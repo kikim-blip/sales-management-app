@@ -155,17 +155,6 @@ export default function QuotePrintModal({ quote, customer, onClose }) {
                 </div>
               </div>
             </div>
-          </div>700">소 재 지 :</strong> 서울특별시 강남구 테헤란로 123</p>
-              <p><strong className="text-slate-700">연 락 처 :</strong> 02-1234-5678</p>
-
-              {/* 직인 도장 아이콘 visual */}
-              <div className="absolute right-4 bottom-4 w-12 h-12 rounded-full border-2 border-rose-500 text-rose-500 flex items-center justify-center font-bold text-[10px] transform rotate-12 opacity-80 select-none">
-                <div className="text-center leading-none">
-                  <Stamp className="w-4 h-4 mx-auto mb-0.5" />
-                  <span>직인</span>
-                </div>
-              </div>
-            </div>
           </div>
 
           {/* 총합 금액 강조 배너 */}
