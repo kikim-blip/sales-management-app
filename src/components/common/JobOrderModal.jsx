@@ -1,10 +1,13 @@
 // src/components/common/JobOrderModal.jsx
 import React, { useState, useEffect } from 'react';
-import { X, ClipboardList, CheckCircle2, UserCheck, Printer, FileText, Hash } from 'lucide-react';
+import { X, ClipboardList, CheckCircle2, UserCheck, Printer, FileText, Hash, Building } from 'lucide-react';
 import { useGoogleAuth } from '../../context/GoogleAuthContext';
+import { useData } from '../../context/DataContext';
 
 export default function JobOrderModal({ customers, onSave, onClose }) {
   const { user } = useGoogleAuth();
+  const { addCustomer } = useData();
+
   const today = new Date().toISOString().split('T')[0];
   
   // 날짜 기반 YYMMDD 및 연도 생성
@@ -15,8 +18,8 @@ export default function JobOrderModal({ customers, onSave, onClose }) {
   const dd = String(d.getDate()).padStart(2, '0');
   const dateYYMMDD = `${yy}${mm}${dd}`;
 
-  const userCode = user?.userCode || '84';
-  const userName = user?.userName || '홍길동';
+  const userCode = user?.userCode || '44';
+  const userName = user?.userName || '김광일';
   const companyCode = user?.companyCode || '3';
 
   // 로컬 스토리지에서 마지막 작성 연도 및 순번 가져오기
@@ -38,10 +41,11 @@ export default function JobOrderModal({ customers, onSave, onClose }) {
   const [seqNumber, setSeqNumber] = useState(getInitialSeq());
   const formattedSeq = String(seqNumber).padStart(3, '0');
   
-  // 생성 코드: (고유번호)-(YYMMDD)-(회사코드+순번) 예: 84 - 260812 - 3277
+  // 생성 코드: (고유번호)-(YYMMDD)-(회사코드+순번) 예: 44 - 260812 - 3277
   const generatedCode = `${userCode} - ${dateYYMMDD} - ${companyCode}${formattedSeq}`;
 
   const [activeTab, setActiveTab] = useState('basic'); // 'basic' | 'print' | 'design'
+  const [customerNameInput, setCustomerNameInput] = useState('');
 
   const [formData, setFormData] = useState({
     code_number: generatedCode,
@@ -103,10 +107,51 @@ export default function JobOrderModal({ customers, onSave, onClose }) {
     }));
   };
 
-  const handleSubmit = (e) => {
+  // 고객사명 입력 또는 선택 시 자동 완성 처리
+  const handleCustomerNameChange = (typedName) => {
+    setCustomerNameInput(typedName);
+    const matched = customers.find(c => c.name.trim() === typedName.trim());
+    if (matched) {
+      setFormData(prev => ({
+        ...prev,
+        customer_id: matched.id,
+        dept: matched.dept || prev.dept,
+        client_contact_person: matched.contact_person || prev.client_contact_person,
+        client_phone: matched.phone || prev.client_phone,
+        client_email: matched.email || prev.client_email,
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        customer_id: typedName,
+      }));
+    }
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.customer_id) return alert('발주처(고객사)를 선택해 주세요.');
+    const finalCustName = customerNameInput.trim();
+    if (!finalCustName) return alert('발주처(고객사명)를 입력하거나 선택해 주세요.');
     if (!formData.title) return alert('품명(작업제목)을 입력해 주세요.');
+
+    // 💡 미등록 고객사일 경우 [01_고객관리] DB에 자동 등록 생성!
+    let custId = formData.customer_id;
+    const existingCust = customers.find(c => c.name.trim() === finalCustName);
+    if (!existingCust && addCustomer) {
+      const createdCust = await addCustomer({
+        name: finalCustName,
+        dept: formData.dept,
+        contact_person: formData.client_contact_person,
+        phone: formData.client_phone,
+        email: formData.client_email,
+        staff_manager_name: userName,
+      });
+      if (createdCust?.id) {
+        custId = createdCust.id;
+      }
+    } else if (existingCust) {
+      custId = existingCust.id;
+    }
 
     // 💡 다음 전표를 위해 마지막 순번 기억 저장!
     localStorage.setItem('last_job_sequence_info', JSON.stringify({
@@ -114,7 +159,11 @@ export default function JobOrderModal({ customers, onSave, onClose }) {
       seq: formData.seq,
     }));
 
-    onSave(formData);
+    onSave({
+      ...formData,
+      customer_id: custId,
+      customer_name: finalCustName,
+    });
   };
 
   return (
@@ -134,7 +183,7 @@ export default function JobOrderModal({ customers, onSave, onClose }) {
           </button>
         </div>
 
-        {/* 🚨 코드번호 및 순번 설정 배너 */}
+        {/* 코드번호 및 순번 설정 배너 */}
         <div className="bg-slate-900 px-6 py-3 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center space-x-3">
             <span className="text-xs bg-slate-800 text-slate-300 px-2.5 py-1 rounded font-bold">코드번호</span>
@@ -204,32 +253,35 @@ export default function JobOrderModal({ customers, onSave, onClose }) {
             <div className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">발주처 (고객사명) *</label>
-                  <select
-                    value={formData.customer_id}
-                    onChange={e => {
-                      const cust = customers.find(c => c.id === e.target.value);
-                      setFormData({
-                        ...formData,
-                        customer_id: e.target.value,
-                        dept: cust?.dept || '',
-                        client_contact_person: cust?.contact_person || '',
-                        client_phone: cust?.phone || '',
-                      });
-                    }}
-                    className="w-full p-2.5 border border-slate-200 rounded-xl text-xs font-semibold"
-                  >
-                    <option value="">-- 발주처(고객사) 선택 --</option>
-                    {customers.map(c => (
-                      <option key={c.id} value={c.id}>{c.name} - {c.dept}</option>
-                    ))}
-                  </select>
+                  <label className="block font-bold text-slate-700 mb-1 flex items-center justify-between">
+                    <span>발주처 (고객사명) *</span>
+                    <span className="text-[10px] text-sky-600 font-normal">※ 신규 입력 시 고객DB에 자동등록</span>
+                  </label>
+
+                  {/* 💡 고객사명만 표기되는 직접 입력 + 자동완성 datalist */}
+                  <div className="relative">
+                    <input
+                      type="text"
+                      list="customer-name-suggestions"
+                      required
+                      placeholder="고객사명 입력 또는 선택 (예: 기후에너지환경부)"
+                      value={customerNameInput}
+                      onChange={e => handleCustomerNameChange(e.target.value)}
+                      className="w-full p-2.5 border border-slate-200 rounded-xl text-xs font-semibold focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                    />
+                    <datalist id="customer-name-suggestions">
+                      {customers.map(c => (
+                        <option key={c.id} value={c.name} />
+                      ))}
+                    </datalist>
+                  </div>
                 </div>
 
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">과/부서명</label>
                   <input
                     type="text"
+                    placeholder="예: 물관리위원회지원단"
                     value={formData.dept}
                     onChange={e => setFormData({ ...formData, dept: e.target.value })}
                     className="w-full p-2.5 border border-slate-200 rounded-xl text-xs"
@@ -254,6 +306,7 @@ export default function JobOrderModal({ customers, onSave, onClose }) {
                   <label className="block font-semibold text-slate-600 mb-1">발주업체 담당자</label>
                   <input
                     type="text"
+                    placeholder="예: 강성희"
                     value={formData.client_contact_person}
                     onChange={e => setFormData({ ...formData, client_contact_person: e.target.value })}
                     className="w-full p-2.5 border border-slate-200 rounded-xl"
@@ -263,6 +316,7 @@ export default function JobOrderModal({ customers, onSave, onClose }) {
                   <label className="block font-semibold text-slate-600 mb-1">담당자 연락처</label>
                   <input
                     type="text"
+                    placeholder="예: 010-1234-5678"
                     value={formData.client_phone}
                     onChange={e => setFormData({ ...formData, client_phone: e.target.value })}
                     className="w-full p-2.5 border border-slate-200 rounded-xl"
@@ -315,6 +369,7 @@ export default function JobOrderModal({ customers, onSave, onClose }) {
                   <label className="block font-semibold text-sky-800 mb-1">견적 산정 금액 (원)</label>
                   <input
                     type="number"
+                    placeholder="0"
                     value={formData.estimated_price}
                     onChange={e => setFormData({ ...formData, estimated_price: Number(e.target.value) })}
                     className="w-full p-2.5 border border-slate-200 rounded-xl font-bold text-sky-700"
@@ -341,6 +396,7 @@ export default function JobOrderModal({ customers, onSave, onClose }) {
                   <label className="block font-semibold text-slate-600 mb-1">규격 (사이즈)</label>
                   <input
                     type="text"
+                    placeholder="예: A4"
                     value={formData.spec}
                     onChange={e => setFormData({ ...formData, spec: e.target.value })}
                     className="w-full p-2 border border-slate-200 rounded-lg"
@@ -350,6 +406,7 @@ export default function JobOrderModal({ customers, onSave, onClose }) {
                   <label className="block font-semibold text-slate-600 mb-1">면수 (페이지)</label>
                   <input
                     type="text"
+                    placeholder="예: 100"
                     value={formData.pages}
                     onChange={e => setFormData({ ...formData, pages: e.target.value })}
                     className="w-full p-2 border border-slate-200 rounded-lg"
@@ -362,6 +419,7 @@ export default function JobOrderModal({ customers, onSave, onClose }) {
                     onChange={e => setFormData({ ...formData, duplex: e.target.value })}
                     className="w-full p-2 border border-slate-200 rounded-lg"
                   >
+                    <option value="">선택</option>
                     <option value="양면">양면</option>
                     <option value="단면">단면</option>
                   </select>
@@ -370,6 +428,7 @@ export default function JobOrderModal({ customers, onSave, onClose }) {
                   <label className="block font-semibold text-slate-600 mb-1">수량 (부)</label>
                   <input
                     type="number"
+                    placeholder="0"
                     value={formData.quantity}
                     onChange={e => setFormData({ ...formData, quantity: Number(e.target.value) })}
                     className="w-full p-2 border border-slate-200 rounded-lg font-bold"
@@ -448,6 +507,7 @@ export default function JobOrderModal({ customers, onSave, onClose }) {
                 <div>
                   <label className="block font-semibold text-slate-600 mb-1">제작 진행 상태</label>
                   <select value={formData.production_progress} onChange={e => setFormData({...formData, production_progress: e.target.value})} className="w-full p-2 border rounded-lg font-bold text-sky-700">
+                    <option value="">선택</option>
                     <option value="진행중">진행중</option>
                     <option value="교정대기">교정대기</option>
                     <option value="인쇄대기">인쇄대기</option>

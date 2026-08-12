@@ -128,6 +128,8 @@ export function parseCustomers(rows) {
     dept: String(row[2] || ''),
     contact_person: String(row[3] || ''),
     phone: String(row[4] || ''),
+    email: String(row[5] || ''),
+    staff_manager_name: String(row[6] || ''),
   }));
 }
 

@@ -206,19 +206,41 @@ export function DataProvider({ children }) {
   // --- 1. 고객 CRUD ---
   const addCustomer = async (newCust) => {
     const custId = `CUST-${String(customers.length + 1).padStart(3, '0')}`;
-    const row = [custId, newCust.name, newCust.dept, newCust.contact_person, newCust.phone];
+    const row = [
+      custId,
+      newCust.name,
+      newCust.dept || '',
+      newCust.contact_person || '',
+      newCust.phone || '',
+      newCust.email || '',
+      newCust.staff_manager_name || user?.userName || '김광일',
+    ];
 
     if (isLoggedIn && accessToken) {
-      await appendSheetValue(accessToken, '01_고객관리', row);
+      try {
+        await appendSheetValue(accessToken, '01_고객관리', row);
+      } catch (err) {
+        console.error('고객관리 시트 쓰기 에러:', err);
+      }
     }
-    setCustomers(prev => [...prev, { id: custId, ...newCust }]);
+    const created = { id: custId, ...newCust, staff_manager_name: newCust.staff_manager_name || user?.userName || '김광일' };
+    setCustomers(prev => [...prev, created]);
+    return created;
   };
 
   const updateCustomer = async (id, updatedCust) => {
     const index = customers.findIndex(c => c.id === id);
     if (index === -1) return;
     const rowIndex = index + 2; // header is row 1
-    const row = [id, updatedCust.name, updatedCust.dept, updatedCust.contact_person, updatedCust.phone];
+    const row = [
+      id,
+      updatedCust.name,
+      updatedCust.dept || '',
+      updatedCust.contact_person || '',
+      updatedCust.phone || '',
+      updatedCust.email || '',
+      updatedCust.staff_manager_name || user?.userName || '김광일',
+    ];
 
     if (isLoggedIn && accessToken) {
       await updateSheetRow(accessToken, '01_고객관리', rowIndex, row);
