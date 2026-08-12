@@ -7,6 +7,7 @@ import BottomNav from './components/layout/BottomNav';
 
 import DashboardPage from './pages/DashboardPage';
 import CustomerPage from './pages/CustomerPage';
+import JobOrderPage from './pages/JobOrderPage';
 import SalesPage from './pages/SalesPage';
 import PaymentPage from './pages/PaymentPage';
 
@@ -25,6 +26,7 @@ export default function App() {
           <Routes>
             <Route path="/" element={<DashboardPage />} />
             <Route path="/customers" element={<CustomerPage />} />
+            <Route path="/job-orders" element={<JobOrderPage />} />
             <Route path="/sales" element={<SalesPage />} />
             <Route path="/payments" element={<PaymentPage />} />
           </Routes>

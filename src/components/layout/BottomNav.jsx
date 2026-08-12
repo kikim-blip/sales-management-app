@@ -1,11 +1,12 @@
 // src/components/layout/BottomNav.jsx
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Users, FileSpreadsheet, CreditCard } from 'lucide-react';
+import { LayoutDashboard, Users, ClipboardList, FileSpreadsheet, CreditCard } from 'lucide-react';
 
 const navItems = [
   { name: '대시보드', path: '/', icon: LayoutDashboard },
   { name: '고객관리', path: '/customers', icon: Users },
+  { name: '작업전표', path: '/job-orders', icon: ClipboardList },
   { name: '매출/견적', path: '/sales', icon: FileSpreadsheet },
   { name: '수금관리', path: '/payments', icon: CreditCard },
 ];
@@ -20,13 +21,13 @@ export default function BottomNav() {
             key={item.path}
             to={item.path}
             className={({ isActive }) =>
-              `flex flex-col items-center justify-center py-1.5 px-3 rounded-xl transition-all ${
+              `flex flex-col items-center justify-center py-1.5 px-2 rounded-xl transition-all ${
                 isActive ? 'text-sky-600 font-bold' : 'text-slate-500 hover:text-slate-800'
               }`
             }
           >
             <Icon className="w-5 h-5 mb-0.5" />
-            <span className="text-[11px] leading-tight">{item.name}</span>
+            <span className="text-[10px] leading-tight">{item.name}</span>
           </NavLink>
         );
       })}
