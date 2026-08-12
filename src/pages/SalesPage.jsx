@@ -1,14 +1,14 @@
 // src/pages/SalesPage.jsx
 import React, { useState } from 'react';
 import { useData } from '../context/DataContext';
-import { Plus, Calendar, Share2, Pencil, Trash2, ClipboardList, FileText, FileSearch, Printer } from 'lucide-react';
+import { Plus, Calendar, Share2, Pencil, Trash2, ClipboardList, FileText, FileSearch, Printer, CheckCircle2, Truck, DollarSign } from 'lucide-react';
 import JobOrderModal from '../components/common/JobOrderModal';
 import SelectJobOrderModal from '../components/common/SelectJobOrderModal';
 import QuotePrintModal from '../components/common/QuotePrintModal';
 import JobOrderPrintModal from '../components/common/JobOrderPrintModal';
 
 export default function SalesPage() {
-  const { sales, customers, jobOrders, addSales, updateSales, deleteSales, addJobOrder } = useData();
+  const { sales, customers, jobOrders, addSales, updateSales, deleteSales, addJobOrder, addPayment } = useData();
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [submitting, setSubmitting] = useState(false);
@@ -32,7 +32,7 @@ export default function SalesPage() {
     title: '',
     content: '',
     note: '',
-    billing_schedule: '청구완료',
+    billing_schedule: '진행중', // 💡 신규 등록 기본 상태: 진행중
     type: '매출',
     supply_price: '',
     tax: 0,
@@ -124,7 +124,7 @@ export default function SalesPage() {
       title: item.title || '',
       content: item.content || '',
       note: item.note || '',
-      billing_schedule: item.billing_schedule || '청구완료',
+      billing_schedule: item.billing_schedule || '진행중',
       type: item.type || '매출',
       supply_price: item.supply_price || '',
       tax: item.tax || 0,
@@ -133,6 +133,48 @@ export default function SalesPage() {
       superthread_synced: !!item.superthread_synced,
     });
     setShowModal(true);
+  };
+
+  // 💡 상태 변경: [납품완료] 처리
+  const handleMarkDelivered = async (item) => {
+    try {
+      await updateSales(item.id, {
+        ...item,
+        billing_schedule: '납품완료',
+      });
+      alert(`[${item.title}] 항목이 [납품완료] 상태로 변경되었습니다.`);
+    } catch (err) {
+      alert('상태 변경 에러: ' + err.message);
+    }
+  };
+
+  // 💡 상태 변경: [💰 수금 처리] -> 수금DB 자동 등록 + [청구완료] 전환!
+  const handleCollectPayment = async (item) => {
+    const cust = customers.find(c => c.id === item.customer_id);
+    const custName = cust ? `${cust.name}` : (item.customer_name || item.customer_id);
+    const amountStr = (item.total_price || 0).toLocaleString();
+
+    if (!window.confirm(`[${custName}] 의 매출 건 (${amountStr}원)에 대해 수금 처리를 진행하시겠습니까?\n\n진행 내용:\n1) [03_수금관리] DB에 입금 데이터 자동 기록\n2) 해당 매출 건 상태를 [청구완료]로 최종 전환`)) return;
+
+    try {
+      // 1. 수금 DB에 수금 데이터 생성
+      await addPayment({
+        payment_date: today,
+        customer_id: item.customer_id,
+        amount: item.total_price || 0,
+        method: '계좌이체',
+      });
+
+      // 2. 매출 DB 항목 상태를 [청구완료]로 업데이트
+      await updateSales(item.id, {
+        ...item,
+        billing_schedule: '청구완료',
+      });
+
+      alert(`[${custName}] 수금 처리 (${amountStr}원) 및 [청구완료] 최종 전환이 완료되었습니다!`);
+    } catch (err) {
+      alert('수금 처리 에러: ' + err.message);
+    }
   };
 
   const handleDelete = async (id) => {
@@ -178,12 +220,23 @@ export default function SalesPage() {
     }
   };
 
+  // 상태 뱃지 렌더링 헬퍼
+  const renderStatusBadge = (status) => {
+    if (status === '청구완료') {
+      return <span className="bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs px-2.5 py-1 rounded-lg font-extrabold flex items-center space-x-1"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /><span>청구완료 (수금완료)</span></span>;
+    }
+    if (status === '납품완료') {
+      return <span className="bg-sky-100 text-sky-800 border border-sky-300 text-xs px-2.5 py-1 rounded-lg font-extrabold flex items-center space-x-1"><Truck className="w-3.5 h-3.5 text-sky-600" /><span>납품완료</span></span>;
+    }
+    return <span className="bg-amber-100 text-amber-800 border border-amber-300 text-xs px-2.5 py-1 rounded-lg font-extrabold flex items-center space-x-1"><span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span><span>진행중</span></span>;
+  };
+
   return (
     <div className="space-y-5">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h2 className="text-xl font-bold text-slate-800">매출 및 견적 관리</h2>
-          <p className="text-xs text-slate-500 mt-0.5">의뢰전표 연동, 구글 시트 저장, 견적서/비교견적서 PDF 출력이 가능합니다.</p>
+          <p className="text-xs text-slate-500 mt-0.5">상태를 [진행중 ➔ 납품완료 ➔ 수금처리(청구완료)] 순으로 체계적으로 관리합니다.</p>
         </div>
 
         <div className="flex items-center space-x-2">
@@ -230,6 +283,7 @@ export default function SalesPage() {
                       {item.type}
                     </span>
                     <h3 className="font-bold text-slate-800 text-base">{item.title}</h3>
+                    {renderStatusBadge(item.billing_schedule)}
                   </div>
                   <p className="text-xs font-medium text-sky-600 mt-1">
                     발주처: {cust ? `${cust.name} (${cust.dept})` : item.customer_id}
@@ -274,26 +328,39 @@ export default function SalesPage() {
                 </div>
               )}
 
+              {/* 하단 정보 및 수금/상태 관리 액션 버튼 */}
               <div className="flex flex-wrap items-center justify-between text-xs text-slate-400 pt-2 border-t border-slate-100 gap-2">
                 <div className="flex items-center space-x-3">
                   <span>납품일: <strong className="text-slate-700">{item.delivery_date} {item.delivery_time}</strong></span>
-                  <span>상태: <strong className="text-slate-700">{item.billing_schedule}</strong></span>
                 </div>
 
+                {/* 💡 상태에 따른 진행 ➔ 납품 ➔ 수금 버튼 액션 바 */}
                 <div className="flex items-center space-x-2">
-                  <span className={`inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[11px] ${
-                    item.calendar_synced ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-400'
-                  }`}>
-                    <Calendar className="w-3 h-3" />
-                    <span>캘린더</span>
-                  </span>
+                  {item.billing_schedule === '진행중' && (
+                    <button
+                      onClick={() => handleMarkDelivered(item)}
+                      className="flex items-center space-x-1 bg-sky-500 hover:bg-sky-600 text-white px-3 py-1 rounded-xl text-xs font-bold transition shadow-sm"
+                    >
+                      <Truck className="w-3.5 h-3.5" />
+                      <span>납품 완료</span>
+                    </button>
+                  )}
 
-                  <span className={`inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[11px] ${
-                    item.superthread_synced ? 'bg-purple-50 text-purple-700' : 'bg-slate-100 text-slate-400'
-                  }`}>
-                    <Share2 className="w-3 h-3" />
-                    <span>슈퍼스레드</span>
-                  </span>
+                  {item.billing_schedule !== '청구완료' && (
+                    <button
+                      onClick={() => handleCollectPayment(item)}
+                      className="flex items-center space-x-1 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1 rounded-xl text-xs font-bold transition shadow-sm animate-pulse"
+                    >
+                      <DollarSign className="w-3.5 h-3.5" />
+                      <span>수금 처리 (청구완료)</span>
+                    </button>
+                  )}
+
+                  {item.billing_schedule === '청구완료' && (
+                    <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-xl border border-emerald-200">
+                      수금완료 (03_수금관리 연동됨)
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
@@ -357,16 +424,32 @@ export default function SalesPage() {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">작업명 (제목) *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="예: 8월 소프트웨어 납품"
-                  value={formData.title}
-                  onChange={e => setFormData({ ...formData, title: e.target.value })}
-                  className="w-full p-2.5 border border-slate-200 rounded-xl text-xs"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">작업명 (제목) *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="예: 8월 소프트웨어 납품"
+                    value={formData.title}
+                    onChange={e => setFormData({ ...formData, title: e.target.value })}
+                    className="w-full p-2.5 border border-slate-200 rounded-xl text-xs"
+                  />
+                </div>
+
+                {/* 💡 상태 (진행중 ➔ 납품완료 ➔ 청구완료) 지정 */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">진행 상태</label>
+                  <select
+                    value={formData.billing_schedule}
+                    onChange={e => setFormData({ ...formData, billing_schedule: e.target.value })}
+                    className="w-full p-2.5 border border-slate-200 rounded-xl text-xs font-bold text-slate-800"
+                  >
+                    <option value="진행중">⏳ 진행중</option>
+                    <option value="납품완료">🚚 납품완료</option>
+                    <option value="청구완료">✅ 청구완료 (수금완료)</option>
+                  </select>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
