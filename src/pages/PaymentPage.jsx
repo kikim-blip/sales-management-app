@@ -1,39 +1,88 @@
 // src/pages/PaymentPage.jsx
 import React, { useState } from 'react';
 import { useData } from '../context/DataContext';
-import { Plus, CreditCard, Calendar, Pencil, Trash2 } from 'lucide-react';
+import { Plus, CreditCard, Calendar, Pencil, Trash2, FileSearch } from 'lucide-react';
+import SelectJobOrderModal from '../components/common/SelectJobOrderModal';
 
 export default function PaymentPage() {
-  const { payments, customers, addPayment, updatePayment, deletePayment } = useData();
+  const { payments, customers, jobOrders, addPayment, updatePayment, deletePayment } = useData();
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
+  const [showSelectJobModal, setShowSelectJobModal] = useState(false);
+
   const today = new Date().toISOString().split('T')[0];
   const defaultForm = {
     payment_date: today,
-    customer_id: customers.length > 0 ? customers[0].id : '',
-    amount: 1000000,
+    customer_id: '',
+    customer_name: '',
+    dept: '',
+    amount: '',
     method: '계좌이체',
   };
 
   const [formData, setFormData] = useState(defaultForm);
+  const [customerNameInput, setCustomerNameInput] = useState('');
+
+  // 작업전표 불러오기로 수금 폼 자동 채우기
+  const handleSelectJobOrder = (order) => {
+    const cust = customers.find(c => c.id === order.customer_id);
+    const cName = cust ? cust.name : (order.customer_name || order.customer_id || '');
+    const cDept = cust ? cust.dept : (order.dept || '');
+
+    setCustomerNameInput(cName);
+    setFormData(prev => ({
+      ...prev,
+      customer_id: order.customer_id || cName,
+      customer_name: cName,
+      dept: cDept,
+      amount: order.estimated_price || '',
+    }));
+    setShowSelectJobModal(false);
+    alert(`[${order.code_number}] ${order.title} 전표의 금액(${(order.estimated_price || 0).toLocaleString()}원)과 고객사 정보가 수금 폼에 반영되었습니다!`);
+  };
+
+  // 고객사명 입력 또는 선택 시
+  const handleCustomerNameChange = (typedName) => {
+    setCustomerNameInput(typedName);
+    const matched = customers.find(c => c.name.trim() === typedName.trim());
+    if (matched) {
+      setFormData(prev => ({
+        ...prev,
+        customer_id: matched.id,
+        customer_name: matched.name,
+        dept: matched.dept || prev.dept,
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        customer_id: typedName,
+        customer_name: typedName,
+      }));
+    }
+  };
 
   const openNewModal = () => {
     setEditingId(null);
-    setFormData({
-      ...defaultForm,
-      customer_id: customers.length > 0 ? customers[0].id : '',
-    });
+    setCustomerNameInput('');
+    setFormData(defaultForm);
     setShowModal(true);
   };
 
   const openEditModal = (p) => {
     setEditingId(p.id);
+    const cust = customers.find(c => c.id === p.customer_id);
+    const cName = cust ? cust.name : (p.customer_id || '');
+    const cDept = cust ? cust.dept : '';
+
+    setCustomerNameInput(cName);
     setFormData({
       payment_date: p.payment_date || today,
-      customer_id: p.customer_id || (customers[0]?.id || ''),
-      amount: p.amount || 0,
+      customer_id: p.customer_id || '',
+      customer_name: cName,
+      dept: cDept,
+      amount: p.amount || '',
       method: p.method || '계좌이체',
     });
     setShowModal(true);
@@ -51,7 +100,8 @@ export default function PaymentPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.customer_id) return alert('고객사를 선택해 주세요.');
+    if (!customerNameInput.trim()) return alert('고객사명을 입력하거나 선택해 주세요.');
+    if (!formData.amount) return alert('수금액을 입력해 주세요.');
 
     try {
       setSubmitting(true);
@@ -98,7 +148,7 @@ export default function PaymentPage() {
                   </div>
                   <div>
                     <span className="font-bold text-slate-800 text-sm">
-                      {cust ? `${cust.name} (${cust.dept})` : `고객 ID: ${p.customer_id}`}
+                      {cust ? `${cust.name} (${cust.dept})` : `발주처: ${p.customer_id}`}
                     </span>
                     <div className="flex items-center space-x-2 text-xs text-slate-400 mt-0.5">
                       <Calendar className="w-3 h-3" />
@@ -110,7 +160,7 @@ export default function PaymentPage() {
 
                 <div className="flex items-center space-x-4">
                   <div className="text-right">
-                    <span className="text-base font-extrabold text-emerald-600">+{p.amount.toLocaleString()} 원</span>
+                    <span className="text-base font-extrabold text-emerald-600">+{(p.amount || 0).toLocaleString()} 원</span>
                     <p className="text-[11px] font-mono text-slate-400">{p.id}</p>
                   </div>
                   <div className="flex items-center space-x-1">
@@ -140,32 +190,70 @@ export default function PaymentPage() {
       {showModal && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <form onSubmit={handleSubmit} className="bg-white w-full max-w-md rounded-2xl shadow-xl p-6 space-y-4">
-            <h3 className="text-lg font-bold text-slate-800">
-              {editingId ? '수금 내역 수정' : '신규 수금 등록'}
-            </h3>
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">고객선택 *</label>
-                <select
-                  value={formData.customer_id}
-                  onChange={e => setFormData({ ...formData, customer_id: e.target.value })}
-                  className="w-full p-2.5 border border-slate-200 rounded-xl text-sm"
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="text-lg font-bold text-slate-800">
+                {editingId ? '수금 내역 수정' : '신규 수금 등록'}
+              </h3>
+
+              {/* 💡 작업전표 불러오기 버튼 추가! */}
+              {!editingId && (
+                <button
+                  type="button"
+                  onClick={() => setShowSelectJobModal(true)}
+                  className="flex items-center space-x-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 px-2.5 py-1 rounded-xl text-xs font-bold transition"
                 >
-                  {customers.map(c => (
-                    <option key={c.id} value={c.id}>{c.name} - {c.dept}</option>
-                  ))}
-                </select>
+                  <FileSearch className="w-3.5 h-3.5 text-amber-600" />
+                  <span>작업전표 불러오기</span>
+                </button>
+              )}
+            </div>
+
+            <div className="space-y-3">
+              
+              {/* 고객사명 및 과/부서 분리 검색 입력 */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">고객사명 *</label>
+                  <input
+                    type="text"
+                    list="payment-customer-list"
+                    required
+                    placeholder="고객사명 검색 또는 입력"
+                    value={customerNameInput}
+                    onChange={e => handleCustomerNameChange(e.target.value)}
+                    className="w-full p-2.5 border border-slate-200 rounded-xl text-xs font-semibold focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                  />
+                  <datalist id="payment-customer-list">
+                    {customers.map(c => (
+                      <option key={c.id} value={c.name} />
+                    ))}
+                  </datalist>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">과/부서명</label>
+                  <input
+                    type="text"
+                    placeholder="부서명 입력"
+                    value={formData.dept}
+                    onChange={e => setFormData({ ...formData, dept: e.target.value })}
+                    className="w-full p-2.5 border border-slate-200 rounded-xl text-xs"
+                  />
+                </div>
               </div>
+
               <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">수금액 (원)</label>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">수금액 (원) *</label>
                 <input
                   type="number"
                   required
+                  placeholder="0"
                   value={formData.amount}
                   onChange={e => setFormData({ ...formData, amount: Number(e.target.value) })}
-                  className="w-full p-2.5 border border-slate-200 rounded-xl text-sm"
+                  className="w-full p-2.5 border border-slate-200 rounded-xl text-sm font-bold text-emerald-700"
                 />
               </div>
+
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1">수금일자</label>
                 <input
@@ -175,6 +263,7 @@ export default function PaymentPage() {
                   className="w-full p-2.5 border border-slate-200 rounded-xl text-sm"
                 />
               </div>
+
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1">결제수단</label>
                 <select
@@ -208,6 +297,16 @@ export default function PaymentPage() {
             </div>
           </form>
         </div>
+      )}
+
+      {/* 💡 수금 탭 작업전표 불러오기 (선택) 모달 */}
+      {showSelectJobModal && (
+        <SelectJobOrderModal
+          jobOrders={jobOrders}
+          customers={customers}
+          onSelect={handleSelectJobOrder}
+          onClose={() => setShowSelectJobModal(false)}
+        />
       )}
     </div>
   );

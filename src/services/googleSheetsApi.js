@@ -44,6 +44,29 @@ export async function getSheetValues(accessToken, sheetName) {
 }
 
 /**
+ * 💡 구글 시트 5개 탭을 1회 호출로 일괄 조회 (API Rate Limit Quota 초과 방지)
+ */
+export async function batchGetSheetValues(accessToken, sheetNames) {
+  if (!SPREADSHEET_ID) throw new Error('.env.local에 VITE_SPREADSHEET_ID가 설정되어 있지 않습니다.');
+  const rangeParams = sheetNames.map(name => `ranges=${encodeURIComponent(name)}!A2:Z`).join('&');
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values:batchGet?${rangeParams}&valueRenderOption=FORMATTED_VALUE`;
+
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error?.message || '구글 시트 데이터를 불러오지 못했습니다.');
+  }
+  const data = await response.json();
+  const result = {};
+  sheetNames.forEach((name, idx) => {
+    result[name] = data.valueRanges?.[idx]?.values || [];
+  });
+  return result;
+}
+
+/**
  * 시트에 새 행(Row) 쓰기 (Append API)
  */
 export async function appendSheetValue(accessToken, sheetName, rowArray) {

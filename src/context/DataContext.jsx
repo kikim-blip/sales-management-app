@@ -1,7 +1,7 @@
 // src/context/DataContext.jsx
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useGoogleAuth } from './GoogleAuthContext';
-import { getSheetValues, appendSheetValue, updateSheetRow, clearSheetRow, parseCustomers, parseSales, parsePayments, parseStaffs, parseJobOrders } from '../services/googleSheetsApi';
+import { getSheetValues, batchGetSheetValues, appendSheetValue, updateSheetRow, clearSheetRow, parseCustomers, parseSales, parsePayments, parseStaffs, parseJobOrders } from '../services/googleSheetsApi';
 import { sendWebhookEvent } from '../services/webhookService';
 import { initialCustomers, initialSales, initialPayments } from '../data/dummyData';
 
@@ -34,32 +34,26 @@ export function DataProvider({ children }) {
       return;
     }
 
-    setLoading(true);
-    setError(null);
-
     try {
-      const [custRows, salesRows, payRows] = await Promise.all([
-        getSheetValues(accessToken, '01_고객관리'),
-        getSheetValues(accessToken, '02_매출견적관리'),
-        getSheetValues(accessToken, '03_수금관리'),
+      setLoading(true);
+      setError(null);
+
+      // 💡 5개 탭을 1회 호출로 일괄 조회하여 구글 API Quota 80% 절감!
+      const sheetMap = await batchGetSheetValues(accessToken, [
+        '01_고객관리',
+        '02_매출견적관리',
+        '03_수금관리',
+        '04_작업전표DB',
+        '05_사원관리',
       ]);
 
-      setCustomers(parseCustomers(custRows));
-      setSales(parseSales(salesRows));
-      setPayments(parsePayments(payRows));
-
-      // 04_작업전표DB 시트 로드
-      try {
-        const orderRows = await getSheetValues(accessToken, '04_작업전표DB');
-        setJobOrders(parseJobOrders(orderRows));
-      } catch (e) {
-        console.log('04_작업전표DB 시트 로드 건너뜀:', e.message);
-      }
-
-      // 05_사원관리 시트 로드
-      try {
-        const staffRows = await getSheetValues(accessToken, '05_사원관리');
-        const parsedStaffs = parseStaffs(staffRows);
+      if (sheetMap['01_고객관리']) setCustomers(parseCustomers(sheetMap['01_고객관리']));
+      if (sheetMap['02_매출견적관리']) setSales(parseSales(sheetMap['02_매출견적관리']));
+      if (sheetMap['03_수금관리']) setPayments(parsePayments(sheetMap['03_수금관리']));
+      if (sheetMap['04_작업전표DB']) setJobOrders(parseJobOrders(sheetMap['04_작업전표DB']));
+      
+      if (sheetMap['05_사원관리']) {
+        const parsedStaffs = parseStaffs(sheetMap['05_사원관리']);
         setStaffs(parsedStaffs);
 
         if (user?.email && parsedStaffs.length > 0) {
@@ -73,10 +67,7 @@ export function DataProvider({ children }) {
             });
           }
         }
-      } catch (e) {
-        console.log('05_사원관리 시트 로드 건너뜀:', e.message);
       }
-
     } catch (err) {
       console.error('시트 데이터 불러오기 에러:', err);
       setError(err.message);

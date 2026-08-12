@@ -8,65 +8,14 @@ import QuotePrintModal from '../components/common/QuotePrintModal';
 import JobOrderPrintModal from '../components/common/JobOrderPrintModal';
 
 export default function SalesPage() {
-  const { sales, customers, addSales, updateSales, deleteSales } = useData();
+  const { sales, customers, jobOrders, addSales, updateSales, deleteSales, addJobOrder } = useData();
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
-  // 1. 작업전표 관련 state
-  const [jobOrders, setJobOrders] = useState([
-    {
-      id: 'ORDER-001',
-      code_number: '84 - 260812 - 3277',
-      manager_name: '강영진',
-      receipt_date: '2026-08-12',
-      customer_id: customers[0]?.id || 'CUST-001',
-      dept: '기획예산부',
-      title: '2026년 공사 주요사업 추진현황',
-      spec: '210*297',
-      pages: '페이지수',
-      duplex: '양면',
-      quantity: 50,
-      estimated_price: 1500000,
-      client_contact_person: '김수정',
-      client_phone: '061-931-1114',
-      client_email: 'ksj127@at.or.kr',
-      email_receipt_time: '26.08.12 (수) 10:51',
-      cover_job: '한글편집세종',
-      cover_paper: '레쟈크체크백색',
-      cover_print: '컬러',
-      coating: '없음',
-      inner_job: '한글편집세종',
-      inner_paper: '백색모조100g',
-      inner_print: '컬러',
-      interleaf_paper: '없음',
-      binding: '무선제본',
-      draft_email: 'ksks5577',
-      draft_group: 'aT',
-      mail_sender: '김수정',
-      cover_proof_date: '2026-08-12',
-      inner_proof_date: '2026-08-12',
-      proof_method: '리턴없음',
-      planning: '기획관련내용',
-      photography: '사진촬영관련내용',
-      illustration: '일러스트 작업 유무',
-      copyright_web: '저작권·웹게시 관련 내용',
-      production_progress: '서울출력실',
-      delivery_destination: '이기철팀장전달',
-      cover_related: '1.첫페이지 표지사용',
-      inner_related: '1.개쪽만 확인하고 올려주세요',
-      request_note: '-',
-      editor_name: '편집 작업자명',
-      designer_name: '디자인 작업자명',
-      delivery_date: '2026-08-13',
-      delivery_time: '12시',
-      status: '의뢰접수',
-    }
-  ]);
   const [showJobOrderModal, setShowJobOrderModal] = useState(false);
   const [showSelectJobModal, setShowSelectJobModal] = useState(false);
 
-  // 2. 출력 모달 state
   const [printingQuote, setPrintingQuote] = useState(null);
   const [printingJobOrder, setPrintingJobOrder] = useState(null);
 
@@ -77,39 +26,49 @@ export default function SalesPage() {
     receipt_date: today,
     delivery_date: today,
     delivery_time: '14:00',
-    customer_id: customers.length > 0 ? customers[0].id : '',
+    customer_id: '',
+    customer_name: '',
+    dept: '',
     title: '',
     content: '',
     note: '',
     billing_schedule: '청구완료',
     type: '매출',
-    supply_price: 1000000,
-    tax: 100000,
-    total_price: 1100000,
+    supply_price: '',
+    tax: 0,
+    total_price: 0,
     calendar_synced: true,
     superthread_synced: true,
   };
 
   const [formData, setFormData] = useState(defaultForm);
+  const [customerNameInput, setCustomerNameInput] = useState('');
 
   // 신규 작업전표 저장
-  const handleSaveJobOrder = (newOrder) => {
-    const orderId = `ORDER-${String(jobOrders.length + 1).padStart(3, '0')}`;
-    setJobOrders(prev => [{ id: orderId, ...newOrder }, ...prev]);
-    alert('경성문화사 1:1 작업전표가 등록되었습니다! [전표 인쇄] 버튼을 누르면 실물 서식으로 즉시 출력됩니다.');
+  const handleSaveJobOrder = async (newOrder) => {
+    await addJobOrder(newOrder);
+    alert('작업전표가 정상 등록되었습니다!');
     setShowJobOrderModal(false);
   };
 
   // 작업전표 클릭 시 폼에 자동 입력 (Auto-fill)
   const handleSelectJobOrder = (order) => {
-    const supply = order.estimated_price || 1000000;
+    const supply = order.estimated_price || 0;
     const tax = Math.round(supply * 0.1);
+    
+    const cust = customers.find(c => c.id === order.customer_id);
+    const cName = cust ? cust.name : (order.customer_name || order.customer_id || '');
+    const cDept = cust ? cust.dept : (order.dept || '');
+
+    setCustomerNameInput(cName);
     setFormData(prev => ({
       ...prev,
-      customer_id: order.customer_id,
+      customer_id: order.customer_id || cName,
+      customer_name: cName,
+      dept: cDept,
       title: order.title,
-      content: `[코드: ${order.code_number || order.id}] ${order.content || ''}`,
-      note: `담당: ${order.manager_name || '강영진'} (코드: ${order.code_number || '84-260812-3277'})`,
+      content: `[코드: ${order.code_number || order.id}] ${order.cover_job || ''} / ${order.binding || ''}`,
+      note: `담당: ${order.manager_name} (코드: ${order.code_number})`,
       delivery_date: order.delivery_date || today,
       delivery_time: order.delivery_time || '14:00',
       supply_price: supply,
@@ -117,32 +76,57 @@ export default function SalesPage() {
       total_price: supply + tax,
     }));
     setShowSelectJobModal(false);
-    alert(`[${order.code_number || '전표'}] ${order.title} 전표가 매출/견적 폼에 자동 반영되었습니다!`);
+    alert(`[${order.code_number}] ${order.title} 전표 정보가 매출 폼에 자동 입력되었습니다!`);
+  };
+
+  // 고객사명 입력 또는 검색 선택 시 처리
+  const handleCustomerNameChange = (typedName) => {
+    setCustomerNameInput(typedName);
+    const matched = customers.find(c => c.name.trim() === typedName.trim());
+    if (matched) {
+      setFormData(prev => ({
+        ...prev,
+        customer_id: matched.id,
+        customer_name: matched.name,
+        dept: matched.dept || prev.dept,
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        customer_id: typedName,
+        customer_name: typedName,
+      }));
+    }
   };
 
   const openNewModal = () => {
     setEditingId(null);
-    setFormData({
-      ...defaultForm,
-      customer_id: customers.length > 0 ? customers[0].id : '',
-    });
+    setCustomerNameInput('');
+    setFormData(defaultForm);
     setShowModal(true);
   };
 
   const openEditModal = (item) => {
     setEditingId(item.id);
+    const cust = customers.find(c => c.id === item.customer_id);
+    const cName = cust ? cust.name : (item.customer_id || '');
+    const cDept = cust ? cust.dept : '';
+    setCustomerNameInput(cName);
+
     setFormData({
       reg_date: item.reg_date || today,
       receipt_date: item.receipt_date || today,
       delivery_date: item.delivery_date || today,
       delivery_time: item.delivery_time || '14:00',
-      customer_id: item.customer_id || (customers[0]?.id || ''),
+      customer_id: item.customer_id || '',
+      customer_name: cName,
+      dept: cDept,
       title: item.title || '',
       content: item.content || '',
       note: item.note || '',
       billing_schedule: item.billing_schedule || '청구완료',
       type: item.type || '매출',
-      supply_price: item.supply_price || 0,
+      supply_price: item.supply_price || '',
       tax: item.tax || 0,
       total_price: item.total_price || 0,
       calendar_synced: !!item.calendar_synced,
@@ -166,7 +150,7 @@ export default function SalesPage() {
     const tax = Math.round(supply * 0.1);
     setFormData(prev => ({
       ...prev,
-      supply_price: supply,
+      supply_price: val === '' ? '' : supply,
       tax: tax,
       total_price: supply + tax,
     }));
@@ -174,7 +158,7 @@ export default function SalesPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.customer_id) return alert('고객사를 선택해 주세요.');
+    if (!customerNameInput.trim()) return alert('고객사명을 입력하거나 선택해 주세요.');
     if (!formData.title) return alert('작업명을 입력해 주세요.');
 
     try {
@@ -203,7 +187,7 @@ export default function SalesPage() {
         </div>
 
         <div className="flex items-center space-x-2">
-          {/* 경성문화사 실물 전표 인쇄 팝업 버튼 */}
+          {/* 실물 전표 인쇄 팝업 버튼 */}
           <button
             onClick={() => setPrintingJobOrder(jobOrders[0])}
             className="flex items-center justify-center space-x-1.5 bg-rose-600 hover:bg-rose-700 text-white px-3.5 py-2 rounded-xl text-xs font-bold shadow-sm transition"
@@ -248,16 +232,15 @@ export default function SalesPage() {
                     <h3 className="font-bold text-slate-800 text-base">{item.title}</h3>
                   </div>
                   <p className="text-xs font-medium text-sky-600 mt-1">
-                    {cust ? `${cust.name} - ${cust.dept}` : `고객 ID: ${item.customer_id}`}
+                    발주처: {cust ? `${cust.name} (${cust.dept})` : item.customer_id}
                   </p>
                 </div>
 
                 <div className="flex flex-col items-end space-y-1">
-                  <span className="text-lg font-extrabold text-slate-900">{item.total_price.toLocaleString()} 원</span>
-                  <p className="text-[11px] text-slate-400">공급가: {item.supply_price.toLocaleString()}원</p>
+                  <span className="text-lg font-extrabold text-slate-900">{(item.total_price || 0).toLocaleString()} 원</span>
+                  <p className="text-[11px] text-slate-400">공급가: {(item.supply_price || 0).toLocaleString()}원</p>
                   
                   <div className="flex items-center space-x-1 pt-1">
-                    {/* 견적서/비교견적서 문서 출력 버튼 */}
                     <button
                       onClick={() => setPrintingQuote({ quote: item, customer: cust })}
                       className="flex items-center space-x-1 px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition mr-1"
@@ -341,17 +324,37 @@ export default function SalesPage() {
             </div>
 
             <div className="space-y-3 text-sm">
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">고객선택 (고객사명 - 과/부서명) *</label>
-                <select
-                  value={formData.customer_id}
-                  onChange={e => setFormData({ ...formData, customer_id: e.target.value })}
-                  className="w-full p-2.5 border border-slate-200 rounded-xl"
-                >
-                  {customers.map(c => (
-                    <option key={c.id} value={c.id}>{c.name} - {c.dept} ({c.contact_person})</option>
-                  ))}
-                </select>
+              
+              {/* 고객사명 및 과/부서 분리 검색 입력 */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">고객사명 *</label>
+                  <input
+                    type="text"
+                    list="sales-customer-list"
+                    required
+                    placeholder="고객사명 검색 또는 직접 입력"
+                    value={customerNameInput}
+                    onChange={e => handleCustomerNameChange(e.target.value)}
+                    className="w-full p-2.5 border border-slate-200 rounded-xl text-xs font-semibold focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                  />
+                  <datalist id="sales-customer-list">
+                    {customers.map(c => (
+                      <option key={c.id} value={c.name} />
+                    ))}
+                  </datalist>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">과/부서명</label>
+                  <input
+                    type="text"
+                    placeholder="부서명 입력"
+                    value={formData.dept}
+                    onChange={e => setFormData({ ...formData, dept: e.target.value })}
+                    className="w-full p-2.5 border border-slate-200 rounded-xl text-xs"
+                  />
+                </div>
               </div>
 
               <div>
@@ -362,7 +365,7 @@ export default function SalesPage() {
                   placeholder="예: 8월 소프트웨어 납품"
                   value={formData.title}
                   onChange={e => setFormData({ ...formData, title: e.target.value })}
-                  className="w-full p-2.5 border border-slate-200 rounded-xl"
+                  className="w-full p-2.5 border border-slate-200 rounded-xl text-xs"
                 />
               </div>
 
@@ -371,9 +374,10 @@ export default function SalesPage() {
                   <label className="block text-xs font-semibold text-slate-600 mb-1">공급가액 (원)</label>
                   <input
                     type="number"
+                    placeholder="0"
                     value={formData.supply_price}
                     onChange={e => handlePriceChange(e.target.value)}
-                    className="w-full p-2.5 border border-slate-200 rounded-xl"
+                    className="w-full p-2.5 border border-slate-200 rounded-xl text-xs"
                   />
                 </div>
                 <div>
@@ -382,7 +386,7 @@ export default function SalesPage() {
                     type="number"
                     disabled
                     value={formData.total_price}
-                    className="w-full p-2.5 bg-slate-100 border border-slate-200 rounded-xl font-bold text-sky-700"
+                    className="w-full p-2.5 bg-slate-100 border border-slate-200 rounded-xl font-bold text-sky-700 text-xs"
                   />
                 </div>
               </div>
@@ -394,7 +398,7 @@ export default function SalesPage() {
                     type="date"
                     value={formData.delivery_date}
                     onChange={e => setFormData({ ...formData, delivery_date: e.target.value })}
-                    className="w-full p-2.5 border border-slate-200 rounded-xl"
+                    className="w-full p-2.5 border border-slate-200 rounded-xl text-xs"
                   />
                 </div>
                 <div>
@@ -403,7 +407,7 @@ export default function SalesPage() {
                     type="time"
                     value={formData.delivery_time}
                     onChange={e => setFormData({ ...formData, delivery_time: e.target.value })}
-                    className="w-full p-2.5 border border-slate-200 rounded-xl"
+                    className="w-full p-2.5 border border-slate-200 rounded-xl text-xs"
                   />
                 </div>
               </div>
@@ -415,7 +419,7 @@ export default function SalesPage() {
                   placeholder="작업 상세 내용 입력"
                   value={formData.content}
                   onChange={e => setFormData({ ...formData, content: e.target.value })}
-                  className="w-full p-2.5 border border-slate-200 rounded-xl"
+                  className="w-full p-2.5 border border-slate-200 rounded-xl text-xs"
                 />
               </div>
 
@@ -502,4 +506,4 @@ export default function SalesPage() {
       )}
     </div>
   );
-}
+}
