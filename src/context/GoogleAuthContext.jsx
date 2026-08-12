@@ -7,8 +7,8 @@ const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 const SCOPES = 'https://www.googleapis.com/auth/spreadsheets';
 
 const defaultProfile = {
-  userCode: '84',
-  userName: '홍길동',
+  userCode: '44',
+  userName: '김광일',
   companyCode: '3',
   email: 'richkikim@gmail.com',
 };
@@ -17,8 +17,9 @@ export function GoogleAuthProvider({ children }) {
   const [tokenClient, setTokenClient] = useState(null);
   const [accessToken, setAccessToken] = useState(localStorage.getItem('google_access_token') || null);
   
-  const savedUser = JSON.parse(localStorage.getItem('google_user_info'));
-  const [user, setUser] = useState(savedUser ? { ...defaultProfile, ...savedUser } : defaultProfile);
+  // 💡 사원 프로필 설정은 토큰 로그아웃과 독립적으로 영구 유지
+  const savedProfile = JSON.parse(localStorage.getItem('staff_profile_settings'));
+  const [user, setUser] = useState(savedProfile ? { ...defaultProfile, ...savedProfile } : defaultProfile);
 
   useEffect(() => {
     /* global google */
@@ -36,9 +37,8 @@ export function GoogleAuthProvider({ children }) {
               const updated = {
                 ...prev,
                 name: prev.userName || '구글 사용자',
-                email: '사용자 인증됨',
               };
-              localStorage.setItem('google_user_info', JSON.stringify(updated));
+              localStorage.setItem('staff_profile_settings', JSON.stringify(updated));
               return updated;
             });
           }
@@ -51,7 +51,7 @@ export function GoogleAuthProvider({ children }) {
   const updateUserProfile = (newProfile) => {
     setUser(prev => {
       const updated = { ...prev, ...newProfile };
-      localStorage.setItem('google_user_info', JSON.stringify(updated));
+      localStorage.setItem('staff_profile_settings', JSON.stringify(updated));
       return updated;
     });
   };
@@ -66,9 +66,8 @@ export function GoogleAuthProvider({ children }) {
 
   const logout = () => {
     setAccessToken(null);
-    setUser(defaultProfile);
     localStorage.removeItem('google_access_token');
-    localStorage.removeItem('google_user_info');
+    // 💡 사용자 프로필(staff_profile_settings)은 삭제하지 않고 유지함!
   };
 
   return (

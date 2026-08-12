@@ -7,8 +7,8 @@ export default function UserProfileModal({ onClose }) {
   const { user, updateUserProfile } = useGoogleAuth();
 
   const [formData, setFormData] = useState({
-    userCode: user?.userCode || '84',
-    userName: user?.userName || '홍길동',
+    userCode: user?.userCode || '44',
+    userName: user?.userName || '김광일',
     companyCode: user?.companyCode || '3',
     email: user?.email || '',
   });
@@ -16,7 +16,7 @@ export default function UserProfileModal({ onClose }) {
   const handleSubmit = (e) => {
     e.preventDefault();
     updateUserProfile(formData);
-    alert(`사원 프로필 정보가 저장되었습니다!\n사원번호: ${formData.userCode} | 담당자: ${formData.userName} | 회사코드: ${formData.companyCode}`);
+    alert(`사원 프로필 정보가 영구 저장되었습니다!\n사원번호: ${formData.userCode} | 담당자: ${formData.userName} | 회사코드: ${formData.companyCode}\n(재로그인 후에도 유지됩니다.)`);
     onClose();
   };
 
