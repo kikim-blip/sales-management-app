@@ -1,0 +1,22 @@
+{
+  "short_name": "영업미수관리",
+  "name": "영업/미수 관리 PWA",
+  "description": "Google Sheets DB 연동 영업 및 미수 관리 앱",
+  "icons": [
+    {
+      "src": "pwa-192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "pwa-512.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#f8fafc",
+  "theme_color": "#0284c7",
+  "display": "standalone",
+  "orientation": "portrait"
+}
