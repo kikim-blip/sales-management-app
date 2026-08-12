@@ -121,6 +121,36 @@ export async function updateSheetRow(accessToken, sheetName, rowIndex, rowArray)
 }
 
 /**
+ * 💡 구글 시트 DB의 [작업전표양식] 탭에 코드번호를 반영하여 VLOOKUP 수식을 자동 평가시키고,
+ * 구글 시트 DB에 작성된 [작업전표양식] 탭의 셀 행렬 데이터를 그대로 100% 1:1 라이브로 불러옵니다!
+ */
+export async function syncAndFetchTemplateSheet(accessToken, codeNumber) {
+  if (!SPREADSHEET_ID) throw new Error('.env.local에 VITE_SPREADSHEET_ID가 설정되어 있지 않습니다.');
+
+  // 1. 작업전표양식 탭 1행 B1 에 검색할 코드번호 작성 (Google Sheets VLOOKUP 수식 자동 트리거)
+  try {
+    await updateSheetRow(accessToken, '작업전표양식', 1, ['코드번호', codeNumber]);
+  } catch (e) {
+    console.warn('작업전표양식 B1 코드번호 업데이트 알림:', e);
+  }
+
+  // 2. 구글 시트가 VLOOKUP으로 자동 평가 계산한 [작업전표양식] 탭 A1:Z40 셀 행렬 데이터를 그대로 불러오기
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent('작업전표양식')}!A1:Z40?valueRenderOption=FORMATTED_VALUE`;
+
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error?.message || '구글 시트의 작업전표양식 탭 데이터를 읽지 못했습니다.');
+  }
+
+  const data = await response.json();
+  return data.values || [];
+}
+
+/**
  * 시트 특정 행(Row) 지우기 (Clear API)
  */
 export async function clearSheetRow(accessToken, sheetName, rowIndex) {
