@@ -1,7 +1,7 @@
 // src/context/DataContext.jsx
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useGoogleAuth } from './GoogleAuthContext';
-import { getSheetValues, appendSheetValue, updateSheetRow, clearSheetRow, parseCustomers, parseSales, parsePayments, parseStaffs } from '../services/googleSheetsApi';
+import { getSheetValues, appendSheetValue, updateSheetRow, clearSheetRow, parseCustomers, parseSales, parsePayments, parseStaffs, parseJobOrders } from '../services/googleSheetsApi';
 import { sendWebhookEvent } from '../services/webhookService';
 import { initialCustomers, initialSales, initialPayments } from '../data/dummyData';
 
@@ -19,6 +19,7 @@ export function DataProvider({ children }) {
   const [sales, setSales] = useState(initialSales);
   const [payments, setPayments] = useState(initialPayments);
   const [staffs, setStaffs] = useState(initialStaffs);
+  const [jobOrders, setJobOrders] = useState([]);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -29,6 +30,7 @@ export function DataProvider({ children }) {
       setSales(initialSales);
       setPayments(initialPayments);
       setStaffs(initialStaffs);
+      setJobOrders([]);
       return;
     }
 
@@ -46,13 +48,20 @@ export function DataProvider({ children }) {
       setSales(parseSales(salesRows));
       setPayments(parsePayments(payRows));
 
-      // 05_사원관리 시트 로드 (시트가 없거나 오류 시 안전 폴백)
+      // 04_작업전표DB 시트 로드
+      try {
+        const orderRows = await getSheetValues(accessToken, '04_작업전표DB');
+        setJobOrders(parseJobOrders(orderRows));
+      } catch (e) {
+        console.log('04_작업전표DB 시트 로드 건너뜀:', e.message);
+      }
+
+      // 05_사원관리 시트 로드
       try {
         const staffRows = await getSheetValues(accessToken, '05_사원관리');
         const parsedStaffs = parseStaffs(staffRows);
         setStaffs(parsedStaffs);
 
-        // 로그인 이메일 기반 사원 자동 매칭 및 프로필 동기화
         if (user?.email && parsedStaffs.length > 0) {
           const matched = parsedStaffs.find(s => s.email === user.email.toLowerCase());
           if (matched) {
@@ -65,7 +74,7 @@ export function DataProvider({ children }) {
           }
         }
       } catch (e) {
-        console.log('05_사원관리 시트 미존재 또는 로드 건너뜀:', e.message);
+        console.log('05_사원관리 시트 로드 건너뜀:', e.message);
       }
 
     } catch (err) {
@@ -79,6 +88,84 @@ export function DataProvider({ children }) {
   useEffect(() => {
     fetchAllData();
   }, [fetchAllData]);
+
+  // --- 0. 작업전표 CRUD ---
+  const addJobOrder = async (newOrder) => {
+    const custObj = customers.find(c => c.id === newOrder.customer_id);
+    const custName = custObj ? `${custObj.name}` : newOrder.customer_id;
+    const custDept = custObj ? `${custObj.dept}` : (newOrder.dept || '');
+
+    const row = [
+      newOrder.code_number,
+      newOrder.manager_name,
+      newOrder.receipt_date,
+      newOrder.delivery_date,
+      newOrder.delivery_time,
+      custName,
+      custDept,
+      newOrder.title,
+      newOrder.spec,
+      newOrder.pages,
+      newOrder.duplex,
+      newOrder.quantity,
+      newOrder.estimated_price,
+      newOrder.client_contact_person,
+      newOrder.client_phone,
+      newOrder.client_email,
+      newOrder.email_receipt_time,
+      newOrder.cover_job,
+      newOrder.cover_paper,
+      newOrder.cover_print,
+      newOrder.coating,
+      newOrder.inner_job,
+      newOrder.inner_paper,
+      newOrder.inner_print,
+      newOrder.interleaf_paper,
+      newOrder.binding,
+      newOrder.draft_email,
+      newOrder.draft_group,
+      newOrder.mail_sender,
+      newOrder.cover_proof_date,
+      newOrder.inner_proof_date,
+      newOrder.proof_method,
+      newOrder.planning,
+      newOrder.photography,
+      newOrder.illustration,
+      newOrder.copyright_web,
+      newOrder.production_progress,
+      newOrder.delivery_destination,
+      newOrder.cover_related,
+      newOrder.inner_related,
+      newOrder.request_note,
+      newOrder.editor_name,
+      newOrder.designer_name,
+    ];
+
+    if (isLoggedIn && accessToken) {
+      try {
+        await appendSheetValue(accessToken, '04_작업전표DB', row);
+      } catch (err) {
+        console.error('작업전표DB 시트 쓰기 에러:', err);
+      }
+    }
+
+    setJobOrders(prev => [{ id: newOrder.code_number, ...newOrder }, ...prev]);
+  };
+
+  const deleteJobOrder = async (codeNo) => {
+    const index = jobOrders.findIndex(o => o.code_number === codeNo || o.id === codeNo);
+    if (index === -1) return;
+    const rowIndex = index + 2;
+
+    if (isLoggedIn && accessToken) {
+      try {
+        await clearSheetRow(accessToken, '04_작업전표DB', rowIndex);
+      } catch (err) {
+        console.error('작업전표 삭제 에러:', err);
+      }
+    }
+    setJobOrders(prev => prev.filter(o => o.code_number !== codeNo && o.id !== codeNo));
+  };
 
   // --- 사원관리 DB CRUD ---
   const saveStaffToSheet = async (profileData) => {
@@ -276,10 +363,13 @@ export function DataProvider({ children }) {
         sales,
         payments,
         staffs,
+        jobOrders,
         loading,
         error,
         refreshData: fetchAllData,
         saveStaffToSheet,
+        addJobOrder,
+        deleteJobOrder,
         addCustomer,
         updateCustomer,
         deleteCustomer,

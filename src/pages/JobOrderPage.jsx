@@ -7,77 +7,25 @@ import JobOrderModal from '../components/common/JobOrderModal';
 import JobOrderPrintModal from '../components/common/JobOrderPrintModal';
 
 export default function JobOrderPage() {
-  const { customers, sales, addSales } = useData();
+  const { customers, sales, addSales, jobOrders, addJobOrder, deleteJobOrder } = useData();
   const { user } = useGoogleAuth();
 
   const today = new Date().toISOString().split('T')[0];
 
-  // 1. 작업전표 목록 state
-  const [jobOrders, setJobOrders] = useState([
-    {
-      id: 'ORDER-001',
-      code_number: '84 - 260812 - 3277',
-      manager_name: user?.userName || '강영진',
-      receipt_date: today,
-      customer_id: customers[0]?.id || 'CUST-001',
-      dept: customers[0]?.dept || '기획예산부',
-      title: '2026년 공사 주요사업 추진현황',
-      spec: '210*297',
-      pages: '페이지수',
-      duplex: '양면',
-      quantity: 50,
-      estimated_price: 1500000,
-      client_contact_person: customers[0]?.contact_person || '김수정',
-      client_phone: customers[0]?.phone || '061-931-1114',
-      client_email: 'ksj127@at.or.kr',
-      email_receipt_time: '26.08.12 (수) 10:51',
-      cover_job: '한글편집세종',
-      cover_paper: '레쟈크체크백색',
-      cover_print: '컬러',
-      coating: '없음',
-      inner_job: '한글편집세종',
-      inner_paper: '백색모조100g',
-      inner_print: '컬러',
-      interleaf_paper: '없음',
-      binding: '무선제본',
-      draft_email: 'ksks5577',
-      draft_group: 'aT',
-      mail_sender: '김수정',
-      cover_proof_date: today,
-      inner_proof_date: today,
-      proof_method: '리턴없음',
-      planning: '기획관련내용',
-      photography: '사진촬영관련내용',
-      illustration: '일러스트 작업 유무',
-      copyright_web: '저작권·웹게시 관련 내용',
-      production_progress: '서울출력실',
-      delivery_destination: '이기철팀장전달',
-      cover_related: '1.첫페이지 표지사용',
-      inner_related: '1.개쪽만 확인하고 올려주세요',
-      request_note: '-',
-      editor_name: '편집 작업자명',
-      designer_name: '디자인 작업자명',
-      delivery_date: today,
-      delivery_time: '12시',
-      status: '의뢰접수',
-    }
-  ]);
-
   const [showModal, setShowModal] = useState(false);
   const [printingOrder, setPrintingOrder] = useState(null);
 
-  // 작업전표 저장
-  const handleSaveJobOrder = (newOrder) => {
-    const orderId = `ORDER-${String(jobOrders.length + 1).padStart(3, '0')}`;
-    setJobOrders(prev => [{ id: orderId, ...newOrder }, ...prev]);
-    alert(`[코드: ${newOrder.code_number}] 작업전표가 접수 등록되었습니다!`);
+  // 작업전표 저장 (구글 시트 04_작업전표DB 연동)
+  const handleSaveJobOrder = async (newOrder) => {
+    await addJobOrder(newOrder);
+    alert(`[코드: ${newOrder.code_number}] 작업전표가 구글 시트(04_작업전표DB)에 정상 등록되었습니다!`);
     setShowModal(false);
   };
 
   // 작업전표 삭제
-  const handleDeleteOrder = (id) => {
-    if (!window.confirm('정말 이 작업전표를 삭제하시겠습니까?')) return;
-    setJobOrders(prev => prev.filter(o => o.id !== id));
+  const handleDeleteOrder = async (id) => {
+    if (!window.confirm('정말 이 작업전표를 구글 시트 DB에서 삭제하시겠습니까?')) return;
+    await deleteJobOrder(id);
   };
 
   // 매출/견적으로 1클릭 전환
