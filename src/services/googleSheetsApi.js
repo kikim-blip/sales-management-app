@@ -161,3 +161,14 @@ export function parsePayments(rows) {
     method: String(row[4] || '계좌이체'),
   }));
 }
+
+export function parseStaffs(rows) {
+  return rows.map((row) => ({
+    userCode: String(row[0] || ''),
+    userName: String(row[1] || ''),
+    companyCode: String(row[2] || ''),
+    email: String(row[3] || '').trim().toLowerCase(),
+    dept: String(row[4] || ''),
+    position: String(row[5] || ''),
+  }));
+}

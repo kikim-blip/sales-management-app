@@ -1,18 +1,24 @@
 // src/context/DataContext.jsx
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useGoogleAuth } from './GoogleAuthContext';
-import { getSheetValues, appendSheetValue, updateSheetRow, clearSheetRow, parseCustomers, parseSales, parsePayments } from '../services/googleSheetsApi';
+import { getSheetValues, appendSheetValue, updateSheetRow, clearSheetRow, parseCustomers, parseSales, parsePayments, parseStaffs } from '../services/googleSheetsApi';
 import { sendWebhookEvent } from '../services/webhookService';
 import { initialCustomers, initialSales, initialPayments } from '../data/dummyData';
 
 const DataContext = createContext();
 
+const initialStaffs = [
+  { userCode: '44', userName: '김광일', companyCode: '3', email: 'richkikim@gmail.com', dept: '기획예산부', position: '부서장' },
+  { userCode: '84', userName: '강영진', companyCode: '3', email: 'youngjin@gmail.com', dept: '영업부', position: '팀장' }
+];
+
 export function DataProvider({ children }) {
-  const { accessToken, isLoggedIn } = useGoogleAuth();
+  const { accessToken, isLoggedIn, user, updateUserProfile } = useGoogleAuth();
 
   const [customers, setCustomers] = useState(initialCustomers);
   const [sales, setSales] = useState(initialSales);
   const [payments, setPayments] = useState(initialPayments);
+  const [staffs, setStaffs] = useState(initialStaffs);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -22,6 +28,7 @@ export function DataProvider({ children }) {
       setCustomers(initialCustomers);
       setSales(initialSales);
       setPayments(initialPayments);
+      setStaffs(initialStaffs);
       return;
     }
 
@@ -38,17 +45,76 @@ export function DataProvider({ children }) {
       setCustomers(parseCustomers(custRows));
       setSales(parseSales(salesRows));
       setPayments(parsePayments(payRows));
+
+      // 05_사원관리 시트 로드 (시트가 없거나 오류 시 안전 폴백)
+      try {
+        const staffRows = await getSheetValues(accessToken, '05_사원관리');
+        const parsedStaffs = parseStaffs(staffRows);
+        setStaffs(parsedStaffs);
+
+        // 로그인 이메일 기반 사원 자동 매칭 및 프로필 동기화
+        if (user?.email && parsedStaffs.length > 0) {
+          const matched = parsedStaffs.find(s => s.email === user.email.toLowerCase());
+          if (matched) {
+            updateUserProfile({
+              userCode: matched.userCode,
+              userName: matched.userName,
+              companyCode: matched.companyCode,
+              dept: matched.dept,
+            });
+          }
+        }
+      } catch (e) {
+        console.log('05_사원관리 시트 미존재 또는 로드 건너뜀:', e.message);
+      }
+
     } catch (err) {
       console.error('시트 데이터 불러오기 에러:', err);
       setError(err.message);
     } finally {
       setLoading(false);
     }
-  }, [accessToken, isLoggedIn]);
+  }, [accessToken, isLoggedIn, user?.email, updateUserProfile]);
 
   useEffect(() => {
     fetchAllData();
   }, [fetchAllData]);
+
+  // --- 사원관리 DB CRUD ---
+  const saveStaffToSheet = async (profileData) => {
+    const row = [
+      profileData.userCode,
+      profileData.userName,
+      profileData.companyCode,
+      profileData.email || user?.email || '',
+      profileData.dept || '기획예산부',
+      profileData.position || '담당자',
+    ];
+
+    if (isLoggedIn && accessToken) {
+      try {
+        const index = staffs.findIndex(s => s.email === profileData.email?.toLowerCase());
+        if (index !== -1) {
+          const rowIndex = index + 2;
+          await updateSheetRow(accessToken, '05_사원관리', rowIndex, row);
+        } else {
+          await appendSheetValue(accessToken, '05_사원관리', row);
+        }
+      } catch (err) {
+        console.error('사원관리 시트 저장 에러:', err);
+      }
+    }
+
+    setStaffs(prev => {
+      const idx = prev.findIndex(s => s.email === profileData.email?.toLowerCase());
+      if (idx !== -1) {
+        const updated = [...prev];
+        updated[idx] = { ...updated[idx], ...profileData };
+        return updated;
+      }
+      return [...prev, profileData];
+    });
+  };
 
   // --- 1. 고객 CRUD ---
   const addCustomer = async (newCust) => {
@@ -209,9 +275,11 @@ export function DataProvider({ children }) {
         customers,
         sales,
         payments,
+        staffs,
         loading,
         error,
         refreshData: fetchAllData,
+        saveStaffToSheet,
         addCustomer,
         updateCustomer,
         deleteCustomer,

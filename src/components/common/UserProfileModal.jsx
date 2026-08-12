@@ -1,10 +1,12 @@
 // src/components/common/UserProfileModal.jsx
 import React, { useState } from 'react';
-import { X, UserCheck, ShieldCheck } from 'lucide-react';
+import { X, UserCheck, ShieldCheck, Database } from 'lucide-react';
 import { useGoogleAuth } from '../../context/GoogleAuthContext';
+import { useData } from '../../context/DataContext';
 
 export default function UserProfileModal({ onClose }) {
   const { user, updateUserProfile } = useGoogleAuth();
+  const { saveStaffToSheet, isUsingSheetsDB } = useData();
 
   const [formData, setFormData] = useState({
     userCode: user?.userCode || '44',
@@ -13,10 +15,15 @@ export default function UserProfileModal({ onClose }) {
     email: user?.email || '',
   });
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     updateUserProfile(formData);
-    alert(`사원 프로필 정보가 영구 저장되었습니다!\n사원번호: ${formData.userCode} | 담당자: ${formData.userName} | 회사코드: ${formData.companyCode}\n(재로그인 후에도 유지됩니다.)`);
+
+    if (isUsingSheetsDB) {
+      await saveStaffToSheet(formData);
+    }
+
+    alert(`사원 프로필 정보가 구글 시트 DB(05_사원관리) 및 브라우저에 연동 저장되었습니다!\n사원번호: ${formData.userCode} | 담당자: ${formData.userName} | 회사코드: ${formData.companyCode}`);
     onClose();
   };
 
