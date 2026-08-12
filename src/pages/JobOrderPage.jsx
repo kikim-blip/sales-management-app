@@ -7,19 +7,32 @@ import JobOrderModal from '../components/common/JobOrderModal';
 import JobOrderPrintModal from '../components/common/JobOrderPrintModal';
 
 export default function JobOrderPage() {
-  const { customers, sales, addSales, jobOrders, addJobOrder, deleteJobOrder } = useData();
+  const { customers, sales, addSales, jobOrders, addJobOrder, updateJobOrder, deleteJobOrder } = useData();
   const { user } = useGoogleAuth();
 
   const today = new Date().toISOString().split('T')[0];
 
   const [showModal, setShowModal] = useState(false);
+  const [editingOrder, setEditingOrder] = useState(null);
   const [printingOrder, setPrintingOrder] = useState(null);
 
-  // 작업전표 저장 (구글 시트 04_작업전표DB 연동)
-  const handleSaveJobOrder = async (newOrder) => {
-    await addJobOrder(newOrder);
-    alert(`[코드: ${newOrder.code_number}] 작업전표가 구글 시트(04_작업전표DB)에 정상 등록되었습니다!`);
+  // 작업전표 저장 또는 수정 (구글 시트 04_작업전표DB 연동)
+  const handleSaveJobOrder = async (orderData) => {
+    if (editingOrder) {
+      await updateJobOrder(editingOrder.code_number, orderData);
+      alert(`[코드: ${orderData.code_number}] 작업전표가 성공적으로 수정 반영되었습니다!`);
+    } else {
+      await addJobOrder(orderData);
+      alert(`[코드: ${orderData.code_number}] 작업전표가 구글 시트(04_작업전표DB)에 정상 등록되었습니다!`);
+    }
     setShowModal(false);
+    setEditingOrder(null);
+  };
+
+  // 작업전표 수정 팝업 열기
+  const handleEditClick = (order) => {
+    setEditingOrder(order);
+    setShowModal(true);
   };
 
   // 작업전표 삭제
@@ -70,12 +83,15 @@ export default function JobOrderPage() {
             <h2 className="text-xl font-bold text-slate-800">의뢰 작업전표 관리</h2>
           </div>
           <p className="text-xs text-slate-500 mt-1">
-            의뢰 들어온 작업전표를 작성 및 관리하고, 실물 경성문화사 양식으로 1:1 출력 또는 매출로 연동합니다.
+            의뢰 들어온 작업전표를 작성 및 수정 관리하고, 실물 경성문화사 양식으로 1:1 출력 또는 매출로 연동합니다.
           </p>
         </div>
 
         <button
-          onClick={() => setShowModal(true)}
+          onClick={() => {
+            setEditingOrder(null);
+            setShowModal(true);
+          }}
           className="flex items-center justify-center space-x-2 bg-sky-600 hover:bg-sky-700 text-white px-4 py-2.5 rounded-xl text-sm font-bold shadow-md transition"
         >
           <Plus className="w-4 h-4" />
@@ -94,7 +110,7 @@ export default function JobOrderPage() {
           jobOrders.map((order) => {
             const cust = customers.find(c => c.id === order.customer_id);
             return (
-              <div key={order.id} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4 hover:border-sky-300 transition">
+              <div key={order.code_number || order.id} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4 hover:border-sky-300 transition">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
                   <div className="flex items-center space-x-3">
                     <span className="text-xs font-mono font-black text-rose-600 bg-rose-50 border border-rose-200 px-3 py-1 rounded-lg">
@@ -119,7 +135,7 @@ export default function JobOrderPage() {
                   <div className="sm:col-span-2 space-y-1">
                     <h3 className="text-base font-extrabold text-slate-900">{order.title}</h3>
                     <p className="text-xs font-semibold text-sky-600">
-                      발주처: {cust ? `${cust.name} - ${cust.dept}` : order.customer_id} (담당: {order.client_contact_person || '미지정'})
+                      발주처: {cust ? `${cust.name} - ${cust.dept}` : (order.customer_name || order.customer_id)} (담당: {order.client_contact_person || '미지정'})
                     </p>
                     <p className="text-xs text-slate-500 pt-1">
                       규격: {order.spec} | 수량: {order.quantity}부 | 제본: {order.binding} | 표지: {order.cover_job}
@@ -138,7 +154,7 @@ export default function JobOrderPage() {
                 {/* 하단 액션 버튼 그룹 */}
                 <div className="flex flex-wrap items-center justify-between pt-3 border-t border-slate-100 gap-2">
                   <div className="flex items-center space-x-2">
-                    {/* 경성문화사 실물 1:1 서식 인쇄 버튼 */}
+                    {/* 실물 1:1 서식 인쇄 버튼 */}
                     <button
                       onClick={() => setPrintingOrder(order)}
                       className="flex items-center space-x-1.5 bg-rose-600 hover:bg-rose-700 text-white px-3.5 py-1.5 rounded-xl text-xs font-bold shadow-sm transition"
@@ -155,11 +171,20 @@ export default function JobOrderPage() {
                       <ArrowRight className="w-3.5 h-3.5" />
                       <span>매출/견적 자동 전환</span>
                     </button>
+
+                    {/* ✏️ 작업전표 수정 버튼 */}
+                    <button
+                      onClick={() => handleEditClick(order)}
+                      className="flex items-center space-x-1 bg-amber-500 hover:bg-amber-600 text-white px-3.5 py-1.5 rounded-xl text-xs font-bold shadow-sm transition"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                      <span>전표 수정</span>
+                    </button>
                   </div>
 
                   <div className="flex items-center space-x-1">
                     <button
-                      onClick={() => handleDeleteOrder(order.id)}
+                      onClick={() => handleDeleteOrder(order.code_number || order.id)}
                       className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
                       title="전표 삭제"
                     >
@@ -174,12 +199,16 @@ export default function JobOrderPage() {
         )}
       </div>
 
-      {/* 작업전표 신규 작성 모달 */}
+      {/* 작업전표 작성 / 수정 모달 */}
       {showModal && (
         <JobOrderModal
           customers={customers}
+          initialData={editingOrder}
           onSave={handleSaveJobOrder}
-          onClose={() => setShowModal(false)}
+          onClose={() => {
+            setShowModal(false);
+            setEditingOrder(null);
+          }}
         />
       )}
 

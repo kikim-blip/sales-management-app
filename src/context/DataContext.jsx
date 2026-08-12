@@ -152,6 +152,72 @@ export function DataProvider({ children }) {
     setJobOrders(prev => [{ id: newOrder.code_number, ...newOrder }, ...prev]);
   };
 
+  const updateJobOrder = async (codeNo, updatedOrder) => {
+    const index = jobOrders.findIndex(o => o.code_number === codeNo || o.id === codeNo);
+    if (index === -1) return;
+    const rowIndex = index + 2;
+
+    const custObj = customers.find(c => c.id === updatedOrder.customer_id);
+    const custName = custObj ? `${custObj.name}` : (updatedOrder.customer_name || updatedOrder.customer_id);
+    const custDept = custObj ? `${custObj.dept}` : (updatedOrder.dept || '');
+
+    const row = [
+      updatedOrder.code_number,
+      updatedOrder.manager_name,
+      updatedOrder.receipt_date,
+      updatedOrder.delivery_date,
+      updatedOrder.delivery_time,
+      custName,
+      custDept,
+      updatedOrder.title,
+      updatedOrder.spec,
+      updatedOrder.pages,
+      updatedOrder.duplex,
+      updatedOrder.quantity,
+      updatedOrder.estimated_price,
+      updatedOrder.client_contact_person,
+      updatedOrder.client_phone,
+      updatedOrder.client_email,
+      updatedOrder.email_receipt_time,
+      updatedOrder.cover_job,
+      updatedOrder.cover_paper,
+      updatedOrder.cover_print,
+      updatedOrder.coating,
+      updatedOrder.inner_job,
+      updatedOrder.inner_paper,
+      updatedOrder.inner_print,
+      updatedOrder.interleaf_paper,
+      updatedOrder.binding,
+      updatedOrder.draft_email,
+      updatedOrder.draft_group,
+      updatedOrder.mail_sender,
+      updatedOrder.cover_proof_date,
+      updatedOrder.inner_proof_date,
+      updatedOrder.proof_method,
+      updatedOrder.planning,
+      updatedOrder.photography,
+      updatedOrder.illustration,
+      updatedOrder.copyright_web,
+      updatedOrder.production_progress,
+      updatedOrder.delivery_destination,
+      updatedOrder.cover_related,
+      updatedOrder.inner_related,
+      updatedOrder.request_note,
+      updatedOrder.editor_name,
+      updatedOrder.designer_name,
+    ];
+
+    if (isLoggedIn && accessToken) {
+      try {
+        await updateSheetRow(accessToken, '04_작업전표DB', rowIndex, row);
+      } catch (err) {
+        console.error('작업전표 시트 수정 에러:', err);
+      }
+    }
+
+    setJobOrders(prev => prev.map(o => (o.code_number === codeNo || o.id === codeNo) ? { ...o, ...updatedOrder } : o));
+  };
+
   const deleteJobOrder = async (codeNo) => {
     const index = jobOrders.findIndex(o => o.code_number === codeNo || o.id === codeNo);
     if (index === -1) return;
@@ -391,6 +457,7 @@ export function DataProvider({ children }) {
         refreshData: fetchAllData,
         saveStaffToSheet,
         addJobOrder,
+        updateJobOrder,
         deleteJobOrder,
         addCustomer,
         updateCustomer,

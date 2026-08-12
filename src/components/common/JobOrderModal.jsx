@@ -1,13 +1,14 @@
 // src/components/common/JobOrderModal.jsx
 import React, { useState, useEffect } from 'react';
-import { X, ClipboardList, CheckCircle2, UserCheck, Printer, FileText, Hash, Building } from 'lucide-react';
+import { X, ClipboardList, CheckCircle2, UserCheck, Printer, FileText, Hash, Pencil } from 'lucide-react';
 import { useGoogleAuth } from '../../context/GoogleAuthContext';
 import { useData } from '../../context/DataContext';
 
-export default function JobOrderModal({ customers, onSave, onClose }) {
+export default function JobOrderModal({ customers, initialData, onSave, onClose }) {
   const { user } = useGoogleAuth();
   const { addCustomer } = useData();
 
+  const isEditMode = !!initialData;
   const today = new Date().toISOString().split('T')[0];
   
   // 날짜 기반 YYMMDD 및 연도 생성
@@ -24,6 +25,7 @@ export default function JobOrderModal({ customers, onSave, onClose }) {
 
   // 로컬 스토리지에서 마지막 작성 연도 및 순번 가져오기
   const getInitialSeq = () => {
+    if (initialData?.seq) return initialData.seq;
     const saved = localStorage.getItem('last_job_sequence_info');
     if (saved) {
       try {
@@ -42,56 +44,68 @@ export default function JobOrderModal({ customers, onSave, onClose }) {
   const formattedSeq = String(seqNumber).padStart(3, '0');
   
   // 생성 코드: (고유번호)-(YYMMDD)-(회사코드+순번) 예: 44 - 260812 - 3277
-  const generatedCode = `${userCode} - ${dateYYMMDD} - ${companyCode}${formattedSeq}`;
+  const generatedCode = initialData?.code_number || `${userCode} - ${dateYYMMDD} - ${companyCode}${formattedSeq}`;
 
   const [activeTab, setActiveTab] = useState('basic'); // 'basic' | 'print' | 'design'
-  const [customerNameInput, setCustomerNameInput] = useState('');
+  
+  // 초기 고객사명 가져오기
+  const getInitialCustomerName = () => {
+    if (initialData?.customer_name) return initialData.customer_name;
+    if (initialData?.customer_id) {
+      const found = customers.find(c => c.id === initialData.customer_id);
+      if (found) return found.name;
+      return initialData.customer_id;
+    }
+    return '';
+  };
+
+  const [customerNameInput, setCustomerNameInput] = useState(getInitialCustomerName());
 
   const [formData, setFormData] = useState({
     code_number: generatedCode,
     seq: seqNumber,
-    manager_name: userName,
-    receipt_date: today,
-    delivery_date: today,
-    delivery_time: '',
-    customer_id: '',
-    dept: '',
-    title: '',
-    spec: '',
-    pages: '',
-    duplex: '',
-    quantity: '',
-    estimated_price: '',
-    client_contact_person: '',
-    client_phone: '',
-    client_email: '',
-    email_receipt_time: '',
-    cover_job: '',
-    cover_paper: '',
-    cover_print: '',
-    coating: '',
-    inner_job: '',
-    inner_paper: '',
-    inner_print: '',
-    interleaf_paper: '',
-    binding: '',
-    draft_email: '',
-    draft_group: '',
-    mail_sender: '',
-    cover_proof_date: '',
-    inner_proof_date: '',
-    proof_method: '',
-    planning: '',
-    photography: '',
-    illustration: '',
-    copyright_web: '',
-    production_progress: '',
-    delivery_destination: '',
-    cover_related: '',
-    inner_related: '',
-    request_note: '',
-    editor_name: userName,
-    designer_name: '',
+    manager_name: initialData?.manager_name || userName,
+    receipt_date: initialData?.receipt_date || today,
+    delivery_date: initialData?.delivery_date || today,
+    delivery_time: initialData?.delivery_time || '',
+    customer_id: initialData?.customer_id || '',
+    dept: initialData?.dept || '',
+    title: initialData?.title || '',
+    spec: initialData?.spec || '',
+    pages: initialData?.pages || '',
+    duplex: initialData?.duplex || '',
+    quantity: initialData?.quantity || '',
+    estimated_price: initialData?.estimated_price || '',
+    client_contact_person: initialData?.client_contact_person || '',
+    client_phone: initialData?.client_phone || '',
+    client_email: initialData?.client_email || '',
+    email_receipt_time: initialData?.email_receipt_time || '',
+    cover_job: initialData?.cover_job || '',
+    cover_paper: initialData?.cover_paper || '',
+    cover_print: initialData?.cover_print || '',
+    coating: initialData?.coating || '',
+    inner_job: initialData?.inner_job || '',
+    inner_paper: initialData?.inner_paper || '',
+    inner_print: initialData?.inner_print || '',
+    interleaf_paper: initialData?.interleaf_paper || '',
+    binding: initialData?.binding || '',
+    draft_email: initialData?.draft_email || '',
+    draft_group: initialData?.draft_group || '',
+    mail_sender: initialData?.mail_sender || '',
+    cover_proof_date: initialData?.cover_proof_date || '',
+    inner_proof_date: initialData?.inner_proof_date || '',
+    proof_method: initialData?.proof_method || '',
+    planning: initialData?.planning || '',
+    photography: initialData?.photography || '',
+    illustration: initialData?.illustration || '',
+    copyright_web: initialData?.copyright_web || '',
+    production_progress: initialData?.production_progress || '',
+    delivery_destination: initialData?.delivery_destination || '',
+    cover_related: initialData?.cover_related || '',
+    inner_related: initialData?.inner_related || '',
+    request_note: initialData?.request_note || '',
+    editor_name: initialData?.editor_name || userName,
+    designer_name: initialData?.designer_name || '',
   });
 
   // 순번 변경 시 실시간 코드번호 업데이트
@@ -128,6 +142,22 @@ export default function JobOrderModal({ customers, onSave, onClose }) {
     }
   };
 
+  // 💡 Enter 키 입력 시 다음 폼 요소로 자동 포커스 이동 헬퍼
+  const handleFormKeyDown = (e) => {
+    if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
+      e.preventDefault();
+      const form = e.target.form;
+      if (!form) return;
+      const elements = Array.from(form.elements).filter(
+        el => !el.disabled && el.type !== 'hidden' && el.tabIndex !== -1
+      );
+      const index = elements.indexOf(e.target);
+      if (index > -1 && index + 1 < elements.length) {
+        elements[index + 1].focus();
+      }
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     const finalCustName = customerNameInput.trim();
@@ -153,11 +183,12 @@ export default function JobOrderModal({ customers, onSave, onClose }) {
       custId = existingCust.id;
     }
 
-    // 💡 다음 전표를 위해 마지막 순번 기억 저장!
-    localStorage.setItem('last_job_sequence_info', JSON.stringify({
-      year: currentYear,
-      seq: formData.seq,
-    }));
+    if (!isEditMode) {
+      localStorage.setItem('last_job_sequence_info', JSON.stringify({
+        year: currentYear,
+        seq: formData.seq,
+      }));
+    }
 
     onSave({
       ...formData,
@@ -168,14 +199,14 @@ export default function JobOrderModal({ customers, onSave, onClose }) {
 
   return (
     <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
-      <form onSubmit={handleSubmit} className="bg-white w-full max-w-3xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+      <form onSubmit={handleSubmit} onKeyDown={handleFormKeyDown} className="bg-white w-full max-w-3xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
         
         {/* 헤더 영역 */}
         <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
           <div className="flex items-center space-x-2">
-            <ClipboardList className="w-5 h-5 text-sky-600" />
+            {isEditMode ? <Pencil className="w-5 h-5 text-amber-600" /> : <ClipboardList className="w-5 h-5 text-sky-600" />}
             <h3 className="font-bold text-slate-800 text-base sm:text-lg">
-              의뢰 작업전표 상세 접수 폼
+              {isEditMode ? '의뢰 작업전표 수정 폼' : '의뢰 작업전표 상세 접수 폼'}
             </h3>
           </div>
           <button type="button" onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-xl">
@@ -205,7 +236,7 @@ export default function JobOrderModal({ customers, onSave, onClose }) {
               className="w-16 p-1 bg-slate-900 border border-slate-600 rounded text-center text-amber-300 font-mono font-extrabold text-xs"
               title="임의 순번 지정 시 다음 작성부터 1씩 자동 증가합니다."
             />
-            <span className="text-[10px] text-slate-400"> (다음 전표부터 +1 자동증가)</span>
+            <span className="text-[10px] text-slate-400"> (Tab / Enter 이동 지원)</span>
           </div>
         </div>
 
@@ -255,10 +286,9 @@ export default function JobOrderModal({ customers, onSave, onClose }) {
                 <div>
                   <label className="block font-bold text-slate-700 mb-1 flex items-center justify-between">
                     <span>발주처 (고객사명) *</span>
-                    <span className="text-[10px] text-sky-600 font-normal">※ 신규 입력 시 고객DB에 자동등록</span>
+                    <span className="text-[10px] text-sky-600 font-normal">※ 신규 입력 시 고객DB 자동등록</span>
                   </label>
 
-                  {/* 💡 고객사명만 표기되는 직접 입력 + 자동완성 datalist */}
                   <div className="relative">
                     <input
                       type="text"
@@ -578,10 +608,12 @@ export default function JobOrderModal({ customers, onSave, onClose }) {
             </button>
             <button
               type="submit"
-              className="flex items-center space-x-1.5 px-5 py-2 rounded-xl text-xs font-bold bg-sky-600 text-white hover:bg-sky-700 shadow-md"
+              className={`flex items-center space-x-1.5 px-5 py-2 rounded-xl text-xs font-bold text-white shadow-md transition ${
+                isEditMode ? 'bg-amber-600 hover:bg-amber-700' : 'bg-sky-600 hover:bg-sky-700'
+              }`}
             >
               <CheckCircle2 className="w-4 h-4" />
-              <span>전표 접수 완료</span>
+              <span>{isEditMode ? '전표 수정 완료' : '전표 접수 완료'}</span>
             </button>
           </div>
         </div>
