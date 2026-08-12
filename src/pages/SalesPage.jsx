@@ -1,10 +1,11 @@
 // src/pages/SalesPage.jsx
 import React, { useState } from 'react';
 import { useData } from '../context/DataContext';
-import { Plus, Calendar, Share2, Pencil, Trash2, ClipboardList, FileText, FileSearch } from 'lucide-react';
+import { Plus, Calendar, Share2, Pencil, Trash2, ClipboardList, FileText, FileSearch, Printer } from 'lucide-react';
 import JobOrderModal from '../components/common/JobOrderModal';
 import SelectJobOrderModal from '../components/common/SelectJobOrderModal';
 import QuotePrintModal from '../components/common/QuotePrintModal';
+import JobOrderPrintModal from '../components/common/JobOrderPrintModal';
 
 export default function SalesPage() {
   const { sales, customers, addSales, updateSales, deleteSales } = useData();
@@ -16,21 +17,58 @@ export default function SalesPage() {
   const [jobOrders, setJobOrders] = useState([
     {
       id: 'ORDER-001',
-      order_date: '2026-08-10',
+      code_number: '84 - 260812 - 3277',
+      manager_name: '강영진',
+      receipt_date: '2026-08-12',
       customer_id: customers[0]?.id || 'CUST-001',
-      title: '(샘플 전표) 8월 홈페이지 인쇄물 및 홍보물 전표 접수',
-      content: '카탈로그 500부 인쇄 및 홈페이지 배너 디자인 의뢰건',
-      delivery_date: '2026-08-20',
-      delivery_time: '15:00',
-      estimated_price: 2500000,
+      dept: '기획예산부',
+      title: '2026년 공사 주요사업 추진현황',
+      spec: '210*297',
+      pages: '페이지수',
+      duplex: '양면',
+      quantity: 50,
+      estimated_price: 1500000,
+      client_contact_person: '김수정',
+      client_phone: '061-931-1114',
+      client_email: 'ksj127@at.or.kr',
+      email_receipt_time: '26.08.12 (수) 10:51',
+      cover_job: '한글편집세종',
+      cover_paper: '레쟈크체크백색',
+      cover_print: '컬러',
+      coating: '없음',
+      inner_job: '한글편집세종',
+      inner_paper: '백색모조100g',
+      inner_print: '컬러',
+      interleaf_paper: '없음',
+      binding: '무선제본',
+      draft_email: 'ksks5577',
+      draft_group: 'aT',
+      mail_sender: '김수정',
+      cover_proof_date: '2026-08-12',
+      inner_proof_date: '2026-08-12',
+      proof_method: '리턴없음',
+      planning: '기획관련내용',
+      photography: '사진촬영관련내용',
+      illustration: '일러스트 작업 유무',
+      copyright_web: '저작권·웹게시 관련 내용',
+      production_progress: '서울출력실',
+      delivery_destination: '이기철팀장전달',
+      cover_related: '1.첫페이지 표지사용',
+      inner_related: '1.개쪽만 확인하고 올려주세요',
+      request_note: '-',
+      editor_name: '편집 작업자명',
+      designer_name: '디자인 작업자명',
+      delivery_date: '2026-08-13',
+      delivery_time: '12시',
       status: '의뢰접수',
     }
   ]);
   const [showJobOrderModal, setShowJobOrderModal] = useState(false);
   const [showSelectJobModal, setShowSelectJobModal] = useState(false);
 
-  // 2. 견적서/비교견적서 출력 모달 state
+  // 2. 출력 모달 state
   const [printingQuote, setPrintingQuote] = useState(null);
+  const [printingJobOrder, setPrintingJobOrder] = useState(null);
 
   const today = new Date().toISOString().split('T')[0];
 
@@ -58,7 +96,7 @@ export default function SalesPage() {
   const handleSaveJobOrder = (newOrder) => {
     const orderId = `ORDER-${String(jobOrders.length + 1).padStart(3, '0')}`;
     setJobOrders(prev => [{ id: orderId, ...newOrder }, ...prev]);
-    alert('의뢰 작업전표가 등록되었습니다! 매출/견적 작성 시 불러오기로 자동 입력하실 수 있습니다.');
+    alert('경성문화사 1:1 작업전표가 등록되었습니다! [전표 인쇄] 버튼을 누르면 실물 서식으로 즉시 출력됩니다.');
     setShowJobOrderModal(false);
   };
 
@@ -71,7 +109,7 @@ export default function SalesPage() {
       customer_id: order.customer_id,
       title: order.title,
       content: `[코드: ${order.code_number || order.id}] ${order.content || ''}`,
-      note: `담당: ${order.manager_name || '홍길동'} (사원번호: ${order.code_number?.split('-')[0]?.trim() || '84'})`,
+      note: `담당: ${order.manager_name || '강영진'} (코드: ${order.code_number || '84-260812-3277'})`,
       delivery_date: order.delivery_date || today,
       delivery_time: order.delivery_time || '14:00',
       supply_price: supply,
@@ -165,6 +203,15 @@ export default function SalesPage() {
         </div>
 
         <div className="flex items-center space-x-2">
+          {/* 경성문화사 실물 전표 인쇄 팝업 버튼 */}
+          <button
+            onClick={() => setPrintingJobOrder(jobOrders[0])}
+            className="flex items-center justify-center space-x-1.5 bg-rose-600 hover:bg-rose-700 text-white px-3.5 py-2 rounded-xl text-xs font-bold shadow-sm transition"
+          >
+            <Printer className="w-4 h-4" />
+            <span>실물 전표 인쇄</span>
+          </button>
+
           {/* 작업전표 신규 접수 버튼 */}
           <button
             onClick={() => setShowJobOrderModal(true)}
@@ -442,6 +489,15 @@ export default function SalesPage() {
           quote={printingQuote.quote}
           customer={printingQuote.customer}
           onClose={() => setPrintingQuote(null)}
+        />
+      )}
+
+      {/* 5. 경성문화사 실물 작업전표 1:1 출력 모달 */}
+      {printingJobOrder && (
+        <JobOrderPrintModal
+          order={printingJobOrder}
+          customer={customers.find(c => c.id === printingJobOrder.customer_id)}
+          onClose={() => setPrintingJobOrder(null)}
         />
       )}
     </div>
