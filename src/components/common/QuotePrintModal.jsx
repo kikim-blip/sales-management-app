@@ -2,8 +2,10 @@
 import React, { useRef } from 'react';
 import { X, Download, Printer, FileText, Stamp, Layers } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import { useGoogleAuth } from '../../context/GoogleAuthContext';
 
 export default function QuotePrintModal({ quote, customer, onClose }) {
+  const { user } = useGoogleAuth();
   const printRef = useRef();
 
   if (!quote) return null;
@@ -14,10 +16,13 @@ export default function QuotePrintModal({ quote, customer, onClose }) {
   const custContact = customer ? customer.contact_person : '';
   const custPhone = customer ? customer.phone : '';
 
+  const managerName = user?.userName || '홍길동';
+  const userCode = user?.userCode || '84';
+
   // 비교견적서 모드 인가?
   const [isComparative, setIsComparative] = React.useState(false);
 
-  // 비교견적 타사 (비교B사) 자동 계산 마진율 10~15% 높게 샘플 세팅
+  // 비교견적 타사 (비교B사) 자동 계산 마진율 12% 높게 설정
   const compPriceB = Math.round((quote.supply_price || 0) * 1.12);
   const compTaxB = Math.round(compPriceB * 0.1);
   const compTotalB = compPriceB + compTaxB;
@@ -36,7 +41,7 @@ export default function QuotePrintModal({ quote, customer, onClose }) {
         [],
         ['견적 번호', quote.id, '발행 일자', today],
         ['수신 (공급받는자)', `${custName} ${custDept}`, '담당자', `${custContact} (${custPhone})`],
-        ['발행 (공급자)', '주식회사 영업관리', '사업자번호', '123-45-67890'],
+        ['발행 (공급자)', '주식회사 영업관리 PWA', '담당 사원', `${managerName} (${userCode})`],
         [],
         ['품명 / 작업명', '상세 사양', '공급가액', '세액(10%)', '합계금액(VAT포함)'],
         [quote.title, quote.content || '-', quote.supply_price, quote.tax, quote.total_price],
@@ -51,7 +56,7 @@ export default function QuotePrintModal({ quote, customer, onClose }) {
         ['작업명', quote.title],
         [],
         ['구분', '공급자 상호', '공급가액', '부가세(VAT)', '총견적금액', '비고'],
-        ['당사 (제출안)', '주식회사 영업관리', quote.supply_price, quote.tax, quote.total_price, '최적단가 적용'],
+        ['당사 (제출안)', `주식회사 영업관리 (${managerName})`, quote.supply_price, quote.tax, quote.total_price, '최적단가 적용'],
         ['비교 (B 사)', '(주)비교디자인', compPriceB, compTaxB, compTotalB, '시장 표준단가'],
       ];
     }
@@ -138,8 +143,19 @@ export default function QuotePrintModal({ quote, customer, onClose }) {
                 <span className="text-[11px] text-slate-400">등록번호: 123-45-67890</span>
               </div>
               <p><strong className="text-slate-700">상 호 명 :</strong> 주식회사 영업관리 PWA</p>
-              <p><strong className="text-slate-700">대 표 자 :</strong> 홍 길 동 (인)</p>
+              <p><strong className="text-slate-700">담당 사원 :</strong> <span className="font-bold text-sky-700">{managerName}</span> (사원번호: {userCode})</p>
               <p><strong className="text-slate-700">소 재 지 :</strong> 서울특별시 강남구 테헤란로 123</p>
+              <p><strong className="text-slate-700">연 락 처 :</strong> 02-1234-5678</p>
+
+              {/* 직인 도장 아이콘 visual */}
+              <div className="absolute right-4 bottom-4 w-12 h-12 rounded-full border-2 border-rose-500 text-rose-500 flex items-center justify-center font-bold text-[10px] transform rotate-12 opacity-80 select-none">
+                <div className="text-center leading-none">
+                  <Stamp className="w-4 h-4 mx-auto mb-0.5" />
+                  <span>직인</span>
+                </div>
+              </div>
+            </div>
+          </div>700">소 재 지 :</strong> 서울특별시 강남구 테헤란로 123</p>
               <p><strong className="text-slate-700">연 락 처 :</strong> 02-1234-5678</p>
 
               {/* 직인 도장 아이콘 visual */}

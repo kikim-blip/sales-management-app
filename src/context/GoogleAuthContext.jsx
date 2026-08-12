@@ -6,10 +6,19 @@ const GoogleAuthContext = createContext();
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 const SCOPES = 'https://www.googleapis.com/auth/spreadsheets';
 
+const defaultProfile = {
+  userCode: '84',
+  userName: '홍길동',
+  companyCode: '3',
+  email: 'richkikim@gmail.com',
+};
+
 export function GoogleAuthProvider({ children }) {
   const [tokenClient, setTokenClient] = useState(null);
   const [accessToken, setAccessToken] = useState(localStorage.getItem('google_access_token') || null);
-  const [user, setUser] = useState(JSON.parse(localStorage.getItem('google_user_info')) || null);
+  
+  const savedUser = JSON.parse(localStorage.getItem('google_user_info'));
+  const [user, setUser] = useState(savedUser ? { ...defaultProfile, ...savedUser } : defaultProfile);
 
   useEffect(() => {
     /* global google */
@@ -23,10 +32,15 @@ export function GoogleAuthProvider({ children }) {
             setAccessToken(token);
             localStorage.setItem('google_access_token', token);
 
-            // 간단 사용자 정보 저장 (토큰 인증 완료)
-            const dummyUserInfo = { name: '구글 사용자', email: '사용자 인증됨' };
-            setUser(dummyUserInfo);
-            localStorage.setItem('google_user_info', JSON.stringify(dummyUserInfo));
+            setUser(prev => {
+              const updated = {
+                ...prev,
+                name: prev.userName || '구글 사용자',
+                email: '사용자 인증됨',
+              };
+              localStorage.setItem('google_user_info', JSON.stringify(updated));
+              return updated;
+            });
           }
         },
       });
@@ -34,9 +48,16 @@ export function GoogleAuthProvider({ children }) {
     }
   }, []);
 
+  const updateUserProfile = (newProfile) => {
+    setUser(prev => {
+      const updated = { ...prev, ...newProfile };
+      localStorage.setItem('google_user_info', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
   const login = () => {
     if (tokenClient) {
-      // 구글 로그인 팝업 호출
       tokenClient.requestAccessToken({ prompt: 'consent' });
     } else {
       alert('Google Identity Services SDK가 아직 로드되지 않았습니다. 잠시 후 다시 시도해 주세요.');
@@ -45,13 +66,13 @@ export function GoogleAuthProvider({ children }) {
 
   const logout = () => {
     setAccessToken(null);
-    setUser(null);
+    setUser(defaultProfile);
     localStorage.removeItem('google_access_token');
     localStorage.removeItem('google_user_info');
   };
 
   return (
-    <GoogleAuthContext.Provider value={{ accessToken, user, login, logout, isLoggedIn: !!accessToken }}>
+    <GoogleAuthContext.Provider value={{ accessToken, user, updateUserProfile, login, logout, isLoggedIn: !!accessToken }}>
       {children}
     </GoogleAuthContext.Provider>
   );

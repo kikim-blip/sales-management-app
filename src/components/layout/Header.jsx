@@ -1,12 +1,14 @@
 // src/components/layout/Header.jsx
-import React from 'react';
-import { Building2, LogIn, LogOut, RefreshCw, Database } from 'lucide-react';
+import React, { useState } from 'react';
+import { Building2, LogIn, LogOut, RefreshCw, Database, UserCheck } from 'lucide-react';
 import { useGoogleAuth } from '../../context/GoogleAuthContext';
 import { useData } from '../../context/DataContext';
+import UserProfileModal from '../common/UserProfileModal';
 
 export default function Header() {
-  const { isLoggedIn, login, logout } = useGoogleAuth();
+  const { isLoggedIn, user, login, logout } = useGoogleAuth();
   const { loading, refreshData, isUsingSheetsDB } = useData();
+  const [showProfileModal, setShowProfileModal] = useState(false);
 
   return (
     <header className="bg-white border-b border-slate-200 sticky top-0 z-30 px-4 py-3 sm:px-6 flex items-center justify-between shadow-sm">
@@ -33,6 +35,17 @@ export default function Header() {
       </div>
 
       <div className="flex items-center space-x-2">
+        {/* 사원 프로필 설정 버튼 */}
+        <button
+          onClick={() => setShowProfileModal(true)}
+          className="flex items-center space-x-1.5 bg-sky-50 hover:bg-sky-100 border border-sky-200 text-sky-800 px-3 py-1.5 rounded-xl text-xs font-semibold transition"
+          title="사원 프로필 변경"
+        >
+          <UserCheck className="w-3.5 h-3.5 text-sky-600" />
+          <span className="font-mono text-sky-900 font-bold">{user?.userCode || '84'}</span>
+          <span>- {user?.userName || '홍길동'}</span>
+        </button>
+
         {isLoggedIn && (
           <button
             onClick={refreshData}
@@ -62,6 +75,10 @@ export default function Header() {
           </button>
         )}
       </div>
+
+      {showProfileModal && (
+        <UserProfileModal onClose={() => setShowProfileModal(false)} />
+      )}
     </header>
   );
 }

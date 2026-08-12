@@ -1,6 +1,6 @@
 // src/components/common/SelectJobOrderModal.jsx
 import React from 'react';
-import { X, ClipboardList, ArrowRight } from 'lucide-react';
+import { X, ClipboardList, ArrowRight, User } from 'lucide-react';
 
 export default function SelectJobOrderModal({ jobOrders, customers, onSelect, onClose }) {
   return (
@@ -18,7 +18,7 @@ export default function SelectJobOrderModal({ jobOrders, customers, onSelect, on
 
         <div className="p-5 overflow-y-auto space-y-3 flex-1">
           <p className="text-xs text-slate-500 mb-2">
-            불러올 작업전표를 선택하시면 매출/견적서 등록 폼에 모든 항목이 클릭 한 번으로 자동 채워집니다.
+            불러올 작업전표를 선택하시면 코드번호, 고객사, 담당자, 작업내용, 사양이 매출/견적서에 자동 입력됩니다.
           </p>
 
           {jobOrders.length === 0 ? (
@@ -28,22 +28,29 @@ export default function SelectJobOrderModal({ jobOrders, customers, onSelect, on
           ) : (
             jobOrders.map((order, idx) => {
               const cust = customers.find(c => c.id === order.customer_id);
+              const codeNo = order.code_number || order.id || '84-260812-3277';
               return (
                 <div
                   key={order.id || idx}
                   onClick={() => onSelect(order)}
                   className="p-4 rounded-xl border border-slate-200 hover:border-sky-500 hover:bg-sky-50/50 cursor-pointer transition flex items-center justify-between group"
                 >
-                  <div className="space-y-1">
+                  <div className="space-y-1.5">
                     <div className="flex items-center space-x-2">
-                      <span className="text-xs font-bold text-sky-600 bg-sky-100 px-2 py-0.5 rounded">{order.id}</span>
+                      <span className="text-xs font-mono font-extrabold text-rose-600 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded">
+                        {codeNo}
+                      </span>
                       <h4 className="font-bold text-slate-800 text-sm group-hover:text-sky-700">{order.title}</h4>
                     </div>
-                    <p className="text-xs text-slate-500">
-                      고객사: <strong className="text-slate-700">{cust ? `${cust.name} (${cust.dept})` : order.customer_id}</strong>
-                    </p>
+                    <div className="flex items-center space-x-3 text-xs text-slate-500">
+                      <span>고객사: <strong className="text-slate-700">{cust ? `${cust.name} (${cust.dept})` : order.customer_id}</strong></span>
+                      <span className="flex items-center space-x-1">
+                        <User className="w-3 h-3 text-slate-400" />
+                        <span>담당: {order.manager_name || '홍길동'}</span>
+                      </span>
+                    </div>
                     <p className="text-[11px] text-slate-400">
-                      접수일: {order.order_date} | 희망 납품일: {order.delivery_date} | 예상금액: {(order.estimated_price || 0).toLocaleString()}원
+                      접수일: {order.receipt_date || order.order_date} | 희망 납품일: {order.delivery_date} | 금액: {(order.estimated_price || 0).toLocaleString()}원
                     </p>
                   </div>
 

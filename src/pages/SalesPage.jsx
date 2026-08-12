@@ -70,7 +70,8 @@ export default function SalesPage() {
       ...prev,
       customer_id: order.customer_id,
       title: order.title,
-      content: order.content,
+      content: `[코드: ${order.code_number || order.id}] ${order.content || ''}`,
+      note: `담당: ${order.manager_name || '홍길동'} (사원번호: ${order.code_number?.split('-')[0]?.trim() || '84'})`,
       delivery_date: order.delivery_date || today,
       delivery_time: order.delivery_time || '14:00',
       supply_price: supply,
@@ -78,7 +79,7 @@ export default function SalesPage() {
       total_price: supply + tax,
     }));
     setShowSelectJobModal(false);
-    alert(`[${order.title}] 전표 데이터가 매출/견적 폼에 자동 반영되었습니다!`);
+    alert(`[${order.code_number || '전표'}] ${order.title} 전표가 매출/견적 폼에 자동 반영되었습니다!`);
   };
 
   const openNewModal = () => {
