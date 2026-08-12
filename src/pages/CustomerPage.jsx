@@ -1,27 +1,37 @@
 // src/pages/CustomerPage.jsx
 import React, { useState } from 'react';
 import { useData } from '../context/DataContext';
+import { useGoogleAuth } from '../context/GoogleAuthContext';
 import { Plus, Search, Pencil, Trash2 } from 'lucide-react';
 
 export default function CustomerPage() {
   const { customers, addCustomer, updateCustomer, deleteCustomer } = useData();
+  const { user } = useGoogleAuth();
+
   const [searchTerm, setSearchTerm] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+
+  const loggedInUserName = user?.userName || '김광일';
 
   const defaultForm = {
     name: '',
     dept: '',
     contact_person: '',
     phone: '',
+    email: '',
+    sales_manager: loggedInUserName,
   };
 
   const [formData, setFormData] = useState(defaultForm);
 
   const openNewModal = () => {
     setEditingId(null);
-    setFormData(defaultForm);
+    setFormData({
+      ...defaultForm,
+      sales_manager: loggedInUserName,
+    });
     setShowModal(true);
   };
 
@@ -32,6 +42,8 @@ export default function CustomerPage() {
       dept: cust.dept || '',
       contact_person: cust.contact_person || '',
       phone: cust.phone || '',
+      email: cust.email || '',
+      sales_manager: cust.sales_manager || loggedInUserName,
     });
     setShowModal(true);
   };
@@ -68,7 +80,7 @@ export default function CustomerPage() {
   };
 
   const filtered = customers.filter(
-    c => c.name.includes(searchTerm) || c.dept.includes(searchTerm) || c.contact_person.includes(searchTerm)
+    c => (c.name || '').includes(searchTerm) || (c.dept || '').includes(searchTerm) || (c.contact_person || '').includes(searchTerm) || (c.sales_manager || '').includes(searchTerm)
   );
 
   return (
@@ -76,7 +88,7 @@ export default function CustomerPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h2 className="text-xl font-bold text-slate-800">고객 관리</h2>
-          <p className="text-xs text-slate-500 mt-0.5">거래처 및 과/부서 담당자 정보를 등록, 수정, 삭제합니다.</p>
+          <p className="text-xs text-slate-500 mt-0.5">거래처 및 과/부서 담당자, 이메일, 영업담당자 정보를 등록 및 수정 관리합니다.</p>
         </div>
         <button
           onClick={openNewModal}
@@ -91,7 +103,7 @@ export default function CustomerPage() {
         <Search className="w-4 h-4 absolute left-3.5 top-3 text-slate-400" />
         <input
           type="text"
-          placeholder="고객사명, 과/부서명, 담당자 검색..."
+          placeholder="고객사명, 과/부서명, 담당자, 영업담당자 검색..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
@@ -110,8 +122,15 @@ export default function CustomerPage() {
                   <div className="flex items-center space-x-2">
                     <span className="font-bold text-slate-800 text-sm">{c.name}</span>
                     {c.dept && <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">{c.dept}</span>}
+                    {c.sales_manager && (
+                      <span className="text-xs bg-rose-50 text-rose-600 font-bold px-2 py-0.5 rounded-full border border-rose-100">
+                        영업담당: {c.sales_manager}
+                      </span>
+                    )}
                   </div>
-                  <p className="text-xs text-slate-500 mt-1">담당: {c.contact_person} | 연락처: {c.phone}</p>
+                  <p className="text-xs text-slate-500 mt-1">
+                    담당자: <strong>{c.contact_person || '미지정'}</strong> ({c.phone || '-'}) | 이메일: <strong>{c.email || '-'}</strong>
+                  </p>
                 </div>
               </div>
 
@@ -139,10 +158,10 @@ export default function CustomerPage() {
         </div>
       </div>
 
-      {/* 등록/수정 모달 */}
+      {/* 💡 신규 고객 등록 / 수정 모달 (이메일 & 영업담당자 필드 추가완료) */}
       {showModal && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <form onSubmit={handleSubmit} className="bg-white w-full max-w-md rounded-2xl shadow-xl p-6 space-y-4">
+          <form onSubmit={handleSubmit} className="bg-white w-full max-w-md rounded-2xl shadow-xl p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <h3 className="text-lg font-bold text-slate-800">
               {editingId ? '고객 정보 수정' : '신규 고객 등록'}
             </h3>
@@ -152,40 +171,68 @@ export default function CustomerPage() {
                 <input
                   type="text"
                   required
-                  placeholder="예: (주)한국상사"
+                  placeholder="예: 기후에너지환경부"
                   value={formData.name}
                   onChange={e => setFormData({ ...formData, name: e.target.value })}
                   className="w-full p-2.5 border border-slate-200 rounded-xl text-sm"
                 />
               </div>
+
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1">과/부서명</label>
                 <input
                   type="text"
-                  placeholder="예: 영업부"
+                  placeholder="예: 물관리위원회지원단"
                   value={formData.dept}
                   onChange={e => setFormData({ ...formData, dept: e.target.value })}
                   className="w-full p-2.5 border border-slate-200 rounded-xl text-sm"
                 />
               </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">담당자명 (고객측)</label>
+                  <input
+                    type="text"
+                    placeholder="예: 강성희"
+                    value={formData.contact_person}
+                    onChange={e => setFormData({ ...formData, contact_person: e.target.value })}
+                    className="w-full p-2.5 border border-slate-200 rounded-xl text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">연락처</label>
+                  <input
+                    type="text"
+                    placeholder="예: 010-1234-5678"
+                    value={formData.phone}
+                    onChange={e => setFormData({ ...formData, phone: e.target.value })}
+                    className="w-full p-2.5 border border-slate-200 rounded-xl text-sm"
+                  />
+                </div>
+              </div>
+
+              {/* 💡 구글 시트 Col F: 이메일 추가 */}
               <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">담당자명</label>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">이메일 주소</label>
                 <input
-                  type="text"
-                  placeholder="예: 홍길동 팀장"
-                  value={formData.contact_person}
-                  onChange={e => setFormData({ ...formData, contact_person: e.target.value })}
+                  type="email"
+                  placeholder="example@domain.com"
+                  value={formData.email}
+                  onChange={e => setFormData({ ...formData, email: e.target.value })}
                   className="w-full p-2.5 border border-slate-200 rounded-xl text-sm"
                 />
               </div>
+
+              {/* 💡 구글 시트 Col G: 영업담당자 추가 */}
               <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">연락처</label>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">영업담당자 (당사 담당직원)</label>
                 <input
                   type="text"
-                  placeholder="010-0000-0000"
-                  value={formData.phone}
-                  onChange={e => setFormData({ ...formData, phone: e.target.value })}
-                  className="w-full p-2.5 border border-slate-200 rounded-xl text-sm"
+                  placeholder="예: 김광일"
+                  value={formData.sales_manager}
+                  onChange={e => setFormData({ ...formData, sales_manager: e.target.value })}
+                  className="w-full p-2.5 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800"
                 />
               </div>
             </div>
