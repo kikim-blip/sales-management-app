@@ -1,15 +1,16 @@
 // src/components/common/JobOrderModal.jsx
-import React, { useState } from 'react';
-import { X, ClipboardList, CheckCircle2, UserCheck, Printer, FileText } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, ClipboardList, CheckCircle2, UserCheck, Printer, FileText, Hash } from 'lucide-react';
 import { useGoogleAuth } from '../../context/GoogleAuthContext';
 
 export default function JobOrderModal({ customers, onSave, onClose }) {
   const { user } = useGoogleAuth();
   const today = new Date().toISOString().split('T')[0];
   
-  // 날짜 기반 YYMMDD 생성 (예: 260812)
+  // 날짜 기반 YYMMDD 및 연도 생성
   const d = new Date();
-  const yy = String(d.getFullYear()).slice(-2);
+  const currentYear = d.getFullYear();
+  const yy = String(currentYear).slice(-2);
   const mm = String(d.getMonth() + 1).padStart(2, '0');
   const dd = String(d.getDate()).padStart(2, '0');
   const dateYYMMDD = `${yy}${mm}${dd}`;
@@ -17,72 +18,101 @@ export default function JobOrderModal({ customers, onSave, onClose }) {
   const userCode = user?.userCode || '84';
   const userName = user?.userName || '홍길동';
   const companyCode = user?.companyCode || '3';
-  const randomSeq = Math.floor(100 + Math.random() * 900); // 3자리 순번
 
-  // 코드번호 예시: 84 - 260812 - 3277
-  const generatedCode = `${userCode} - ${dateYYMMDD} - ${companyCode}${randomSeq}`;
+  // 로컬 스토리지에서 마지막 작성 연도 및 순번 가져오기
+  const getInitialSeq = () => {
+    const saved = localStorage.getItem('last_job_sequence_info');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.year === currentYear) {
+          return Number(parsed.seq || 277) + 1;
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    return 277; // 기본 시작 순번
+  };
+
+  const [seqNumber, setSeqNumber] = useState(getInitialSeq());
+  const formattedSeq = String(seqNumber).padStart(3, '0');
+  
+  // 생성 코드: (고유번호)-(YYMMDD)-(회사코드+순번) 예: 84 - 260812 - 3277
+  const generatedCode = `${userCode} - ${dateYYMMDD} - ${companyCode}${formattedSeq}`;
 
   const [activeTab, setActiveTab] = useState('basic'); // 'basic' | 'print' | 'design'
 
   const [formData, setFormData] = useState({
-    // 1~5
     code_number: generatedCode,
+    seq: seqNumber,
     manager_name: userName,
     receipt_date: today,
     delivery_date: today,
     delivery_time: '14:00',
-    // 6~7
     customer_id: customers.length > 0 ? customers[0].id : '',
     dept: customers[0]?.dept || '',
-    // 8~13
     title: '',
-    spec: 'A4',
+    spec: '210*297',
     pages: '100',
     duplex: '양면',
-    quantity: 500,
+    quantity: 50,
     estimated_price: 1500000,
-    // 14~17
     client_contact_person: customers[0]?.contact_person || '',
     client_phone: customers[0]?.phone || '',
     client_email: '',
     email_receipt_time: '10:00',
-    // 18~21 (표지)
-    cover_job: '4도 칼라',
-    cover_paper: '아트지 250g',
-    cover_print: '옵셋인쇄',
-    coating: '유광코팅',
-    // 22~26 (내지 & 제본)
-    inner_job: '1도 흑백',
-    inner_paper: '모조지 80g',
-    inner_print: '옵셋인쇄',
-    interleaf_paper: '색지 80g',
+    cover_job: '한글편집세종',
+    cover_paper: '레쟈크체크백색',
+    cover_print: '컬러',
+    coating: '없음',
+    inner_job: '한글편집세종',
+    inner_paper: '백색모조100g',
+    inner_print: '컬러',
+    interleaf_paper: '없음',
     binding: '무선제본',
-    // 27~32 (교정 & 메일)
     draft_email: '',
     draft_group: '',
     mail_sender: '',
     cover_proof_date: today,
     inner_proof_date: today,
-    proof_method: 'PDF 교정',
-    // 33~37 (제작 & 기획)
-    planning: '기획 포함',
-    photography: '해당 없음',
-    illustration: '필요',
-    copyright_web: '허용',
-    production_progress: '진행중',
-    // 38~43 (비고 & 작업자)
-    delivery_destination: '본사 납품',
-    cover_related: '',
-    inner_related: '',
-    request_note: '',
+    proof_method: '리턴없음',
+    planning: '기획관련내용',
+    photography: '사진촬영관련내용',
+    illustration: '일러스트 작업 유무',
+    copyright_web: '저작권·웹게시 관련 내용',
+    production_progress: '서울출력실',
+    delivery_destination: '이기철팀장전달',
+    cover_related: '1.첫페이지 표지사용',
+    inner_related: '1.개쪽만 확인하고 올려주세요',
+    request_note: '-',
     editor_name: userName,
     designer_name: '디자이너',
   });
+
+  // 순번 변경 시 실시간 코드번호 업데이트
+  const handleSeqChange = (newSeqVal) => {
+    const val = Number(newSeqVal) || 1;
+    setSeqNumber(val);
+    const fmt = String(val).padStart(3, '0');
+    const newCode = `${userCode} - ${dateYYMMDD} - ${companyCode}${fmt}`;
+    setFormData(prev => ({
+      ...prev,
+      seq: val,
+      code_number: newCode,
+    }));
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!formData.customer_id) return alert('발주처(고객사)를 선택해 주세요.');
     if (!formData.title) return alert('품명(작업제목)을 입력해 주세요.');
+
+    // 💡 다음 전표를 위해 마지막 순번 기억 저장!
+    localStorage.setItem('last_job_sequence_info', JSON.stringify({
+      year: currentYear,
+      seq: formData.seq,
+    }));
 
     onSave(formData);
   };
@@ -104,17 +134,29 @@ export default function JobOrderModal({ customers, onSave, onClose }) {
           </button>
         </div>
 
-        {/* 🚨 코드번호 강조 배너 (이미지 서식과 동일 적용) */}
-        <div className="bg-slate-900 px-6 py-3 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          <div className="flex items-center space-x-2">
+        {/* 🚨 코드번호 및 순번 설정 배너 */}
+        <div className="bg-slate-900 px-6 py-3 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center space-x-3">
             <span className="text-xs bg-slate-800 text-slate-300 px-2.5 py-1 rounded font-bold">코드번호</span>
             <span className="text-lg font-mono font-extrabold text-rose-400 tracking-wider">
               {formData.code_number}
             </span>
           </div>
-          <div className="flex items-center space-x-3 text-xs text-slate-300">
-            <span>담당자: <strong className="text-sky-300">{formData.manager_name}</strong></span>
-            <span>작업자: <strong className="text-emerald-300">{formData.editor_name}</strong></span>
+
+          {/* 수동 순번 지정 입력창 */}
+          <div className="flex items-center space-x-2 text-xs bg-slate-800 px-3 py-1.5 rounded-xl border border-slate-700">
+            <Hash className="w-3.5 h-3.5 text-amber-400" />
+            <span className="text-slate-300">전표 순번:</span>
+            <input
+              type="number"
+              min="1"
+              max="9999"
+              value={formData.seq}
+              onChange={e => handleSeqChange(e.target.value)}
+              className="w-16 p-1 bg-slate-900 border border-slate-600 rounded text-center text-amber-300 font-mono font-extrabold text-xs"
+              title="임의 순번 지정 시 다음 작성부터 1씩 자동 증가합니다."
+            />
+            <span className="text-[10px] text-slate-400"> (다음 전표부터 +1 자동증가)</span>
           </div>
         </div>
 
