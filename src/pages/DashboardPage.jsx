@@ -88,7 +88,7 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      {error && (
+      {error && !error.includes('Quota exceeded') && !error.includes('Read requests') && (
         <div className="bg-rose-50 border border-rose-200 text-rose-700 p-4 rounded-xl text-xs">
           <strong>시트 데이터 읽기 에러:</strong> {error}
         </div>

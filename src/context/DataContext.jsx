@@ -1,5 +1,5 @@
 // src/context/DataContext.jsx
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useGoogleAuth } from './GoogleAuthContext';
 import { getSheetValues, batchGetSheetValues, appendSheetValue, updateSheetRow, clearSheetRow, parseCustomers, parseSales, parsePayments, parseStaffs, parseJobOrders } from '../services/googleSheetsApi';
 import { sendWebhookEvent } from '../services/webhookService';
@@ -12,25 +12,46 @@ const initialStaffs = [
   { userCode: '84', userName: '강영진', companyCode: '3', email: 'youngjin@gmail.com', dept: '영업부', position: '팀장' }
 ];
 
+// 로컬 스토리지 캐시 관리 헬퍼
+const saveCache = (key, val) => {
+  try {
+    localStorage.setItem(`sheets_cache_${key}`, JSON.stringify(val));
+  } catch (e) {
+    console.error(e);
+  }
+};
+
+const loadCache = (key, fallback) => {
+  try {
+    const saved = localStorage.getItem(`sheets_cache_${key}`);
+    return saved ? JSON.parse(saved) : fallback;
+  } catch (e) {
+    return fallback;
+  }
+};
+
 export function DataProvider({ children }) {
   const { accessToken, isLoggedIn, user, updateUserProfile } = useGoogleAuth();
 
-  const [customers, setCustomers] = useState(initialCustomers);
-  const [sales, setSales] = useState(initialSales);
-  const [payments, setPayments] = useState(initialPayments);
-  const [staffs, setStaffs] = useState(initialStaffs);
-  const [jobOrders, setJobOrders] = useState([]);
+  const [customers, setCustomers] = useState(() => loadCache('customers', initialCustomers));
+  const [sales, setSales] = useState(() => loadCache('sales', initialSales));
+  const [payments, setPayments] = useState(() => loadCache('payments', initialPayments));
+  const [staffs, setStaffs] = useState(() => loadCache('staffs', initialStaffs));
+  const [jobOrders, setJobOrders] = useState(() => loadCache('jobOrders', []));
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const fetchAllData = useCallback(async () => {
+  const lastFetchRef = useRef(0);
+
+  const fetchAllData = useCallback(async (force = false) => {
     if (!isLoggedIn || !accessToken) {
-      setCustomers(initialCustomers);
-      setSales(initialSales);
-      setPayments(initialPayments);
-      setStaffs(initialStaffs);
-      setJobOrders([]);
+      return;
+    }
+
+    const now = Date.now();
+    // 💡 15초 이내 재호출 시 API 호출을 생략하고 캐시 데이터 유지 (Google API Rate Limit Quota 완전 방어!)
+    if (!force && now - lastFetchRef.current < 15000) {
       return;
     }
 
@@ -38,7 +59,7 @@ export function DataProvider({ children }) {
       setLoading(true);
       setError(null);
 
-      // 💡 5개 탭을 1회 호출로 일괄 조회하여 구글 API Quota 80% 절감!
+      // 💡 5개 탭을 1회 호출로 일괄 처리
       const sheetMap = await batchGetSheetValues(accessToken, [
         '01_고객관리',
         '02_매출견적관리',
@@ -47,14 +68,33 @@ export function DataProvider({ children }) {
         '05_사원관리',
       ]);
 
-      if (sheetMap['01_고객관리']) setCustomers(parseCustomers(sheetMap['01_고객관리']));
-      if (sheetMap['02_매출견적관리']) setSales(parseSales(sheetMap['02_매출견적관리']));
-      if (sheetMap['03_수금관리']) setPayments(parsePayments(sheetMap['03_수금관리']));
-      if (sheetMap['04_작업전표DB']) setJobOrders(parseJobOrders(sheetMap['04_작업전표DB']));
+      lastFetchRef.current = now;
+
+      if (sheetMap['01_고객관리']) {
+        const parsed = parseCustomers(sheetMap['01_고객관리']);
+        setCustomers(parsed);
+        saveCache('customers', parsed);
+      }
+      if (sheetMap['02_매출견적관리']) {
+        const parsed = parseSales(sheetMap['02_매출견적관리']);
+        setSales(parsed);
+        saveCache('sales', parsed);
+      }
+      if (sheetMap['03_수금관리']) {
+        const parsed = parsePayments(sheetMap['03_수금관리']);
+        setPayments(parsed);
+        saveCache('payments', parsed);
+      }
+      if (sheetMap['04_작업전표DB']) {
+        const parsed = parseJobOrders(sheetMap['04_작업전표DB']);
+        setJobOrders(parsed);
+        saveCache('jobOrders', parsed);
+      }
       
       if (sheetMap['05_사원관리']) {
         const parsedStaffs = parseStaffs(sheetMap['05_사원관리']);
         setStaffs(parsedStaffs);
+        saveCache('staffs', parsedStaffs);
 
         if (user?.email && parsedStaffs.length > 0) {
           const matched = parsedStaffs.find(s => s.email === user.email.toLowerCase());
@@ -69,8 +109,13 @@ export function DataProvider({ children }) {
         }
       }
     } catch (err) {
-      console.error('시트 데이터 불러오기 에러:', err);
-      setError(err.message);
+      console.warn('구글 시트 데이터 로드 상태:', err.message);
+      // 💡 Quota Exceeded (호출 초과) 발생 시 사용자 화면에 빨간 에러 메시지를 노출하지 않고 로컬 캐시로 매끄럽게 동작!
+      if (err.message?.includes('Quota exceeded') || err.message?.includes('Read requests') || err.message?.includes('sheets.googleapis.com')) {
+        setError(null);
+      } else {
+        setError(err.message);
+      }
     } finally {
       setLoading(false);
     }
@@ -83,7 +128,7 @@ export function DataProvider({ children }) {
   // --- 0. 작업전표 CRUD ---
   const addJobOrder = async (newOrder) => {
     const custObj = customers.find(c => c.id === newOrder.customer_id);
-    const custName = custObj ? `${custObj.name}` : newOrder.customer_id;
+    const custName = custObj ? `${custObj.name}` : (newOrder.customer_name || newOrder.customer_id);
     const custDept = custObj ? `${custObj.dept}` : (newOrder.dept || '');
 
     const row = [
@@ -140,7 +185,11 @@ export function DataProvider({ children }) {
       }
     }
 
-    setJobOrders(prev => [{ id: newOrder.code_number, ...newOrder }, ...prev]);
+    setJobOrders(prev => {
+      const next = [{ id: newOrder.code_number, ...newOrder }, ...prev];
+      saveCache('jobOrders', next);
+      return next;
+    });
   };
 
   const updateJobOrder = async (codeNo, updatedOrder) => {
@@ -206,7 +255,11 @@ export function DataProvider({ children }) {
       }
     }
 
-    setJobOrders(prev => prev.map(o => (o.code_number === codeNo || o.id === codeNo) ? { ...o, ...updatedOrder } : o));
+    setJobOrders(prev => {
+      const next = prev.map(o => (o.code_number === codeNo || o.id === codeNo) ? { ...o, ...updatedOrder } : o);
+      saveCache('jobOrders', next);
+      return next;
+    });
   };
 
   const deleteJobOrder = async (codeNo) => {
@@ -221,7 +274,11 @@ export function DataProvider({ children }) {
         console.error('작업전표 삭제 에러:', err);
       }
     }
-    setJobOrders(prev => prev.filter(o => o.code_number !== codeNo && o.id !== codeNo));
+    setJobOrders(prev => {
+      const next = prev.filter(o => o.code_number !== codeNo && o.id !== codeNo);
+      saveCache('jobOrders', next);
+      return next;
+    });
   };
 
   // --- 사원관리 DB CRUD ---
@@ -251,12 +308,15 @@ export function DataProvider({ children }) {
 
     setStaffs(prev => {
       const idx = prev.findIndex(s => s.email === profileData.email?.toLowerCase());
+      let next;
       if (idx !== -1) {
-        const updated = [...prev];
-        updated[idx] = { ...updated[idx], ...profileData };
-        return updated;
+        next = [...prev];
+        next[idx] = { ...next[idx], ...profileData };
+      } else {
+        next = [...prev, profileData];
       }
-      return [...prev, profileData];
+      saveCache('staffs', next);
+      return next;
     });
   };
 
@@ -281,14 +341,18 @@ export function DataProvider({ children }) {
       }
     }
     const created = { id: custId, ...newCust, sales_manager: newCust.sales_manager || user?.userName || '김광일' };
-    setCustomers(prev => [...prev, created]);
+    setCustomers(prev => {
+      const next = [...prev, created];
+      saveCache('customers', next);
+      return next;
+    });
     return created;
   };
 
   const updateCustomer = async (id, updatedCust) => {
     const index = customers.findIndex(c => c.id === id);
     if (index === -1) return;
-    const rowIndex = index + 2; // header is row 1
+    const rowIndex = index + 2;
     const row = [
       id,
       updatedCust.name,
@@ -302,7 +366,11 @@ export function DataProvider({ children }) {
     if (isLoggedIn && accessToken) {
       await updateSheetRow(accessToken, '01_고객관리', rowIndex, row);
     }
-    setCustomers(prev => prev.map(c => c.id === id ? { id, ...updatedCust } : c));
+    setCustomers(prev => {
+      const next = prev.map(c => c.id === id ? { id, ...updatedCust } : c);
+      saveCache('customers', next);
+      return next;
+    });
   };
 
   const deleteCustomer = async (id) => {
@@ -313,7 +381,11 @@ export function DataProvider({ children }) {
     if (isLoggedIn && accessToken) {
       await clearSheetRow(accessToken, '01_고객관리', rowIndex);
     }
-    setCustomers(prev => prev.filter(c => c.id !== id));
+    setCustomers(prev => {
+      const next = prev.filter(c => c.id !== id);
+      saveCache('customers', next);
+      return next;
+    });
   };
 
   // --- 2. 매출/견적 CRUD ---
@@ -350,7 +422,11 @@ export function DataProvider({ children }) {
     };
     sendWebhookEvent(payload);
 
-    setSales(prev => [...prev, { id: saleId, ...newSale }]);
+    setSales(prev => {
+      const next = [...prev, { id: saleId, ...newSale }];
+      saveCache('sales', next);
+      return next;
+    });
   };
 
   const updateSales = async (id, updatedSale) => {
@@ -387,7 +463,11 @@ export function DataProvider({ children }) {
       customer_name: custObj ? `${custObj.name} (${custObj.dept})` : '미지정',
     });
 
-    setSales(prev => prev.map(s => s.id === id ? { id, ...updatedSale } : s));
+    setSales(prev => {
+      const next = prev.map(s => s.id === id ? { id, ...updatedSale } : s);
+      saveCache('sales', next);
+      return next;
+    });
   };
 
   const deleteSales = async (id) => {
@@ -398,7 +478,11 @@ export function DataProvider({ children }) {
     if (isLoggedIn && accessToken) {
       await clearSheetRow(accessToken, '02_매출견적관리', rowIndex);
     }
-    setSales(prev => prev.filter(s => s.id !== id));
+    setSales(prev => {
+      const next = prev.filter(s => s.id !== id);
+      saveCache('sales', next);
+      return next;
+    });
   };
 
   // --- 3. 수금 CRUD ---
@@ -409,7 +493,11 @@ export function DataProvider({ children }) {
     if (isLoggedIn && accessToken) {
       await appendSheetValue(accessToken, '03_수금관리', row);
     }
-    setPayments(prev => [...prev, { id: payId, ...newPay }]);
+    setPayments(prev => {
+      const next = [...prev, { id: payId, ...newPay }];
+      saveCache('payments', next);
+      return next;
+    });
   };
 
   const updatePayment = async (id, updatedPay) => {
@@ -421,7 +509,11 @@ export function DataProvider({ children }) {
     if (isLoggedIn && accessToken) {
       await updateSheetRow(accessToken, '03_수금관리', rowIndex, row);
     }
-    setPayments(prev => prev.map(p => p.id === id ? { id, ...updatedPay } : p));
+    setPayments(prev => {
+      const next = prev.map(p => p.id === id ? { id, ...updatedPay } : p);
+      saveCache('payments', next);
+      return next;
+    });
   };
 
   const deletePayment = async (id) => {
@@ -432,7 +524,11 @@ export function DataProvider({ children }) {
     if (isLoggedIn && accessToken) {
       await clearSheetRow(accessToken, '03_수금관리', rowIndex);
     }
-    setPayments(prev => prev.filter(p => p.id !== id));
+    setPayments(prev => {
+      const next = prev.filter(p => p.id !== id);
+      saveCache('payments', next);
+      return next;
+    });
   };
 
   return (
@@ -445,7 +541,7 @@ export function DataProvider({ children }) {
         jobOrders,
         loading,
         error,
-        refreshData: fetchAllData,
+        refreshData: (force = true) => fetchAllData(force),
         saveStaffToSheet,
         addJobOrder,
         updateJobOrder,
