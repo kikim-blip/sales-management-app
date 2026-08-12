@@ -1,21 +1,22 @@
 // src/pages/SalesPage.jsx
 import React, { useState } from 'react';
 import { useData } from '../context/DataContext';
-import { Plus, Calendar, Share2 } from 'lucide-react';
+import { Plus, Calendar, Share2, Pencil, Trash2 } from 'lucide-react';
 
 export default function SalesPage() {
-  const { sales, customers, addSales } = useData();
+  const { sales, customers, addSales, updateSales, deleteSales } = useData();
   const [showModal, setShowModal] = useState(false);
+  const [editingId, setEditingId] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
   const today = new Date().toISOString().split('T')[0];
 
-  const [formData, setFormData] = useState({
+  const defaultForm = {
     reg_date: today,
     receipt_date: today,
     delivery_date: today,
     delivery_time: '14:00',
-    customer_id: '',
+    customer_id: customers.length > 0 ? customers[0].id : '',
     title: '',
     content: '',
     note: '',
@@ -26,9 +27,51 @@ export default function SalesPage() {
     total_price: 1100000,
     calendar_synced: true,
     superthread_synced: true,
-  });
+  };
 
-  // 공급가액 입력 시 부가세 10% 자동 계산
+  const [formData, setFormData] = useState(defaultForm);
+
+  const openNewModal = () => {
+    setEditingId(null);
+    setFormData({
+      ...defaultForm,
+      customer_id: customers.length > 0 ? customers[0].id : '',
+    });
+    setShowModal(true);
+  };
+
+  const openEditModal = (item) => {
+    setEditingId(item.id);
+    setFormData({
+      reg_date: item.reg_date || today,
+      receipt_date: item.receipt_date || today,
+      delivery_date: item.delivery_date || today,
+      delivery_time: item.delivery_time || '14:00',
+      customer_id: item.customer_id || (customers[0]?.id || ''),
+      title: item.title || '',
+      content: item.content || '',
+      note: item.note || '',
+      billing_schedule: item.billing_schedule || '청구완료',
+      type: item.type || '매출',
+      supply_price: item.supply_price || 0,
+      tax: item.tax || 0,
+      total_price: item.total_price || 0,
+      calendar_synced: !!item.calendar_synced,
+      superthread_synced: !!item.superthread_synced,
+    });
+    setShowModal(true);
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('정말 이 매출/견적 항목을 시트에서 삭제하시겠습니까?')) return;
+    try {
+      await deleteSales(id);
+      alert('성공적으로 삭제되었습니다.');
+    } catch (err) {
+      alert('삭제 에러: ' + err.message);
+    }
+  };
+
   const handlePriceChange = (val) => {
     const supply = Number(val) || 0;
     const tax = Math.round(supply * 0.1);
@@ -47,8 +90,13 @@ export default function SalesPage() {
 
     try {
       setSubmitting(true);
-      await addSales(formData);
-      alert('매출 내역이 구글 시트 저장 및 Webhook 연동되었습니다!');
+      if (editingId) {
+        await updateSales(editingId, formData);
+        alert('매출/견적 항목이 구글 시트에 수정 적용되었습니다!');
+      } else {
+        await addSales(formData);
+        alert('신규 매출이 구글 시트 저장 및 Webhook 연동되었습니다!');
+      }
       setShowModal(false);
     } catch (err) {
       alert('저장 에러: ' + err.message);
@@ -62,15 +110,10 @@ export default function SalesPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h2 className="text-xl font-bold text-slate-800">매출 및 견적 관리</h2>
-          <p className="text-xs text-slate-500 mt-0.5">매출 입력 시 구글 시트 기록과 구글 캘린더 연동이 자동 실행됩니다.</p>
+          <p className="text-xs text-slate-500 mt-0.5">매출 등록 및 수정 시 구글 시트 반영과 Webhook 연동이 자동 실행됩니다.</p>
         </div>
         <button
-          onClick={() => {
-            if (customers.length > 0) {
-              setFormData(prev => ({ ...prev, customer_id: customers[0].id }));
-            }
-            setShowModal(true);
-          }}
+          onClick={openNewModal}
           className="flex items-center justify-center space-x-2 bg-sky-600 hover:bg-sky-700 text-white px-4 py-2 rounded-xl text-sm font-medium shadow-sm transition"
         >
           <Plus className="w-4 h-4" />
@@ -82,7 +125,7 @@ export default function SalesPage() {
         {sales.map((item, idx) => {
           const cust = customers.find(c => c.id === item.customer_id);
           return (
-            <div key={item.id || idx} className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+            <div key={item.id || idx} className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3 relative group">
               <div className="flex justify-between items-start">
                 <div>
                   <div className="flex items-center space-x-2">
@@ -97,9 +140,28 @@ export default function SalesPage() {
                     {cust ? `${cust.name} - ${cust.dept}` : `고객 ID: ${item.customer_id}`}
                   </p>
                 </div>
-                <div className="text-right">
+
+                <div className="flex flex-col items-end space-y-1">
                   <span className="text-lg font-extrabold text-slate-900">{item.total_price.toLocaleString()} 원</span>
                   <p className="text-[11px] text-slate-400">공급가: {item.supply_price.toLocaleString()}원</p>
+                  
+                  {/* 수정/삭제 버튼 */}
+                  <div className="flex items-center space-x-1 pt-1">
+                    <button
+                      onClick={() => openEditModal(item)}
+                      className="p-1.5 text-slate-500 hover:text-sky-600 hover:bg-sky-50 rounded-lg transition"
+                      title="수정"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(item.id)}
+                      className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                      title="삭제"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -136,11 +198,13 @@ export default function SalesPage() {
         })}
       </div>
 
-      {/* 매출 입력 모달 */}
+      {/* 등록/수정 입력 모달 */}
       {showModal && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
           <form onSubmit={handleSubmit} className="bg-white w-full max-w-lg rounded-2xl shadow-xl p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-            <h3 className="text-lg font-bold text-slate-800">신규 매출/견적 입력</h3>
+            <h3 className="text-lg font-bold text-slate-800">
+              {editingId ? '매출/견적 항목 수정' : '신규 매출/견적 입력'}
+            </h3>
             
             <div className="space-y-3 text-sm">
               <div>
@@ -221,7 +285,6 @@ export default function SalesPage() {
                 />
               </div>
 
-              {/* 자동화 체크박스 */}
               <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
                 <p className="text-xs font-bold text-slate-700">외부 자동화 연동 선택</p>
                 <div className="flex space-x-4 text-xs">
@@ -260,7 +323,7 @@ export default function SalesPage() {
                 disabled={submitting}
                 className="px-4 py-2 rounded-xl text-xs font-medium bg-sky-600 text-white hover:bg-sky-700 disabled:opacity-50"
               >
-                {submitting ? '저장 & Webhook 중...' : '시트에 저장하기'}
+                {submitting ? '저장 중...' : (editingId ? '수정 내용 저장' : '시트에 저장하기')}
               </button>
             </div>
           </form>

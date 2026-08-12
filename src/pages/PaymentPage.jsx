@@ -1,20 +1,53 @@
 // src/pages/PaymentPage.jsx
 import React, { useState } from 'react';
 import { useData } from '../context/DataContext';
-import { Plus, CreditCard, Calendar } from 'lucide-react';
+import { Plus, CreditCard, Calendar, Pencil, Trash2 } from 'lucide-react';
 
 export default function PaymentPage() {
-  const { payments, customers, addPayment } = useData();
+  const { payments, customers, addPayment, updatePayment, deletePayment } = useData();
   const [showModal, setShowModal] = useState(false);
+  const [editingId, setEditingId] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
   const today = new Date().toISOString().split('T')[0];
-  const [formData, setFormData] = useState({
+  const defaultForm = {
     payment_date: today,
-    customer_id: '',
+    customer_id: customers.length > 0 ? customers[0].id : '',
     amount: 1000000,
     method: '계좌이체',
-  });
+  };
+
+  const [formData, setFormData] = useState(defaultForm);
+
+  const openNewModal = () => {
+    setEditingId(null);
+    setFormData({
+      ...defaultForm,
+      customer_id: customers.length > 0 ? customers[0].id : '',
+    });
+    setShowModal(true);
+  };
+
+  const openEditModal = (p) => {
+    setEditingId(p.id);
+    setFormData({
+      payment_date: p.payment_date || today,
+      customer_id: p.customer_id || (customers[0]?.id || ''),
+      amount: p.amount || 0,
+      method: p.method || '계좌이체',
+    });
+    setShowModal(true);
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('정말 이 수금 내역을 삭제하시겠습니까?')) return;
+    try {
+      await deletePayment(id);
+      alert('수금 내역이 삭제되었습니다.');
+    } catch (err) {
+      alert('삭제 에러: ' + err.message);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -22,8 +55,13 @@ export default function PaymentPage() {
 
     try {
       setSubmitting(true);
-      await addPayment(formData);
-      alert('수금 내역이 구글 시트에 기록되었습니다!');
+      if (editingId) {
+        await updatePayment(editingId, formData);
+        alert('수금 내역이 수정되었습니다!');
+      } else {
+        await addPayment(formData);
+        alert('수금 내역이 구글 시트에 기록되었습니다!');
+      }
       setShowModal(false);
     } catch (err) {
       alert('저장 에러: ' + err.message);
@@ -37,15 +75,10 @@ export default function PaymentPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h2 className="text-xl font-bold text-slate-800">수금 내역 관리</h2>
-          <p className="text-xs text-slate-500 mt-0.5">입금 완료된 수금 내역을 구글 시트에 저장합니다.</p>
+          <p className="text-xs text-slate-500 mt-0.5">입금 완료된 수금 내역을 구글 시트에 저장, 수정, 삭제합니다.</p>
         </div>
         <button
-          onClick={() => {
-            if (customers.length > 0) {
-              setFormData(prev => ({ ...prev, customer_id: customers[0].id }));
-            }
-            setShowModal(true);
-          }}
+          onClick={openNewModal}
           className="flex items-center justify-center space-x-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-sm font-medium shadow-sm transition"
         >
           <Plus className="w-4 h-4" />
@@ -74,9 +107,28 @@ export default function PaymentPage() {
                     </div>
                   </div>
                 </div>
-                <div className="text-right">
-                  <span className="text-base font-extrabold text-emerald-600">+{p.amount.toLocaleString()} 원</span>
-                  <p className="text-[11px] font-mono text-slate-400">{p.id}</p>
+
+                <div className="flex items-center space-x-4">
+                  <div className="text-right">
+                    <span className="text-base font-extrabold text-emerald-600">+{p.amount.toLocaleString()} 원</span>
+                    <p className="text-[11px] font-mono text-slate-400">{p.id}</p>
+                  </div>
+                  <div className="flex items-center space-x-1">
+                    <button
+                      onClick={() => openEditModal(p)}
+                      className="p-1.5 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition"
+                      title="수정"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(p.id)}
+                      className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                      title="삭제"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
               </div>
             );
@@ -88,7 +140,9 @@ export default function PaymentPage() {
       {showModal && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <form onSubmit={handleSubmit} className="bg-white w-full max-w-md rounded-2xl shadow-xl p-6 space-y-4">
-            <h3 className="text-lg font-bold text-slate-800">신규 수금 등록</h3>
+            <h3 className="text-lg font-bold text-slate-800">
+              {editingId ? '수금 내역 수정' : '신규 수금 등록'}
+            </h3>
             <div className="space-y-3">
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1">고객선택 *</label>
@@ -149,7 +203,7 @@ export default function PaymentPage() {
                 disabled={submitting}
                 className="px-4 py-2 rounded-xl text-xs font-medium bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
               >
-                {submitting ? '시트 저장 중...' : '수금 완료 저장'}
+                {submitting ? '저장 중...' : (editingId ? '수정 저장' : '수금 완료 저장')}
               </button>
             </div>
           </form>

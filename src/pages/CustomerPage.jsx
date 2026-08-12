@@ -1,20 +1,50 @@
 // src/pages/CustomerPage.jsx
 import React, { useState } from 'react';
 import { useData } from '../context/DataContext';
-import { Plus, Search, UserPlus } from 'lucide-react';
+import { Plus, Search, Pencil, Trash2 } from 'lucide-react';
 
 export default function CustomerPage() {
-  const { customers, addCustomer } = useData();
+  const { customers, addCustomer, updateCustomer, deleteCustomer } = useData();
   const [searchTerm, setSearchTerm] = useState('');
   const [showModal, setShowModal] = useState(false);
+  const [editingId, setEditingId] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const [formData, setFormData] = useState({
+  const defaultForm = {
     name: '',
     dept: '',
     contact_person: '',
     phone: '',
-  });
+  };
+
+  const [formData, setFormData] = useState(defaultForm);
+
+  const openNewModal = () => {
+    setEditingId(null);
+    setFormData(defaultForm);
+    setShowModal(true);
+  };
+
+  const openEditModal = (cust) => {
+    setEditingId(cust.id);
+    setFormData({
+      name: cust.name || '',
+      dept: cust.dept || '',
+      contact_person: cust.contact_person || '',
+      phone: cust.phone || '',
+    });
+    setShowModal(true);
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('정말 이 고객 정보를 시트에서 삭제하시겠습니까?')) return;
+    try {
+      await deleteCustomer(id);
+      alert('고객 정보가 삭제되었습니다.');
+    } catch (err) {
+      alert('삭제 에러: ' + err.message);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -22,10 +52,14 @@ export default function CustomerPage() {
 
     try {
       setSubmitting(true);
-      await addCustomer(formData);
-      alert('신규 고객이 구글 시트에 저장되었습니다!');
+      if (editingId) {
+        await updateCustomer(editingId, formData);
+        alert('고객 정보가 수정되었습니다!');
+      } else {
+        await addCustomer(formData);
+        alert('신규 고객이 구글 시트에 저장되었습니다!');
+      }
       setShowModal(false);
-      setFormData({ name: '', dept: '', contact_person: '', phone: '' });
     } catch (err) {
       alert('저장 에러: ' + err.message);
     } finally {
@@ -42,10 +76,10 @@ export default function CustomerPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h2 className="text-xl font-bold text-slate-800">고객 관리</h2>
-          <p className="text-xs text-slate-500 mt-0.5">거래처 및 과/부서 담당자 정보를 등록하고 시트에 기록합니다.</p>
+          <p className="text-xs text-slate-500 mt-0.5">거래처 및 과/부서 담당자 정보를 등록, 수정, 삭제합니다.</p>
         </div>
         <button
-          onClick={() => setShowModal(true)}
+          onClick={openNewModal}
           className="flex items-center justify-center space-x-2 bg-sky-600 hover:bg-sky-700 text-white px-4 py-2 rounded-xl text-sm font-medium shadow-sm transition"
         >
           <Plus className="w-4 h-4" />
@@ -80,17 +114,38 @@ export default function CustomerPage() {
                   <p className="text-xs text-slate-500 mt-1">담당: {c.contact_person} | 연락처: {c.phone}</p>
                 </div>
               </div>
-              <span className="text-xs font-mono text-slate-400 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-100">{c.id}</span>
+
+              <div className="flex items-center space-x-3">
+                <span className="text-xs font-mono text-slate-400 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-100">{c.id}</span>
+                <div className="flex items-center space-x-1">
+                  <button
+                    onClick={() => openEditModal(c)}
+                    className="p-1.5 text-slate-500 hover:text-sky-600 hover:bg-sky-50 rounded-lg transition"
+                    title="수정"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => handleDelete(c.id)}
+                    className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                    title="삭제"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
             </div>
           ))}
         </div>
       </div>
 
-      {/* 등록 모달 */}
+      {/* 등록/수정 모달 */}
       {showModal && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <form onSubmit={handleSubmit} className="bg-white w-full max-w-md rounded-2xl shadow-xl p-6 space-y-4">
-            <h3 className="text-lg font-bold text-slate-800">신규 고객 등록</h3>
+            <h3 className="text-lg font-bold text-slate-800">
+              {editingId ? '고객 정보 수정' : '신규 고객 등록'}
+            </h3>
             <div className="space-y-3">
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1">고객사명 *</label>
@@ -148,7 +203,7 @@ export default function CustomerPage() {
                 disabled={submitting}
                 className="px-4 py-2 rounded-xl text-xs font-medium bg-sky-600 text-white hover:bg-sky-700 disabled:opacity-50"
               >
-                {submitting ? '시트 저장 중...' : '시트에 저장'}
+                {submitting ? '저장 중...' : (editingId ? '수정 저장' : '시트에 저장')}
               </button>
             </div>
           </form>

@@ -1,7 +1,7 @@
 // src/context/DataContext.jsx
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useGoogleAuth } from './GoogleAuthContext';
-import { getSheetValues, appendSheetValue, parseCustomers, parseSales, parsePayments } from '../services/googleSheetsApi';
+import { getSheetValues, appendSheetValue, updateSheetRow, clearSheetRow, parseCustomers, parseSales, parsePayments } from '../services/googleSheetsApi';
 import { sendWebhookEvent } from '../services/webhookService';
 import { initialCustomers, initialSales, initialPayments } from '../data/dummyData';
 
@@ -50,7 +50,7 @@ export function DataProvider({ children }) {
     fetchAllData();
   }, [fetchAllData]);
 
-  // 1. 신규 고객 저장
+  // --- 1. 고객 CRUD ---
   const addCustomer = async (newCust) => {
     const custId = `CUST-${String(customers.length + 1).padStart(3, '0')}`;
     const row = [custId, newCust.name, newCust.dept, newCust.contact_person, newCust.phone];
@@ -61,7 +61,30 @@ export function DataProvider({ children }) {
     setCustomers(prev => [...prev, { id: custId, ...newCust }]);
   };
 
-  // 2. 신규 매출/견적 저장 (구글 시트 + Webhook 연동)
+  const updateCustomer = async (id, updatedCust) => {
+    const index = customers.findIndex(c => c.id === id);
+    if (index === -1) return;
+    const rowIndex = index + 2; // header is row 1
+    const row = [id, updatedCust.name, updatedCust.dept, updatedCust.contact_person, updatedCust.phone];
+
+    if (isLoggedIn && accessToken) {
+      await updateSheetRow(accessToken, '01_고객관리', rowIndex, row);
+    }
+    setCustomers(prev => prev.map(c => c.id === id ? { id, ...updatedCust } : c));
+  };
+
+  const deleteCustomer = async (id) => {
+    const index = customers.findIndex(c => c.id === id);
+    if (index === -1) return;
+    const rowIndex = index + 2;
+
+    if (isLoggedIn && accessToken) {
+      await clearSheetRow(accessToken, '01_고객관리', rowIndex);
+    }
+    setCustomers(prev => prev.filter(c => c.id !== id));
+  };
+
+  // --- 2. 매출/견적 CRUD ---
   const addSales = async (newSale) => {
     const saleId = `SALE-${String(sales.length + 101).padStart(3, '0')}`;
     const row = [
@@ -87,7 +110,6 @@ export function DataProvider({ children }) {
       await appendSheetValue(accessToken, '02_매출견적관리', row);
     }
 
-    // 구글 캘린더 / 슈퍼스레드 Webhook 전송
     const custObj = customers.find(c => c.id === newSale.customer_id);
     const payload = {
       ...newSale,
@@ -99,7 +121,55 @@ export function DataProvider({ children }) {
     setSales(prev => [...prev, { id: saleId, ...newSale }]);
   };
 
-  // 3. 신규 수금 저장
+  const updateSales = async (id, updatedSale) => {
+    const index = sales.findIndex(s => s.id === id);
+    if (index === -1) return;
+    const rowIndex = index + 2;
+    const row = [
+      id,
+      updatedSale.reg_date,
+      updatedSale.receipt_date,
+      updatedSale.delivery_date,
+      updatedSale.delivery_time,
+      updatedSale.customer_id,
+      updatedSale.title,
+      updatedSale.content,
+      updatedSale.note,
+      updatedSale.billing_schedule,
+      updatedSale.type,
+      updatedSale.supply_price,
+      updatedSale.tax,
+      updatedSale.total_price,
+      updatedSale.calendar_synced ? 'Y' : 'N',
+      updatedSale.superthread_synced ? 'Y' : 'N',
+    ];
+
+    if (isLoggedIn && accessToken) {
+      await updateSheetRow(accessToken, '02_매출견적관리', rowIndex, row);
+    }
+
+    const custObj = customers.find(c => c.id === updatedSale.customer_id);
+    sendWebhookEvent({
+      ...updatedSale,
+      id,
+      customer_name: custObj ? `${custObj.name} (${custObj.dept})` : '미지정',
+    });
+
+    setSales(prev => prev.map(s => s.id === id ? { id, ...updatedSale } : s));
+  };
+
+  const deleteSales = async (id) => {
+    const index = sales.findIndex(s => s.id === id);
+    if (index === -1) return;
+    const rowIndex = index + 2;
+
+    if (isLoggedIn && accessToken) {
+      await clearSheetRow(accessToken, '02_매출견적관리', rowIndex);
+    }
+    setSales(prev => prev.filter(s => s.id !== id));
+  };
+
+  // --- 3. 수금 CRUD ---
   const addPayment = async (newPay) => {
     const payId = `PAY-${String(payments.length + 201).padStart(3, '0')}`;
     const row = [payId, newPay.payment_date, newPay.customer_id, newPay.amount, newPay.method];
@@ -108,6 +178,29 @@ export function DataProvider({ children }) {
       await appendSheetValue(accessToken, '03_수금관리', row);
     }
     setPayments(prev => [...prev, { id: payId, ...newPay }]);
+  };
+
+  const updatePayment = async (id, updatedPay) => {
+    const index = payments.findIndex(p => p.id === id);
+    if (index === -1) return;
+    const rowIndex = index + 2;
+    const row = [id, updatedPay.payment_date, updatedPay.customer_id, updatedPay.amount, updatedPay.method];
+
+    if (isLoggedIn && accessToken) {
+      await updateSheetRow(accessToken, '03_수금관리', rowIndex, row);
+    }
+    setPayments(prev => prev.map(p => p.id === id ? { id, ...updatedPay } : p));
+  };
+
+  const deletePayment = async (id) => {
+    const index = payments.findIndex(p => p.id === id);
+    if (index === -1) return;
+    const rowIndex = index + 2;
+
+    if (isLoggedIn && accessToken) {
+      await clearSheetRow(accessToken, '03_수금관리', rowIndex);
+    }
+    setPayments(prev => prev.filter(p => p.id !== id));
   };
 
   return (
@@ -120,8 +213,14 @@ export function DataProvider({ children }) {
         error,
         refreshData: fetchAllData,
         addCustomer,
+        updateCustomer,
+        deleteCustomer,
         addSales,
+        updateSales,
+        deleteSales,
         addPayment,
+        updatePayment,
+        deletePayment,
         isUsingSheetsDB: isLoggedIn && !error,
       }}
     >
