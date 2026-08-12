@@ -1,13 +1,36 @@
 // src/pages/SalesPage.jsx
 import React, { useState } from 'react';
 import { useData } from '../context/DataContext';
-import { Plus, Calendar, Share2, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Calendar, Share2, Pencil, Trash2, ClipboardList, FileText, FileSearch } from 'lucide-react';
+import JobOrderModal from '../components/common/JobOrderModal';
+import SelectJobOrderModal from '../components/common/SelectJobOrderModal';
+import QuotePrintModal from '../components/common/QuotePrintModal';
 
 export default function SalesPage() {
   const { sales, customers, addSales, updateSales, deleteSales } = useData();
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // 1. 작업전표 관련 state
+  const [jobOrders, setJobOrders] = useState([
+    {
+      id: 'ORDER-001',
+      order_date: '2026-08-10',
+      customer_id: customers[0]?.id || 'CUST-001',
+      title: '(샘플 전표) 8월 홈페이지 인쇄물 및 홍보물 전표 접수',
+      content: '카탈로그 500부 인쇄 및 홈페이지 배너 디자인 의뢰건',
+      delivery_date: '2026-08-20',
+      delivery_time: '15:00',
+      estimated_price: 2500000,
+      status: '의뢰접수',
+    }
+  ]);
+  const [showJobOrderModal, setShowJobOrderModal] = useState(false);
+  const [showSelectJobModal, setShowSelectJobModal] = useState(false);
+
+  // 2. 견적서/비교견적서 출력 모달 state
+  const [printingQuote, setPrintingQuote] = useState(null);
 
   const today = new Date().toISOString().split('T')[0];
 
@@ -30,6 +53,33 @@ export default function SalesPage() {
   };
 
   const [formData, setFormData] = useState(defaultForm);
+
+  // 신규 작업전표 저장
+  const handleSaveJobOrder = (newOrder) => {
+    const orderId = `ORDER-${String(jobOrders.length + 1).padStart(3, '0')}`;
+    setJobOrders(prev => [{ id: orderId, ...newOrder }, ...prev]);
+    alert('의뢰 작업전표가 등록되었습니다! 매출/견적 작성 시 불러오기로 자동 입력하실 수 있습니다.');
+    setShowJobOrderModal(false);
+  };
+
+  // 작업전표 클릭 시 폼에 자동 입력 (Auto-fill)
+  const handleSelectJobOrder = (order) => {
+    const supply = order.estimated_price || 1000000;
+    const tax = Math.round(supply * 0.1);
+    setFormData(prev => ({
+      ...prev,
+      customer_id: order.customer_id,
+      title: order.title,
+      content: order.content,
+      delivery_date: order.delivery_date || today,
+      delivery_time: order.delivery_time || '14:00',
+      supply_price: supply,
+      tax: tax,
+      total_price: supply + tax,
+    }));
+    setShowSelectJobModal(false);
+    alert(`[${order.title}] 전표 데이터가 매출/견적 폼에 자동 반영되었습니다!`);
+  };
 
   const openNewModal = () => {
     setEditingId(null);
@@ -110,15 +160,28 @@ export default function SalesPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h2 className="text-xl font-bold text-slate-800">매출 및 견적 관리</h2>
-          <p className="text-xs text-slate-500 mt-0.5">매출 등록 및 수정 시 구글 시트 반영과 Webhook 연동이 자동 실행됩니다.</p>
+          <p className="text-xs text-slate-500 mt-0.5">의뢰전표 연동, 구글 시트 저장, 견적서/비교견적서 PDF 출력이 가능합니다.</p>
         </div>
-        <button
-          onClick={openNewModal}
-          className="flex items-center justify-center space-x-2 bg-sky-600 hover:bg-sky-700 text-white px-4 py-2 rounded-xl text-sm font-medium shadow-sm transition"
-        >
-          <Plus className="w-4 h-4" />
-          <span>매출/견적 등록</span>
-        </button>
+
+        <div className="flex items-center space-x-2">
+          {/* 작업전표 신규 접수 버튼 */}
+          <button
+            onClick={() => setShowJobOrderModal(true)}
+            className="flex items-center justify-center space-x-1.5 bg-slate-800 hover:bg-slate-900 text-white px-3.5 py-2 rounded-xl text-xs font-semibold shadow-sm transition"
+          >
+            <ClipboardList className="w-4 h-4 text-sky-400" />
+            <span>의뢰 전표 접수</span>
+          </button>
+
+          {/* 매출/견적 등록 버튼 */}
+          <button
+            onClick={openNewModal}
+            className="flex items-center justify-center space-x-1.5 bg-sky-600 hover:bg-sky-700 text-white px-4 py-2 rounded-xl text-xs font-semibold shadow-sm transition"
+          >
+            <Plus className="w-4 h-4" />
+            <span>매출/견적 등록</span>
+          </button>
+        </div>
       </div>
 
       <div className="space-y-3">
@@ -145,8 +208,17 @@ export default function SalesPage() {
                   <span className="text-lg font-extrabold text-slate-900">{item.total_price.toLocaleString()} 원</span>
                   <p className="text-[11px] text-slate-400">공급가: {item.supply_price.toLocaleString()}원</p>
                   
-                  {/* 수정/삭제 버튼 */}
                   <div className="flex items-center space-x-1 pt-1">
+                    {/* 견적서/비교견적서 문서 출력 버튼 */}
+                    <button
+                      onClick={() => setPrintingQuote({ quote: item, customer: cust })}
+                      className="flex items-center space-x-1 px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition mr-1"
+                      title="견적서/비교견적서 문서 출력"
+                    >
+                      <FileText className="w-3.5 h-3.5 text-sky-600" />
+                      <span>견적서 출력</span>
+                    </button>
+
                     <button
                       onClick={() => openEditModal(item)}
                       className="p-1.5 text-slate-500 hover:text-sky-600 hover:bg-sky-50 rounded-lg transition"
@@ -198,14 +270,28 @@ export default function SalesPage() {
         })}
       </div>
 
-      {/* 등록/수정 입력 모달 */}
+      {/* 1. 신규/수정 매출 모달 */}
       {showModal && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
           <form onSubmit={handleSubmit} className="bg-white w-full max-w-lg rounded-2xl shadow-xl p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-            <h3 className="text-lg font-bold text-slate-800">
-              {editingId ? '매출/견적 항목 수정' : '신규 매출/견적 입력'}
-            </h3>
-            
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="text-lg font-bold text-slate-800">
+                {editingId ? '매출/견적 항목 수정' : '신규 매출/견적 입력'}
+              </h3>
+
+              {/* 작업전표 불러오기 (자동채우기) 버튼 */}
+              {!editingId && (
+                <button
+                  type="button"
+                  onClick={() => setShowSelectJobModal(true)}
+                  className="flex items-center space-x-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 px-3 py-1.5 rounded-xl text-xs font-bold transition"
+                >
+                  <FileSearch className="w-3.5 h-3.5 text-amber-600" />
+                  <span>작업전표 불러오기</span>
+                </button>
+              )}
+            </div>
+
             <div className="space-y-3 text-sm">
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1">고객선택 (고객사명 - 과/부서명) *</label>
@@ -329,6 +415,34 @@ export default function SalesPage() {
           </form>
         </div>
       )}
+
+      {/* 2. 신규 작업전표 접수 모달 */}
+      {showJobOrderModal && (
+        <JobOrderModal
+          customers={customers}
+          onSave={handleSaveJobOrder}
+          onClose={() => setShowJobOrderModal(false)}
+        />
+      )}
+
+      {/* 3. 작업전표 불러오기 (선택) 모달 */}
+      {showSelectJobModal && (
+        <SelectJobOrderModal
+          jobOrders={jobOrders}
+          customers={customers}
+          onSelect={handleSelectJobOrder}
+          onClose={() => setShowSelectJobModal(false)}
+        />
+      )}
+
+      {/* 4. 견적서 / 비교견적서 문서 출력 모달 */}
+      {printingQuote && (
+        <QuotePrintModal
+          quote={printingQuote.quote}
+          customer={printingQuote.customer}
+          onClose={() => setPrintingQuote(null)}
+        />
+      )}
     </div>
   );
-}
+}
