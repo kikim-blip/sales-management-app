@@ -129,7 +129,7 @@ export function parseCustomers(rows) {
     contact_person: String(row[3] || ''),
     phone: String(row[4] || ''),
     email: String(row[5] || ''),
-    staff_manager_name: String(row[6] || ''),
+    sales_manager: String(row[6] || ''),
   }));
 }
 

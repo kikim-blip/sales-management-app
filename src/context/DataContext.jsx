@@ -213,7 +213,7 @@ export function DataProvider({ children }) {
       newCust.contact_person || '',
       newCust.phone || '',
       newCust.email || '',
-      newCust.staff_manager_name || user?.userName || '김광일',
+      newCust.sales_manager || user?.userName || '김광일',
     ];
 
     if (isLoggedIn && accessToken) {
@@ -223,7 +223,7 @@ export function DataProvider({ children }) {
         console.error('고객관리 시트 쓰기 에러:', err);
       }
     }
-    const created = { id: custId, ...newCust, staff_manager_name: newCust.staff_manager_name || user?.userName || '김광일' };
+    const created = { id: custId, ...newCust, sales_manager: newCust.sales_manager || user?.userName || '김광일' };
     setCustomers(prev => [...prev, created]);
     return created;
   };
@@ -239,7 +239,7 @@ export function DataProvider({ children }) {
       updatedCust.contact_person || '',
       updatedCust.phone || '',
       updatedCust.email || '',
-      updatedCust.staff_manager_name || user?.userName || '김광일',
+      updatedCust.sales_manager || user?.userName || '김광일',
     ];
 
     if (isLoggedIn && accessToken) {

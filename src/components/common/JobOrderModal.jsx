@@ -144,7 +144,7 @@ export default function JobOrderModal({ customers, onSave, onClose }) {
         contact_person: formData.client_contact_person,
         phone: formData.client_phone,
         email: formData.client_email,
-        staff_manager_name: userName,
+        sales_manager: userName,
       });
       if (createdCust?.id) {
         custId = createdCust.id;
