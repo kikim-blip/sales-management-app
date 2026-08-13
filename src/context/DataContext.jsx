@@ -87,8 +87,25 @@ export function DataProvider({ children }) {
       }
       if (sheetMap['04_작업전표DB']) {
         const parsed = parseJobOrders(sheetMap['04_작업전표DB']);
-        setJobOrders(parsed);
-        saveCache('jobOrders', parsed);
+        // ✅ 기존 로컬 캐시와 시트 데이터를 병합: 로컬에서 수정된 최신 항목을 시트 데이터가 덮어쓰지 않도록 보호
+        setJobOrders(prev => {
+          if (!prev || prev.length === 0) {
+            saveCache('jobOrders', parsed);
+            return parsed;
+          }
+          // 시트 기준 전체를 사용하되, 로컬에만 존재하는 신규 항목도 포함
+          const merged = parsed.map(sheetOrder => {
+            const localOrder = prev.find(o => o.code_number === sheetOrder.code_number || o.id === sheetOrder.code_number);
+            // 로컬 캐시의 수정 시각이 더 최신이면 로컬 우선
+            return localOrder?._localUpdated ? localOrder : sheetOrder;
+          });
+          // 로컬에만 있는 신규 추가 항목 (아직 시트에 반영 안 된 것)
+          const sheetCodes = new Set(parsed.map(o => o.code_number));
+          const localOnly = prev.filter(o => !sheetCodes.has(o.code_number) && !sheetCodes.has(o.id));
+          const final = [...localOnly, ...merged];
+          saveCache('jobOrders', final);
+          return final;
+        });
       }
       
       if (sheetMap['05_사원관리']) {
@@ -197,6 +214,19 @@ export function DataProvider({ children }) {
     if (index === -1) return;
     const rowIndex = index + 2;
 
+    // ✅ 1. 로컬 state를 먼저 업데이트 (optimistic update) - 화면에 즉시 반영
+    setJobOrders(prev => {
+      const next = prev.map(o => (o.code_number === codeNo || o.id === codeNo) 
+        ? { ...o, ...updatedOrder, _localUpdated: Date.now() }  // _localUpdated 플래그로 최신 로컬 수정 표시
+        : o
+      );
+      saveCache('jobOrders', next);
+      return next;
+    });
+
+    // ✅ 2. 자동 재fetch가 수정 내용을 덮어쓰지 못하도록 lastFetchRef를 현재 시각으로 갱신 (30초 보호)
+    lastFetchRef.current = Date.now();
+
     const custObj = customers.find(c => c.id === updatedOrder.customer_id);
     const custName = custObj ? `${custObj.name}` : (updatedOrder.customer_name || updatedOrder.customer_id);
     const custDept = custObj ? `${custObj.dept}` : (updatedOrder.dept || '');
@@ -247,19 +277,16 @@ export function DataProvider({ children }) {
       updatedOrder.designer_name,
     ];
 
+    // ✅ 3. 그 다음 Google Sheets에 실제 저장
     if (isLoggedIn && accessToken) {
       try {
         await updateSheetRow(accessToken, '04_작업전표DB', rowIndex, row);
       } catch (err) {
         console.error('작업전표 시트 수정 에러:', err);
+        // 시트 저장 실패 시 사용자에게 알림 (로컬 state는 이미 반영됨)
+        throw err;
       }
     }
-
-    setJobOrders(prev => {
-      const next = prev.map(o => (o.code_number === codeNo || o.id === codeNo) ? { ...o, ...updatedOrder } : o);
-      saveCache('jobOrders', next);
-      return next;
-    });
   };
 
   const deleteJobOrder = async (codeNo) => {
@@ -388,6 +415,15 @@ export function DataProvider({ children }) {
     const index = customers.findIndex(c => c.id === id);
     if (index === -1) return;
     const rowIndex = index + 2;
+
+    // ✅ 로컬 state 먼저 반영 (optimistic update)
+    setCustomers(prev => {
+      const next = prev.map(c => c.id === id ? { id, ...updatedCust, _localUpdated: Date.now() } : c);
+      saveCache('customers', next);
+      return next;
+    });
+    lastFetchRef.current = Date.now();
+
     const row = [
       id,
       updatedCust.name,
@@ -397,15 +433,9 @@ export function DataProvider({ children }) {
       updatedCust.email || '',
       updatedCust.sales_manager || user?.userName || '김광일',
     ];
-
     if (isLoggedIn && accessToken) {
       await updateSheetRow(accessToken, '01_고객관리', rowIndex, row);
     }
-    setCustomers(prev => {
-      const next = prev.map(c => c.id === id ? { id, ...updatedCust } : c);
-      saveCache('customers', next);
-      return next;
-    });
   };
 
   const deleteCustomer = async (id) => {
@@ -468,6 +498,15 @@ export function DataProvider({ children }) {
     const index = sales.findIndex(s => s.id === id);
     if (index === -1) return;
     const rowIndex = index + 2;
+
+    // ✅ 1. 로컬 state 먼저 반영 (optimistic update)
+    setSales(prev => {
+      const next = prev.map(s => s.id === id ? { id, ...updatedSale, _localUpdated: Date.now() } : s);
+      saveCache('sales', next);
+      return next;
+    });
+    lastFetchRef.current = Date.now();
+
     const row = [
       id,
       updatedSale.reg_date,
@@ -496,12 +535,6 @@ export function DataProvider({ children }) {
       ...updatedSale,
       id,
       customer_name: custObj ? `${custObj.name} (${custObj.dept})` : '미지정',
-    });
-
-    setSales(prev => {
-      const next = prev.map(s => s.id === id ? { id, ...updatedSale } : s);
-      saveCache('sales', next);
-      return next;
     });
   };
 
@@ -539,16 +572,19 @@ export function DataProvider({ children }) {
     const index = payments.findIndex(p => p.id === id);
     if (index === -1) return;
     const rowIndex = index + 2;
-    const row = [id, updatedPay.payment_date, updatedPay.customer_id, updatedPay.amount, updatedPay.method];
 
-    if (isLoggedIn && accessToken) {
-      await updateSheetRow(accessToken, '03_수금관리', rowIndex, row);
-    }
+    // ✅ 로컬 state 먼저 반영 (optimistic update)
     setPayments(prev => {
-      const next = prev.map(p => p.id === id ? { id, ...updatedPay } : p);
+      const next = prev.map(p => p.id === id ? { id, ...updatedPay, _localUpdated: Date.now() } : p);
       saveCache('payments', next);
       return next;
     });
+    lastFetchRef.current = Date.now();
+
+    const row = [id, updatedPay.payment_date, updatedPay.customer_id, updatedPay.amount, updatedPay.method];
+    if (isLoggedIn && accessToken) {
+      await updateSheetRow(accessToken, '03_수금관리', rowIndex, row);
+    }
   };
 
   const deletePayment = async (id) => {
