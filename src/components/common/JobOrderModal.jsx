@@ -4,7 +4,7 @@ import { X, CheckCircle2, UserCheck, Hash, Save } from 'lucide-react';
 import { useGoogleAuth } from '../../context/GoogleAuthContext';
 import { useData } from '../../context/DataContext';
 
-export default function JobOrderModal({ customers, initialData, onSave, onClose }) {
+export default function JobOrderModal({ customers = [], initialData = null, onSave, onClose }) {
   const { user } = useGoogleAuth();
   const { addCustomer } = useData();
 
@@ -44,8 +44,8 @@ export default function JobOrderModal({ customers, initialData, onSave, onClose 
 
   const getInitialCustomerName = () => {
     if (initialData?.customer_name) return initialData.customer_name;
-    if (initialData?.customer_id) {
-      const found = customers.find(c => c.id === initialData.customer_id);
+    if (initialData?.customer_id && Array.isArray(customers)) {
+      const found = customers.find(c => c && c.id === initialData.customer_id);
       if (found) return found.name;
       return initialData.customer_id;
     }
@@ -116,7 +116,7 @@ export default function JobOrderModal({ customers, initialData, onSave, onClose 
 
   const handleCustomerNameChange = (typedName) => {
     setCustomerNameInput(typedName);
-    const matched = customers.find(c => c.name.trim() === typedName.trim());
+    const matched = (customers || []).find(c => c && c.name && c.name.trim() === typedName.trim());
     if (matched) {
       setFormData(prev => ({
         ...prev,
@@ -342,8 +342,8 @@ export default function JobOrderModal({ customers, initialData, onSave, onClose 
                       className="w-full p-1.5 border border-slate-300 rounded font-bold text-rose-600 text-xs focus:ring-1 focus:ring-sky-500"
                     />
                     <datalist id="job-customer-list">
-                      {customers.map(c => (
-                        <option key={c.id} value={c.name} />
+                      {(customers || []).map(c => (
+                        <option key={c.id || c.name} value={c.name} />
                       ))}
                     </datalist>
                   </div>

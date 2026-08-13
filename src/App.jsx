@@ -10,6 +10,7 @@ import CustomerPage from './pages/CustomerPage';
 import JobOrderPage from './pages/JobOrderPage';
 import SalesPage from './pages/SalesPage';
 import PaymentPage from './pages/PaymentPage';
+import StaffManagementPage from './pages/StaffManagementPage';
 
 export default function App() {
   return (
@@ -29,6 +30,7 @@ export default function App() {
             <Route path="/job-orders" element={<JobOrderPage />} />
             <Route path="/sales" element={<SalesPage />} />
             <Route path="/payments" element={<PaymentPage />} />
+            <Route path="/staffs" element={<StaffManagementPage />} />
           </Routes>
         </main>
       </div>

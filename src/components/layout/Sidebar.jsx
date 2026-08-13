@@ -1,16 +1,16 @@
 // src/components/layout/Sidebar.jsx
 import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Users, ClipboardList, FileSpreadsheet, CreditCard, UserCheck } from 'lucide-react';
+import { LayoutDashboard, Users, ClipboardList, FileSpreadsheet, CreditCard, UserCheck, Shield } from 'lucide-react';
 import { useGoogleAuth } from '../../context/GoogleAuthContext';
 import UserProfileModal from '../common/UserProfileModal';
 
 const navItems = [
-  { name: '대시보드', path: '/', icon: LayoutDashboard },
-  { name: '고객 관리', path: '/customers', icon: Users },
+  { name: '통합 대시보드', path: '/', icon: LayoutDashboard },
   { name: '작업전표 관리', path: '/job-orders', icon: ClipboardList },
-  { name: '매출/견적 관리', path: '/sales', icon: FileSpreadsheet },
-  { name: '수금 관리', path: '/payments', icon: CreditCard },
+  { name: '매출 및 수금 관리', path: '/sales', icon: FileSpreadsheet },
+  { name: '거래처(고객) 관리', path: '/customers', icon: Users },
+  { name: '사용자(사원) 승인 관리', path: '/staffs', icon: Shield },
 ];
 
 export default function Sidebar() {
@@ -55,13 +55,12 @@ export default function Sidebar() {
               <UserCheck className="w-4 h-4" />
             </div>
             <div>
-              <p className="text-[11px] font-bold text-slate-400">담당 직원 정보</p>
+              <p className="text-[11px] font-bold text-slate-400">담당 사원 정보</p>
               <p className="text-xs font-bold text-slate-800 group-hover:text-sky-600">
-                {user?.userCode || '84'} - {user?.userName || '홍길동'}
+                {user?.userCode || '44'} - {user?.userName || '김광일'}
               </p>
             </div>
           </div>
-          <span className="text-[10px] bg-slate-200 group-hover:bg-sky-200 px-1.5 py-0.5 rounded text-slate-600 font-semibold">변경</span>
         </button>
       </div>
 
