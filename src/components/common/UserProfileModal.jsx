@@ -6,11 +6,16 @@ import { useData } from '../../context/DataContext';
 
 export default function UserProfileModal({ onClose }) {
   const { user, updateUserProfile } = useGoogleAuth();
-  const { saveStaffToSheet, isUsingSheetsDB, departments, staffs } = useData();
+  const { saveStaffToSheet, isUsingSheetsDB, departments, teams, staffs } = useData();
 
   const allDepartments = Array.from(new Set([
     ...(departments || []),
-    ...(staffs || []).map(s => s.dept || s.team).filter(Boolean)
+    ...(staffs || []).map(s => s.dept).filter(Boolean)
+  ]));
+
+  const allTeams = Array.from(new Set([
+    ...(teams || []),
+    ...(staffs || []).map(s => s.team).filter(Boolean)
   ]));
 
   const [formData, setFormData] = useState({
@@ -19,7 +24,7 @@ export default function UserProfileModal({ onClose }) {
     companyCode: user?.companyCode || '3',
     email: user?.email || '',
     dept: user?.dept || (allDepartments[0] || '세종영업본부'),
-    team: user?.team || user?.dept || '영업1조',
+    team: user?.team || (allTeams[0] || '영업1조'),
   });
 
   const handleSubmit = async (e) => {
@@ -97,15 +102,23 @@ export default function UserProfileModal({ onClose }) {
               </select>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">팀명 *</label>
-              <input
-                type="text"
+              <label className="block text-xs font-semibold text-slate-600 mb-1">팀명 선택 *</label>
+              <select
                 required
-                placeholder="예: 영업1팀"
                 value={formData.team}
                 onChange={e => setFormData({ ...formData, team: e.target.value })}
-                className="w-full p-2.5 border border-slate-200 rounded-xl font-semibold focus:border-sky-500"
-              />
+                className="w-full p-2.5 border border-slate-200 rounded-xl font-bold text-slate-800 focus:border-sky-500 bg-white cursor-pointer"
+              >
+                {allTeams.length === 0 ? (
+                  <option value="영업1조">👥 영업1조</option>
+                ) : (
+                  allTeams.map(tName => (
+                    <option key={tName} value={tName}>
+                      👥 {tName}
+                    </option>
+                  ))
+                )}
+              </select>
             </div>
           </div>
 

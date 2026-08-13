@@ -2,10 +2,14 @@
 import React, { useState } from 'react';
 import { useData } from '../context/DataContext';
 import { useGoogleAuth } from '../context/GoogleAuthContext';
-import { Plus, Search, Shield, UserCheck, CheckCircle2, Clock, Pencil, Trash2, XCircle, Building2, PlusCircle, Check } from 'lucide-react';
+import { Plus, Search, Shield, UserCheck, CheckCircle2, Clock, Pencil, Trash2, XCircle, Building2, PlusCircle, Check, Users } from 'lucide-react';
 
 export default function StaffManagementPage() {
-  const { staffs, saveStaffToSheet, deleteStaff, departments, addDepartment, updateDepartment, deleteDepartment } = useData();
+  const { 
+    staffs, saveStaffToSheet, deleteStaff, 
+    departments, addDepartment, updateDepartment, deleteDepartment,
+    teams, addTeam, updateTeam, deleteTeam
+  } = useData();
   const { user } = useGoogleAuth();
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -19,19 +23,31 @@ export default function StaffManagementPage() {
   // 💡 유효한 사원 데이터만 추출 (유령/빈 데이터 제거)
   const validStaffs = staffs.filter(s => s.userName || s.userCode || s.email);
 
-  // 💡 전체 통합 부서/팀 목록 (사원 DB 등재 부서 + 관리자 추가 부서)
+  // 💡 전체 통합 부서 목록
   const allDepartments = Array.from(new Set([
     ...(departments || []),
-    ...validStaffs.map(s => s.dept || s.team).filter(Boolean)
+    ...validStaffs.map(s => s.dept).filter(Boolean)
   ]));
 
+  // 💡 전체 통합 팀 목록
+  const allTeams = Array.from(new Set([
+    ...(teams || []),
+    ...validStaffs.map(s => s.team).filter(Boolean)
+  ]));
+
+  const [deptOrTeamTab, setDeptOrTeamTab] = useState('dept'); // 'dept' | 'team'
   const [newDeptInput, setNewDeptInput] = useState('');
+  const [newTeamInput, setNewTeamInput] = useState('');
+
   const [editingDeptName, setEditingDeptName] = useState(null);
   const [editDeptValue, setEditDeptValue] = useState('');
 
+  const [editingTeamName, setEditingTeamName] = useState(null);
+  const [editTeamValue, setEditTeamValue] = useState('');
+
   const defaultForm = {
     dept: user?.dept || (allDepartments[0] || '세종영업본부'),
-    team: user?.team || '영업1조',
+    team: user?.team || (allTeams[0] || '영업1조'),
     userName: '',
     userCode: '',
     companyCode: '3',
@@ -51,8 +67,8 @@ export default function StaffManagementPage() {
   const openEditModal = (s) => {
     setEditingStaff(s);
     setFormData({
-      dept: s.dept || '부서 미지정',
-      team: s.team || s.dept || '팀 미지정',
+      dept: s.dept || (allDepartments[0] || '세종영업본부'),
+      team: s.team || (allTeams[0] || '영업1조'),
       userName: s.userName || s.name || '',
       userCode: s.userCode || s.code || '',
       companyCode: s.companyCode || '3',
@@ -101,7 +117,7 @@ export default function StaffManagementPage() {
     const identifier = targetStaff.userCode || targetStaff.email || targetStaff.userName;
     if (!identifier) return;
 
-    if (!window.confirm(`정말 사원 [${targetStaff.userName || targetStaff.userCode}] 님의 정보를 DB 시트에서 삭제하시겠습니까?\n삭제 후에는 해당 계정의 팀 데이터 조회가 제한될 수 있습니다.`)) {
+    if (!window.confirm(`정말 사원 [${targetStaff.userName || targetStaff.userCode}] 님의 정보를 DB 시트에서 삭제하시겠습니까?`)) {
       return;
     }
 
@@ -117,18 +133,24 @@ export default function StaffManagementPage() {
   const handleAddDeptSubmit = (e) => {
     e.preventDefault();
     const name = newDeptInput.trim();
-    if (!name) return alert('추가할 부서/팀명을 입력해 주세요.');
-    if (allDepartments.includes(name)) return alert('이미 존재하는 부서/팀명입니다.');
+    if (!name) return alert('추가할 부서명을 입력해 주세요.');
+    if (allDepartments.includes(name)) return alert('이미 존재하는 부서명입니다.');
 
     addDepartment(name);
     setNewDeptInput('');
     alert(`신규 부서 [${name}] (이)가 성공적으로 추가 등록되었습니다!`);
   };
 
-  // 💡 부서 수정 시작
-  const handleStartDeptEdit = (deptName) => {
-    setEditingDeptName(deptName);
-    setEditDeptValue(deptName);
+  // 💡 신규 팀 등록
+  const handleAddTeamSubmit = (e) => {
+    e.preventDefault();
+    const name = newTeamInput.trim();
+    if (!name) return alert('추가할 팀명을 입력해 주세요.');
+    if (allTeams.includes(name)) return alert('이미 존재하는 팀명입니다.');
+
+    addTeam(name);
+    setNewTeamInput('');
+    alert(`신규 팀 [${name}] (이)가 성공적으로 추가 등록되었습니다!`);
   };
 
   // 💡 부서 수정 저장
@@ -145,19 +167,32 @@ export default function StaffManagementPage() {
     alert(`부서명이 [${oldName}] ➔ [${newName}] (으)로 수정 변경되었습니다!`);
   };
 
-  // 💡 부서 삭제
-  const handleDeleteDept = (deptName) => {
-    const count = validStaffs.filter(s => s.dept === deptName || s.team === deptName).length;
-    if (count > 0) {
-      if (!window.confirm(`[${deptName}] 부서에 현재 ${count}명의 사원이 소속되어 있습니다.\n정말 이 부서를 목록에서 삭제하시겠습니까?`)) {
-        return;
-      }
-    } else {
-      if (!window.confirm(`[${deptName}] 부서를 삭제하시겠습니까?`)) return;
+  // 💡 팀 수정 저장
+  const handleSaveTeamEdit = (oldName) => {
+    const newName = editTeamValue.trim();
+    if (!newName) return alert('팀명을 입력해 주세요.');
+    if (newName === oldName) {
+      setEditingTeamName(null);
+      return;
     }
 
+    updateTeam(oldName, newName);
+    setEditingTeamName(null);
+    alert(`팀명이 [${oldName}] ➔ [${newName}] (으)로 수정 변경되었습니다!`);
+  };
+
+  // 💡 부서 삭제
+  const handleDeleteDept = (deptName) => {
+    if (!window.confirm(`[${deptName}] 부서를 삭제하시겠습니까?`)) return;
     deleteDepartment(deptName);
     alert(`[${deptName}] 부서가 성공적으로 삭제되었습니다.`);
+  };
+
+  // 💡 팀 삭제
+  const handleDeleteTeam = (teamName) => {
+    if (!window.confirm(`[${teamName}] 팀을 삭제하시겠습니까?`)) return;
+    deleteTeam(teamName);
+    alert(`[${teamName}] 팀이 성공적으로 삭제되었습니다.`);
   };
 
   const filteredStaffs = validStaffs.filter(s => {
@@ -350,15 +385,23 @@ export default function StaffManagementPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">팀명 *</label>
-                  <input
-                    type="text"
+                  <label className="block font-bold text-slate-700 mb-1">팀명 선택 *</label>
+                  <select
                     required
-                    placeholder="예: 영업1조"
                     value={formData.team}
                     onChange={e => setFormData({ ...formData, team: e.target.value })}
-                    className="w-full p-2 border border-slate-200 rounded-xl font-semibold"
-                  />
+                    className="w-full p-2 border border-slate-200 rounded-xl font-bold text-slate-800 focus:border-sky-500 bg-white cursor-pointer"
+                  >
+                    {allTeams.length === 0 ? (
+                      <option value="영업1조">👥 영업1조</option>
+                    ) : (
+                      allTeams.map(t => (
+                        <option key={t} value={t}>
+                          👥 {t}
+                        </option>
+                      ))
+                    )}
+                  </select>
                 </div>
               </div>
 
@@ -455,113 +498,207 @@ export default function StaffManagementPage() {
         </div>
       )}
 
-      {/* 2. 🏢 공식 부서/팀 CRUD 등록/수정/삭제 종합 관리 모달 */}
+      {/* 2. 🏢 공식 부서 & 팀 탭별 등록/수정/삭제 관리 모달 */}
       {showDeptModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-lg rounded-2xl shadow-xl p-6 space-y-4">
             <div className="flex justify-between items-center border-b border-slate-100 pb-3">
               <div className="flex items-center space-x-2">
                 <Building2 className="w-5 h-5 text-sky-600" />
-                <h3 className="font-bold text-slate-800 text-base">공식 부서/팀 등록·수정·삭제 관리</h3>
+                <h3 className="font-bold text-slate-800 text-base">공식 부서 및 팀 관리</h3>
               </div>
               <button type="button" onClick={() => setShowDeptModal(false)} className="text-slate-400 hover:text-slate-700">
                 <XCircle className="w-5 h-5" />
               </button>
             </div>
 
-            {/* 신규 부서 추가 입력 폼 */}
-            <form onSubmit={handleAddDeptSubmit} className="bg-sky-50 p-3 rounded-2xl border border-sky-100 space-y-2">
-              <label className="block text-xs font-bold text-sky-900">➕ 신규 부서/팀 등록</label>
-              <div className="flex items-center space-x-2">
-                <input
-                  type="text"
-                  placeholder="추가할 부서/팀명 입력 (예: 영업3팀)"
-                  value={newDeptInput}
-                  onChange={e => setNewDeptInput(e.target.value)}
-                  className="flex-1 p-2 border border-sky-200 rounded-xl text-xs font-bold bg-white text-slate-800 focus:outline-none focus:border-sky-500"
-                />
-                <button
-                  type="submit"
-                  className="flex items-center space-x-1 bg-sky-600 hover:bg-sky-700 text-white px-3.5 py-2 rounded-xl text-xs font-bold shadow-sm transition shrink-0"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>부서 등록</span>
-                </button>
-              </div>
-            </form>
-
-            <p className="text-xs text-slate-500 font-semibold">
-              등록된 부서 목록 (수정 클릭 시 부서명 변경, 삭제 클릭 시 전용 삭제):
-            </p>
-
-            {/* 부서 목록 조작 리스트 */}
-            <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
-              {allDepartments.length === 0 ? (
-                <p className="text-xs text-slate-400 font-bold text-center py-6">등록된 부서가 없습니다.</p>
-              ) : (
-                allDepartments.map((deptName) => {
-                  const isEditing = editingDeptName === deptName;
-                  const memberCount = validStaffs.filter(s => s.dept === deptName || s.team === deptName).length;
-
-                  return (
-                    <div key={deptName} className="flex items-center justify-between bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-800">
-                      {isEditing ? (
-                        <div className="flex items-center space-x-2 flex-1 mr-2">
-                          <input
-                            type="text"
-                            value={editDeptValue}
-                            onChange={e => setEditDeptValue(e.target.value)}
-                            className="flex-1 p-1.5 border border-sky-400 rounded-lg text-xs font-bold bg-white"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => handleSaveDeptEdit(deptName)}
-                            className="p-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition"
-                            title="수정 저장"
-                          >
-                            <Check className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setEditingDeptName(null)}
-                            className="p-1.5 bg-slate-200 text-slate-600 rounded-lg hover:bg-slate-300 transition"
-                            title="취소"
-                          >
-                            <XCircle className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      ) : (
-                        <>
-                          <div className="flex items-center space-x-2">
-                            <span>🏢 {deptName}</span>
-                            <span className="text-[10px] text-sky-600 font-normal">({memberCount}명 소속)</span>
-                          </div>
-
-                          <div className="flex items-center space-x-1">
-                            <button
-                              type="button"
-                              onClick={() => handleStartDeptEdit(deptName)}
-                              className="p-1.5 text-slate-500 hover:text-sky-600 hover:bg-sky-50 rounded-lg transition"
-                              title="부서명 수정"
-                            >
-                              <Pencil className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteDept(deptName)}
-                              className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
-                              title="부서 삭제"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  );
-                })
-              )}
+            {/* 탭: [🏢 부서 관리] vs [👥 팀 관리] */}
+            <div className="flex border-b border-slate-200">
+              <button
+                type="button"
+                onClick={() => setDeptOrTeamTab('dept')}
+                className={`flex-1 py-2 font-bold text-xs border-b-2 transition ${
+                  deptOrTeamTab === 'dept' ? 'border-sky-600 text-sky-600 bg-sky-50/50' : 'border-transparent text-slate-500'
+                }`}
+              >
+                🏢 부서 관리 ({allDepartments.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setDeptOrTeamTab('team')}
+                className={`flex-1 py-2 font-bold text-xs border-b-2 transition ${
+                  deptOrTeamTab === 'team' ? 'border-sky-600 text-sky-600 bg-sky-50/50' : 'border-transparent text-slate-500'
+                }`}
+              >
+                👥 팀 관리 ({allTeams.length})
+              </button>
             </div>
+
+            {/* 🏢 1. 부서 관리 탭 */}
+            {deptOrTeamTab === 'dept' && (
+              <div className="space-y-3">
+                <form onSubmit={handleAddDeptSubmit} className="bg-sky-50 p-3 rounded-2xl border border-sky-100 space-y-2">
+                  <label className="block text-xs font-bold text-sky-900">➕ 신규 부서 등록</label>
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="text"
+                      placeholder="추가할 부서명 입력 (예: 개발본부)"
+                      value={newDeptInput}
+                      onChange={e => setNewDeptInput(e.target.value)}
+                      className="flex-1 p-2 border border-sky-200 rounded-xl text-xs font-bold bg-white text-slate-800 focus:outline-none focus:border-sky-500"
+                    />
+                    <button
+                      type="submit"
+                      className="flex items-center space-x-1 bg-sky-600 hover:bg-sky-700 text-white px-3.5 py-2 rounded-xl text-xs font-bold shadow-sm transition shrink-0"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>부서 등록</span>
+                    </button>
+                  </div>
+                </form>
+
+                <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                  {allDepartments.map((deptName) => {
+                    const isEditing = editingDeptName === deptName;
+                    const count = validStaffs.filter(s => s.dept === deptName).length;
+                    return (
+                      <div key={deptName} className="flex items-center justify-between bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-800">
+                        {isEditing ? (
+                          <div className="flex items-center space-x-2 flex-1 mr-2">
+                            <input
+                              type="text"
+                              value={editDeptValue}
+                              onChange={e => setEditDeptValue(e.target.value)}
+                              className="flex-1 p-1.5 border border-sky-400 rounded-lg text-xs font-bold bg-white"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleSaveDeptEdit(deptName)}
+                              className="p-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
+                            >
+                              <Check className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditingDeptName(null)}
+                              className="p-1.5 bg-slate-200 text-slate-600 rounded-lg"
+                            >
+                              <XCircle className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="flex items-center space-x-2">
+                              <span>🏢 {deptName}</span>
+                              <span className="text-[10px] text-sky-600 font-normal">({count}명 소속)</span>
+                            </div>
+                            <div className="flex items-center space-x-1">
+                              <button
+                                type="button"
+                                onClick={() => { setEditingDeptName(deptName); setEditDeptValue(deptName); }}
+                                className="p-1.5 text-slate-500 hover:text-sky-600 rounded-lg"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteDept(deptName)}
+                                className="p-1.5 text-slate-500 hover:text-rose-600 rounded-lg"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* 👥 2. 팀 관리 탭 */}
+            {deptOrTeamTab === 'team' && (
+              <div className="space-y-3">
+                <form onSubmit={handleAddTeamSubmit} className="bg-purple-50 p-3 rounded-2xl border border-purple-100 space-y-2">
+                  <label className="block text-xs font-bold text-purple-900">➕ 신규 팀/조 등록</label>
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="text"
+                      placeholder="추가할 팀명 입력 (예: 영업5조)"
+                      value={newTeamInput}
+                      onChange={e => setNewTeamInput(e.target.value)}
+                      className="flex-1 p-2 border border-purple-200 rounded-xl text-xs font-bold bg-white text-slate-800 focus:outline-none focus:border-purple-500"
+                    />
+                    <button
+                      type="submit"
+                      className="flex items-center space-x-1 bg-purple-600 hover:bg-purple-700 text-white px-3.5 py-2 rounded-xl text-xs font-bold shadow-sm transition shrink-0"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>팀 등록</span>
+                    </button>
+                  </div>
+                </form>
+
+                <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                  {allTeams.map((teamName) => {
+                    const isEditing = editingTeamName === teamName;
+                    const count = validStaffs.filter(s => s.team === teamName).length;
+                    return (
+                      <div key={teamName} className="flex items-center justify-between bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-800">
+                        {isEditing ? (
+                          <div className="flex items-center space-x-2 flex-1 mr-2">
+                            <input
+                              type="text"
+                              value={editTeamValue}
+                              onChange={e => setEditTeamValue(e.target.value)}
+                              className="flex-1 p-1.5 border border-purple-400 rounded-lg text-xs font-bold bg-white"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleSaveTeamEdit(teamName)}
+                              className="p-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
+                            >
+                              <Check className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditingTeamName(null)}
+                              className="p-1.5 bg-slate-200 text-slate-600 rounded-lg"
+                            >
+                              <XCircle className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="flex items-center space-x-2">
+                              <span>👥 {teamName}</span>
+                              <span className="text-[10px] text-purple-600 font-normal">({count}명 소속)</span>
+                            </div>
+                            <div className="flex items-center space-x-1">
+                              <button
+                                type="button"
+                                onClick={() => { setEditingTeamName(teamName); setEditTeamValue(teamName); }}
+                                className="p-1.5 text-slate-500 hover:text-purple-600 rounded-lg"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteTeam(teamName)}
+                                className="p-1.5 text-slate-500 hover:text-rose-600 rounded-lg"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             <div className="flex justify-end pt-3 border-t border-slate-100">
               <button

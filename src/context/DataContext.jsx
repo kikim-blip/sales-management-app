@@ -570,7 +570,11 @@ export function DataProvider({ children }) {
 
   // --- 공식 부서/팀 CRUD ---
   const [departments, setDepartments] = useState(() => 
-    loadCache('departments', ['세종영업본부', '영업1팀', '기획예산부', '생산관리부'])
+    loadCache('departments', ['세종영업본부', '기획예산부', '생산관리부', '영업본부'])
+  );
+
+  const [teams, setTeams] = useState(() => 
+    loadCache('teams', ['영업1조', '영업2조', '영업3조', '영업4조', '영업1팀', '영업2팀', '기획팀', '생산팀'])
   );
 
   const addDepartment = (name) => {
@@ -604,6 +608,37 @@ export function DataProvider({ children }) {
     });
   };
 
+  const addTeam = (name) => {
+    if (!name || teams.includes(name)) return;
+    setTeams(prev => {
+      const next = [...prev, name];
+      saveCache('teams', next);
+      return next;
+    });
+  };
+
+  const updateTeam = (oldName, newName) => {
+    if (!newName || oldName === newName) return;
+    setTeams(prev => {
+      const next = prev.map(t => t === oldName ? newName : t);
+      saveCache('teams', next);
+      return next;
+    });
+    setStaffs(prev => {
+      const next = prev.map(s => s.team === oldName ? { ...s, team: newName } : s);
+      saveCache('staffs', next);
+      return next;
+    });
+  };
+
+  const deleteTeam = (name) => {
+    setTeams(prev => {
+      const next = prev.filter(t => t !== name);
+      saveCache('teams', next);
+      return next;
+    });
+  };
+
   return (
     <DataContext.Provider
       value={{
@@ -613,9 +648,13 @@ export function DataProvider({ children }) {
         staffs,
         jobOrders,
         departments,
+        teams,
         addDepartment,
         updateDepartment,
         deleteDepartment,
+        addTeam,
+        updateTeam,
+        deleteTeam,
         loading,
         error,
         selectedTeamGroup,

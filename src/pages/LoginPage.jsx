@@ -6,7 +6,7 @@ import { useData } from '../context/DataContext';
 
 export default function LoginPage() {
   const { login, updateUserProfile } = useGoogleAuth();
-  const { saveStaffToSheet, departments, staffs } = useData();
+  const { saveStaffToSheet, departments, teams, staffs } = useData();
 
   const [activeTab, setActiveTab] = useState('login'); // 'login' | 'register'
   const [submitting, setSubmitting] = useState(false);
@@ -15,14 +15,20 @@ export default function LoginPage() {
   // 💡 관리자가 등록/운용 중인 공식 부서/팀 목록만 추출
   const availableDepartments = Array.from(new Set([
     ...(departments || []),
-    ...(staffs || []).map(s => s.dept || s.team).filter(Boolean)
+    ...(staffs || []).map(s => s.dept).filter(Boolean)
+  ]));
+
+  const availableTeams = Array.from(new Set([
+    ...(teams || []),
+    ...(staffs || []).map(s => s.team).filter(Boolean)
   ]));
 
   const defaultDept = availableDepartments[0] || '세종영업본부';
+  const defaultTeam = availableTeams[0] || '영업1조';
 
   const [regForm, setRegForm] = useState({
     dept: defaultDept,
-    team: defaultDept,
+    team: defaultTeam,
     userName: '',
     userCode: '',
     companyCode: '3',
@@ -169,15 +175,23 @@ export default function LoginPage() {
                     </div>
 
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">세부 팀명 *</label>
-                      <input
-                        type="text"
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">세부 팀명 선택 *</label>
+                      <select
                         required
-                        placeholder="예: 영업1조"
                         value={regForm.team}
                         onChange={e => setRegForm({ ...regForm, team: e.target.value })}
-                        className="w-full p-2 border border-slate-200 rounded-xl text-xs font-semibold focus:border-sky-500"
-                      />
+                        className="w-full p-2 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:border-sky-500 cursor-pointer bg-white"
+                      >
+                        {availableTeams.length === 0 ? (
+                          <option value="영업1조">👥 영업1조</option>
+                        ) : (
+                          availableTeams.map(tName => (
+                            <option key={tName} value={tName}>
+                              👥 {tName}
+                            </option>
+                          ))
+                        )}
+                      </select>
                     </div>
                   </div>
 
