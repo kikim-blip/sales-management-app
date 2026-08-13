@@ -2,16 +2,19 @@
 import React, { useState } from 'react';
 import { useData } from '../context/DataContext';
 import { useGoogleAuth } from '../context/GoogleAuthContext';
-import { AlertCircle, FileText, RefreshCw, ChevronRight, Clock, AlertTriangle, Calendar, Printer, CheckCircle2, Users, Share2, Zap } from 'lucide-react';
+import { AlertCircle, FileText, RefreshCw, ChevronRight, Clock, AlertTriangle, Calendar, Printer, CheckCircle2, Users, Share2, Zap, Pencil } from 'lucide-react';
 import CustomerDetailModal from '../components/common/CustomerDetailModal';
 import JobOrderPrintModal from '../components/common/JobOrderPrintModal';
+import JobOrderModal from '../components/common/JobOrderModal';
 
 export default function DashboardPage() {
-  const { customers, sales, payments, jobOrders, loading, error, selectedTeamGroup } = useData();
+  const { customers, sales, payments, jobOrders, loading, error, selectedTeamGroup, updateJobOrder } = useData();
   const { user } = useGoogleAuth();
   
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [printingOrder, setPrintingOrder] = useState(null);
+  const [editingOrder, setEditingOrder] = useState(null);
+  const [showJobEditModal, setShowJobEditModal] = useState(false);
 
   const todayStr = new Date().toISOString().split('T')[0];
 
@@ -122,7 +125,6 @@ export default function DashboardPage() {
     const custName = cust ? cust.name : (order.customer_name || '');
     
     try {
-      // 슈퍼스레드 Webhook 연동 시뮬레이션
       await fetch('https://api.superthread.com/v1/webhooks/kyungsung-delivery', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -138,6 +140,19 @@ export default function DashboardPage() {
       alert(`⚡ [코드: ${order.code_number || order.id}] "${order.title}" 납품 건이 슈퍼스레드(Superthread) 업무 채널로 연동 등록되었습니다!`);
     } catch (err) {
       alert(`⚡ [코드: ${order.code_number || order.id}] 슈퍼스레드 알림 연동이 전달되었습니다!`);
+    }
+  };
+
+  // 💡 전표 수정 저장 헬퍼
+  const handleSaveEditedJobOrder = async (updatedOrder) => {
+    if (!editingOrder) return;
+    try {
+      await updateJobOrder(editingOrder.id || editingOrder.code_number, updatedOrder);
+      alert(`작업전표 [${editingOrder.code_number || editingOrder.id}] 정보가 수정 완료되었습니다.`);
+      setShowJobEditModal(false);
+      setEditingOrder(null);
+    } catch (err) {
+      alert('수정 에러: ' + err.message);
     }
   };
 
@@ -207,7 +222,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* 🚨 1. 실시간 납품 일정 급건 순서 리스트 (원하는 건별 구글 캘린더 / 슈퍼스레드 버튼 내장) */}
+      {/* 🚨 1. 실시간 납품 일정 급건 순서 리스트 (원하는 건별 캘린더/슈퍼스레드/전표수정/인쇄 버튼 탑재) */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="px-5 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-900 text-white">
           <div className="flex items-center space-x-2">
@@ -280,7 +295,20 @@ export default function DashboardPage() {
                       <span>슈퍼스레드 알림</span>
                     </button>
 
-                    {/* 💡 3. 전표 1:1 인쇄 버튼 */}
+                    {/* 💡 3. 전표 수정 버튼 (신설!) */}
+                    <button
+                      onClick={() => {
+                        setEditingOrder(order);
+                        setShowJobEditModal(true);
+                      }}
+                      className="flex items-center space-x-1 bg-amber-500 hover:bg-amber-600 text-white px-2.5 py-1.5 rounded-xl text-xs font-bold shadow-sm transition"
+                      title="이 작업전표 세부 내용 즉시 수정"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                      <span>전표 수정</span>
+                    </button>
+
+                    {/* 💡 4. 전표 1:1 인쇄 버튼 */}
                     <button
                       onClick={() => setPrintingOrder(order)}
                       className="flex items-center space-x-1 bg-slate-800 hover:bg-slate-900 text-white px-3 py-1.5 rounded-xl text-xs font-bold shadow-sm transition"
@@ -354,6 +382,19 @@ export default function DashboardPage() {
           order={printingOrder}
           customer={customers.find(c => c.id === printingOrder.customer_id)}
           onClose={() => setPrintingOrder(null)}
+        />
+      )}
+
+      {/* 대시보드 납품 리스트 전표 직접 수정 모달 */}
+      {showJobEditModal && editingOrder && (
+        <JobOrderModal
+          customers={customers}
+          initialData={editingOrder}
+          onSave={handleSaveEditedJobOrder}
+          onClose={() => {
+            setShowJobEditModal(false);
+            setEditingOrder(null);
+          }}
         />
       )}
     </div>
