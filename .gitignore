@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Wrangler (Cloudflare Workers) 캐시/상태 파일
+workers/.wrangler/
+.wrangler/
