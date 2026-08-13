@@ -35,9 +35,12 @@ export default function DashboardPage() {
   const filteredJobOrders = jobOrders.filter(o => isTeamMatch(o.dept, o.customer_id));
   const filteredCustomers = customers.filter(c => !selectedTeamGroup || selectedTeamGroup === 'ALL' || c.dept === selectedTeamGroup);
 
-  const totalSalesAmount = filteredSales.reduce((acc, curr) => acc + curr.total_price, 0);
-  const totalPaymentAmount = filteredPayments.reduce((acc, curr) => acc + curr.amount, 0);
+  const totalSalesAmount = filteredSales.reduce((acc, curr) => acc + (Number(curr.total_price) || 0), 0);
+  const totalPaymentAmount = filteredPayments.reduce((acc, curr) => acc + (Number(curr.amount) || 0), 0);
+  // 미수금 = 매출액 - 수금액 (음수가 되는 경우는 0으로 표시, 별도 안내)
   const totalUnpaidAmount = totalSalesAmount - totalPaymentAmount;
+  const displayUnpaid = Math.max(0, totalUnpaidAmount);
+  const isOverpaid = totalUnpaidAmount < 0;
 
   const customerSummary = filteredCustomers.map((cust) => {
     const custSales = filteredSales
@@ -211,12 +214,18 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-2xl border border-rose-100 bg-rose-50/30 shadow-sm flex items-center justify-between">
+        <div className={`bg-white p-5 rounded-2xl border shadow-sm flex items-center justify-between ${isOverpaid ? 'border-amber-200 bg-amber-50/30' : 'border-rose-100 bg-rose-50/30'}`}>
           <div>
-            <p className="text-xs font-semibold text-rose-500 mb-1">총 미수금 (잔액)</p>
-            <p className="text-xl font-bold text-rose-600">₩ {totalUnpaidAmount.toLocaleString()} 원</p>
+            <p className={`text-xs font-semibold mb-1 ${isOverpaid ? 'text-amber-500' : 'text-rose-500'}`}>총 미수금 (잔액)</p>
+            <p className={`text-xl font-bold ${isOverpaid ? 'text-amber-600' : 'text-rose-600'}`}>
+              {isOverpaid ? (
+                <span className="text-sm font-semibold">₩ 0 원 <span className="text-xs text-amber-500">(초과 수금 {Math.abs(totalUnpaidAmount).toLocaleString()}원)</span></span>
+              ) : (
+                <>₩ {displayUnpaid.toLocaleString()} 원</>
+              )}
+            </p>
           </div>
-          <div className="w-10 h-10 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center">
+          <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isOverpaid ? 'bg-amber-100 text-amber-600' : 'bg-rose-100 text-rose-600'}`}>
             <AlertCircle className="w-5 h-5" />
           </div>
         </div>

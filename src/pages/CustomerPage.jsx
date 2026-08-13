@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { useData } from '../context/DataContext';
 import { useGoogleAuth } from '../context/GoogleAuthContext';
-import { Plus, Search, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Search, Pencil, Trash2, Download } from 'lucide-react';
 
 export default function CustomerPage() {
   const { customers, addCustomer, updateCustomer, deleteCustomer, selectedTeamGroup } = useData();
@@ -69,7 +69,7 @@ export default function CustomerPage() {
         alert('고객 정보가 수정되었습니다!');
       } else {
         await addCustomer(formData);
-        alert('신규 고객이 구글 시트에 저장되었습니다!');
+        alert('신규 고객이 등록되었습니다!');
       }
       setShowModal(false);
     } catch (err) {
@@ -77,6 +77,34 @@ export default function CustomerPage() {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  // 고객 리스트 CSV 다운로드
+  const handleExportCSV = () => {
+    if (filtered.length === 0) return alert('다운로드할 고객 데이터가 없습니다.');
+    const headers = ['고객사명', '사업장(ID)', '과/부서명', '담당자', '연락처', '이메일', '영업담당'];
+    const rows = filtered.map(c => [
+      c.name || '',
+      c.id || '',
+      c.dept || '',
+      c.contact_person || '',
+      c.phone || '',
+      c.email || '',
+      c.sales_manager || '',
+    ]);
+    const today = new Date().toISOString().split('T')[0];
+    const csv = '\uFEFF' + [headers, ...rows]
+      .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}`).join(','))
+      .join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `고객관리_전체목록_${today}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   const filtered = customers.filter(c => {
@@ -94,6 +122,8 @@ export default function CustomerPage() {
     return matchesSearch && matchesTeam;
   });
 
+
+
   return (
     <div className="space-y-5">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -101,13 +131,24 @@ export default function CustomerPage() {
           <h2 className="text-xl font-bold text-slate-800">고객 관리</h2>
           <p className="text-xs text-slate-500 mt-0.5">거래처 및 과/부서 담당자, 이메일, 영업담당자 정보를 등록 및 수정 관리합니다.</p>
         </div>
-        <button
-          onClick={openNewModal}
-          className="flex items-center justify-center space-x-2 bg-sky-600 hover:bg-sky-700 text-white px-4 py-2 rounded-xl text-sm font-medium shadow-sm transition"
-        >
-          <Plus className="w-4 h-4" />
-          <span>신규 고객 등록</span>
-        </button>
+        <div className="flex items-center space-x-2">
+          {filtered.length > 0 && (
+            <button
+              onClick={handleExportCSV}
+              className="flex items-center justify-center space-x-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 rounded-xl text-xs font-semibold shadow-sm transition"
+            >
+              <Download className="w-4 h-4" />
+              <span>CSV 다운로드</span>
+            </button>
+          )}
+          <button
+            onClick={openNewModal}
+            className="flex items-center justify-center space-x-2 bg-sky-600 hover:bg-sky-700 text-white px-4 py-2 rounded-xl text-sm font-medium shadow-sm transition"
+          >
+            <Plus className="w-4 h-4" />
+            <span>신규 고객 등록</span>
+          </button>
+        </div>
       </div>
 
       <div className="relative">
