@@ -4,6 +4,7 @@ import { Routes, Route } from 'react-router-dom';
 import Header from './components/layout/Header';
 import Sidebar from './components/layout/Sidebar';
 import BottomNav from './components/layout/BottomNav';
+import { useGoogleAuth } from './context/GoogleAuthContext';
 
 import DashboardPage from './pages/DashboardPage';
 import CustomerPage from './pages/CustomerPage';
@@ -11,8 +12,16 @@ import JobOrderPage from './pages/JobOrderPage';
 import SalesPage from './pages/SalesPage';
 import PaymentPage from './pages/PaymentPage';
 import StaffManagementPage from './pages/StaffManagementPage';
+import LoginPage from './pages/LoginPage';
 
 export default function App() {
+  const { isLoggedIn } = useGoogleAuth();
+
+  // 💡 최초 접속 시 로그인되지 않은 사용자는 메인 화면을 숨기고 로그인 & 회원가입 신청 게이트만 표시!
+  if (!isLoggedIn) {
+    return <LoginPage />;
+  }
+
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">
       {/* 상단 헤더 */}
