@@ -114,8 +114,8 @@ export default function SalesPage() {
     supply_price: '',
     tax: 0,
     total_price: 0,
-    calendar_synced: true,
-    superthread_synced: true,
+    calendar_synced: false,
+    superthread_synced: false,
   };
 
   const [formData, setFormData] = useState(defaultForm);
@@ -1314,7 +1314,7 @@ export default function SalesPage() {
                 disabled={submitting}
                 className="px-4 py-2 rounded-xl text-xs font-medium bg-sky-600 text-white hover:bg-sky-700 disabled:opacity-50"
               >
-                {submitting ? '저장 중...' : (editingId ? '수정 내용 저장' : '시트에 저장하기')}
+                {submitting ? '저장 중...' : (editingId ? '수정 내용 저장' : '저장하기')}
               </button>
             </div>
           </form>
