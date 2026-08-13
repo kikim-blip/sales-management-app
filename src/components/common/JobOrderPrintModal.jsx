@@ -1,7 +1,8 @@
 // src/components/common/JobOrderPrintModal.jsx
 import React, { useRef } from 'react';
-import { X, Download, Printer, FileText } from 'lucide-react';
+import { X, Download, Printer, FileText, FileSpreadsheet, FileCode } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import { exportJobOrderToHWP } from '../../services/hwpExportService';
 
 export default function JobOrderPrintModal({ order, customer, onClose }) {
   const printRef = useRef();
@@ -57,23 +58,36 @@ export default function JobOrderPrintModal({ order, customer, onClose }) {
       <div className="bg-white w-full max-w-4xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh]">
         
         {/* 모달 상단 조작 헤더 (인쇄 시 자동 숨김) */}
-        <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50 print:hidden">
+        <div className="px-6 py-4 border-b border-slate-200 flex flex-wrap items-center justify-between bg-slate-50 gap-2 print:hidden">
           <div className="flex items-center space-x-2">
             <FileText className="w-5 h-5 text-sky-600" />
             <h3 className="font-bold text-slate-800 text-base">
-              경성문화사 실물 작업전표 1:1 양식 서식 (PDF / 엑셀 추출)
+              경성문화사 실물 작업전표 1:1 양식 서식 (PDF / 엑셀 / HWP 한글 추출)
             </h3>
           </div>
 
           <div className="flex items-center space-x-2">
+            {/* 💡 1클릭 HWP 한글 파일 다운로드 버튼 (golbin/hop 및 HWP 5.0 호환) */}
+            <button
+              onClick={() => exportJobOrderToHWP(order, customer)}
+              className="flex items-center space-x-1.5 bg-amber-600 hover:bg-amber-700 text-white px-3.5 py-1.5 rounded-xl text-xs font-semibold shadow-sm transition"
+              title="한컴오피스 HWP 한글 파일 다운로드"
+            >
+              <FileCode className="w-4 h-4" />
+              <span>HWP 한글 양식 다운로드 (.hwp)</span>
+            </button>
+
+            {/* 💡 1클릭 엑셀 다운로드 버튼 */}
             <button
               onClick={handleExportExcel}
               className="flex items-center space-x-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-1.5 rounded-xl text-xs font-semibold shadow-sm transition"
+              title="마이크로소프트 엑셀 파일 다운로드"
             >
-              <Download className="w-4 h-4" />
+              <FileSpreadsheet className="w-4 h-4" />
               <span>양식 엑셀 다운로드 (.xlsx)</span>
             </button>
 
+            {/* 💡 1클릭 PDF 인쇄 버튼 */}
             <button
               onClick={handlePrint}
               className="flex items-center space-x-1.5 bg-slate-800 hover:bg-slate-900 text-white px-3.5 py-1.5 rounded-xl text-xs font-semibold shadow-sm transition"
@@ -316,11 +330,10 @@ export default function JobOrderPrintModal({ order, customer, onClose }) {
           </div>
         </div>
 
-        {/* 📊 엑셀 다운로드 전용 HTML 테이블 (모든 colSpan 셀 병합 100% 완벽 변환) */}
+        {/* 📊 엑셀 다운로드 전용 HTML 테이블 */}
         <div className="hidden">
           <table ref={excelTableRef} border="1">
             <tbody>
-              {/* Row 1: 코드번호 & 로고 & 결재란 */}
               <tr>
                 <td style={{ fontWeight: 'bold', backgroundColor: '#f1f5f9' }}>코드번호</td>
                 <td colSpan={3} style={{ color: '#dc2626', fontWeight: 'bold' }}>{v(order.code_number)}</td>
@@ -330,142 +343,120 @@ export default function JobOrderPrintModal({ order, customer, onClose }) {
                 <td style={{ fontWeight: 'bold', textAlign: 'center' }}>부서장</td>
                 <td style={{ fontWeight: 'bold', textAlign: 'center' }}>회장</td>
               </tr>
-              {/* Row 2: 큰 타이틀 & 결재자 이름 */}
               <tr>
                 <td colSpan={4} style={{ fontSize: '16px', fontWeight: 'bold', textAlign: 'center' }}>작 업 전 표</td>
                 <td colSpan={2}></td>
                 <td></td>
-                <td style={{ color: '#dc2626', textAlign: 'center' }}>{v(order.manager_name)}</td>
-                <td style={{ color: '#dc2626', textAlign: 'center' }}>김광일</td>
+                <td style={{ color: '#dc2626', textAlignment: 'center' }}>{v(order.manager_name)}</td>
+                <td style={{ color: '#dc2626', textAlignment: 'center' }}>김광일</td>
                 <td></td>
               </tr>
-              {/* Row 3: 접수일 & 납품일 */}
               <tr>
                 <td style={{ fontWeight: 'bold' }}>접수일 :</td>
                 <td colSpan={3} style={{ color: '#dc2626' }}>{order.receipt_date}</td>
                 <td style={{ fontWeight: 'bold' }}>납품일 :</td>
                 <td colSpan={5} style={{ color: '#dc2626' }}>{order.delivery_date} {order.delivery_time}</td>
               </tr>
-              {/* Row 4: 발주처 & 과/부서 */}
               <tr>
                 <td style={{ fontWeight: 'bold', backgroundColor: '#f8fafc' }}>발 주 처</td>
                 <td colSpan={5} style={{ color: '#dc2626', fontWeight: 'bold' }}>{custName}</td>
                 <td colSpan={4} style={{ color: '#dc2626', fontWeight: 'bold' }}>{custDept}</td>
               </tr>
-              {/* Row 5: 품명 */}
               <tr>
                 <td style={{ fontWeight: 'bold', backgroundColor: '#f8fafc' }}>품 명</td>
                 <td colSpan={9} style={{ color: '#dc2626', fontWeight: 'bold' }}>{v(order.title)}</td>
               </tr>
-              {/* Row 6: 규격 / 면수 */}
               <tr>
                 <td style={{ fontWeight: 'bold', backgroundColor: '#f8fafc' }}>규 격</td>
                 <td colSpan={3} style={{ color: '#dc2626' }}>{v(order.spec)}</td>
                 <td style={{ fontWeight: 'bold', backgroundColor: '#f8fafc' }}>면 수</td>
                 <td colSpan={5} style={{ color: '#dc2626' }}>{v(order.pages)} {order.duplex ? `/ ${order.duplex}` : ''}</td>
               </tr>
-              {/* Row 7: 수량 & 견적금액 */}
               <tr>
                 <td style={{ fontWeight: 'bold', backgroundColor: '#f8fafc' }}>수 량</td>
                 <td colSpan={3} style={{ color: '#dc2626', fontWeight: 'bold' }}>{order.quantity ? `${order.quantity}부` : ''}</td>
                 <td style={{ fontWeight: 'bold', backgroundColor: '#f8fafc' }}>견 적 금 액</td>
                 <td colSpan={5} style={{ color: '#dc2626', fontWeight: 'bold' }}>{order.estimated_price ? `${Number(order.estimated_price).toLocaleString()}원` : ''}</td>
               </tr>
-              {/* Row 8: 발주업체 담당자 & 이메일 */}
               <tr>
                 <td style={{ fontWeight: 'bold', backgroundColor: '#f8fafc' }}>발주업체 담당자</td>
                 <td colSpan={3} style={{ color: '#dc2626' }}>{v(custContact)} ({v(custPhone)})</td>
                 <td style={{ fontWeight: 'bold', backgroundColor: '#f8fafc' }}>이 메 일</td>
                 <td colSpan={5} style={{ color: '#dc2626' }}>{v(order.client_email)} {v(order.email_receipt_time, '')}</td>
               </tr>
-              {/* Row 9: 표지작업 & 표지용지 */}
               <tr>
                 <td style={{ fontWeight: 'bold', backgroundColor: '#f8fafc' }}>표 지 작 업</td>
                 <td colSpan={3} style={{ color: '#dc2626' }}>{v(order.cover_job)}</td>
                 <td style={{ fontWeight: 'bold', backgroundColor: '#f8fafc' }}>표 지 용 지</td>
                 <td colSpan={5} style={{ color: '#dc2626' }}>{v(order.cover_paper)}</td>
               </tr>
-              {/* Row 10: 표지인쇄 & 코팅 */}
               <tr>
                 <td style={{ fontWeight: 'bold', backgroundColor: '#f8fafc' }}>표 지 인 쇄</td>
                 <td colSpan={3} style={{ color: '#dc2626' }}>{v(order.cover_print)}</td>
                 <td style={{ fontWeight: 'bold', backgroundColor: '#f8fafc' }}>코 팅</td>
                 <td colSpan={5} style={{ color: '#dc2626' }}>{v(order.coating)}</td>
               </tr>
-              {/* Row 11: 내지작업 & 본문용지 */}
               <tr>
                 <td style={{ fontWeight: 'bold', backgroundColor: '#f8fafc' }}>내 지 작 업</td>
                 <td colSpan={3} style={{ color: '#dc2626' }}>{v(order.inner_job)}</td>
                 <td style={{ fontWeight: 'bold', backgroundColor: '#f8fafc' }}>본 문 용 지</td>
                 <td colSpan={5} style={{ color: '#dc2626' }}>{v(order.inner_paper)}</td>
               </tr>
-              {/* Row 12: 내지인쇄 & 간지용지 */}
               <tr>
                 <td style={{ fontWeight: 'bold', backgroundColor: '#f8fafc' }}>내 지 인 쇄</td>
                 <td colSpan={3} style={{ color: '#dc2626' }}>{v(order.inner_print)}</td>
                 <td style={{ fontWeight: 'bold', backgroundColor: '#f8fafc' }}>간 지 용 지</td>
                 <td colSpan={5} style={{ color: '#dc2626' }}>{v(order.interleaf_paper)}</td>
               </tr>
-              {/* Row 13: 제본 & 후가공 */}
               <tr>
                 <td style={{ fontWeight: 'bold', backgroundColor: '#f8fafc' }}>제 본</td>
                 <td colSpan={3} style={{ color: '#dc2626' }}>{v(order.binding)}</td>
                 <td style={{ fontWeight: 'bold', backgroundColor: '#f8fafc' }}>후 가 공</td>
                 <td colSpan={5} style={{ color: '#dc2626' }}>없음</td>
               </tr>
-              {/* Row 14: 원고 & 교정일 */}
               <tr>
                 <td style={{ fontWeight: 'bold', backgroundColor: '#f8fafc' }}>원 고</td>
                 <td colSpan={3} style={{ color: '#dc2626' }}>{v(order.draft_email)} {v(order.draft_group)} {v(order.mail_sender)}</td>
                 <td style={{ fontWeight: 'bold', backgroundColor: '#f8fafc' }}>교 정 일</td>
                 <td colSpan={5} style={{ color: '#dc2626' }}>표지: {v(order.cover_proof_date)} / 내지: {v(order.inner_proof_date)}</td>
               </tr>
-              {/* Row 15: 교정방법 */}
               <tr>
                 <td style={{ fontWeight: 'bold', backgroundColor: '#f8fafc' }}>교 정 방 법</td>
                 <td colSpan={3} style={{ color: '#dc2626' }}>{v(order.proof_method)}</td>
                 <td colSpan={6}></td>
               </tr>
-              {/* Row 16: 기획 & 사진촬영 */}
               <tr>
                 <td style={{ fontWeight: 'bold', backgroundColor: '#f8fafc' }}>기 획</td>
                 <td colSpan={3} style={{ color: '#dc2626' }}>{v(order.planning)}</td>
                 <td style={{ fontWeight: 'bold', backgroundColor: '#f8fafc' }}>사 진 촬 영</td>
                 <td colSpan={5} style={{ color: '#dc2626' }}>{v(order.photography, '-')}</td>
               </tr>
-              {/* Row 17: 일러스트 & 저작권.웹게시 */}
               <tr>
                 <td style={{ fontWeight: 'bold', backgroundColor: '#f8fafc' }}>일 러 스 트</td>
                 <td colSpan={3} style={{ color: '#dc2626' }}>{v(order.illustration)}</td>
                 <td style={{ fontWeight: 'bold', backgroundColor: '#f8fafc' }}>저작권ㆍ웹게시</td>
                 <td colSpan={5} style={{ color: '#dc2626' }}>{v(order.copyright_web, '-')}</td>
               </tr>
-              {/* Row 18: 제작진행 & 납품처 */}
               <tr>
                 <td style={{ fontWeight: 'bold', backgroundColor: '#f8fafc' }}>제 작 진 행</td>
                 <td colSpan={3} style={{ color: '#dc2626' }}>{v(order.production_progress)}</td>
                 <td style={{ fontWeight: 'bold', backgroundColor: '#f8fafc' }}>납 품 처</td>
                 <td colSpan={5} style={{ color: '#dc2626' }}>{v(order.delivery_destination)}</td>
               </tr>
-              {/* Row 19: 표지컨셉 */}
               <tr>
                 <td style={{ fontWeight: 'bold', backgroundColor: '#f8fafc' }}>표 지 컨 셉</td>
                 <td colSpan={9} style={{ color: '#dc2626' }}>{v(order.cover_related)}</td>
               </tr>
-              {/* Row 20: 내지컨셉 */}
               <tr>
                 <td style={{ fontWeight: 'bold', backgroundColor: '#f8fafc' }}>내 지 컨 셉</td>
                 <td colSpan={9} style={{ color: '#dc2626' }}>{v(order.inner_related)}</td>
               </tr>
-              {/* Row 21: 요청사항 */}
               <tr>
                 <td colSpan={10} style={{ fontWeight: 'bold' }}>&lt;요청사항&gt;<br/>{v(order.request_note)}</td>
               </tr>
-              {/* Row 22: 원칙 안내문 */}
               <tr>
                 <td colSpan={10} style={{ fontSize: '10px' }}>※ 원칙: 영업자는 6하원칙에 따라 작업자가 쉽게 이해 하도록 작업내용을 구체적으로 작성하여 요청 바라며 작업자는 업무를 배당받고 실제 작업착수시에 영업자에게 재차 요청업무를 확인 후 진행 당부 드립니다.</td>
               </tr>
-              {/* Row 23: 하단 작업자 서명란 */}
               <tr>
                 <td colSpan={5} style={{ fontWeight: 'bold' }}>표지 작업자 : {v(order.editor_name, order.manager_name || '김광일')}</td>
                 <td colSpan={5} style={{ fontWeight: 'bold' }}>내지 작업자 : {v(order.designer_name, '-')}</td>
