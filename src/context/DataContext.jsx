@@ -568,6 +568,42 @@ export function DataProvider({ children }) {
 
   const [selectedTeamGroup, setSelectedTeamGroup] = useState('ALL');
 
+  // --- 공식 부서/팀 CRUD ---
+  const [departments, setDepartments] = useState(() => 
+    loadCache('departments', ['세종영업본부', '영업1팀', '기획예산부', '생산관리부'])
+  );
+
+  const addDepartment = (name) => {
+    if (!name || departments.includes(name)) return;
+    setDepartments(prev => {
+      const next = [...prev, name];
+      saveCache('departments', next);
+      return next;
+    });
+  };
+
+  const updateDepartment = (oldName, newName) => {
+    if (!newName || oldName === newName) return;
+    setDepartments(prev => {
+      const next = prev.map(d => d === oldName ? newName : d);
+      saveCache('departments', next);
+      return next;
+    });
+    setStaffs(prev => {
+      const next = prev.map(s => s.dept === oldName ? { ...s, dept: newName } : s);
+      saveCache('staffs', next);
+      return next;
+    });
+  };
+
+  const deleteDepartment = (name) => {
+    setDepartments(prev => {
+      const next = prev.filter(d => d !== name);
+      saveCache('departments', next);
+      return next;
+    });
+  };
+
   return (
     <DataContext.Provider
       value={{
@@ -576,6 +612,10 @@ export function DataProvider({ children }) {
         payments,
         staffs,
         jobOrders,
+        departments,
+        addDepartment,
+        updateDepartment,
+        deleteDepartment,
         loading,
         error,
         selectedTeamGroup,

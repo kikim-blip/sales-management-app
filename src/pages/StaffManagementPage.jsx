@@ -2,10 +2,10 @@
 import React, { useState } from 'react';
 import { useData } from '../context/DataContext';
 import { useGoogleAuth } from '../context/GoogleAuthContext';
-import { Plus, Search, Shield, UserCheck, CheckCircle2, Clock, Pencil, Trash2, XCircle, Building2, PlusCircle } from 'lucide-react';
+import { Plus, Search, Shield, UserCheck, CheckCircle2, Clock, Pencil, Trash2, XCircle, Building2, PlusCircle, Check } from 'lucide-react';
 
 export default function StaffManagementPage() {
-  const { staffs, saveStaffToSheet, deleteStaff } = useData();
+  const { staffs, saveStaffToSheet, deleteStaff, departments, addDepartment, updateDepartment, deleteDepartment } = useData();
   const { user } = useGoogleAuth();
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -19,15 +19,18 @@ export default function StaffManagementPage() {
   // 💡 유효한 사원 데이터만 추출 (유령/빈 데이터 제거)
   const validStaffs = staffs.filter(s => s.userName || s.userCode || s.email);
 
-  // 💡 사원 등록 DB에 등재된 부서/팀 전용 목록
-  const activeDepartments = Array.from(new Set(
-    validStaffs.map(s => s.dept || s.team).filter(Boolean)
-  ));
+  // 💡 전체 통합 부서/팀 목록 (사원 DB 등재 부서 + 관리자 추가 부서)
+  const allDepartments = Array.from(new Set([
+    ...(departments || []),
+    ...validStaffs.map(s => s.dept || s.team).filter(Boolean)
+  ]));
 
   const [newDeptInput, setNewDeptInput] = useState('');
+  const [editingDeptName, setEditingDeptName] = useState(null);
+  const [editDeptValue, setEditDeptValue] = useState('');
 
   const defaultForm = {
-    dept: user?.dept || (activeDepartments[0] || '세종영업본부'),
+    dept: user?.dept || (allDepartments[0] || '세종영업본부'),
     team: user?.team || '영업1조',
     userName: '',
     userCode: '',
@@ -108,6 +111,53 @@ export default function StaffManagementPage() {
     } catch (err) {
       alert('삭제 에러: ' + err.message);
     }
+  };
+
+  // 💡 신규 부서 등록
+  const handleAddDeptSubmit = (e) => {
+    e.preventDefault();
+    const name = newDeptInput.trim();
+    if (!name) return alert('추가할 부서/팀명을 입력해 주세요.');
+    if (allDepartments.includes(name)) return alert('이미 존재하는 부서/팀명입니다.');
+
+    addDepartment(name);
+    setNewDeptInput('');
+    alert(`신규 부서 [${name}] (이)가 성공적으로 추가 등록되었습니다!`);
+  };
+
+  // 💡 부서 수정 시작
+  const handleStartDeptEdit = (deptName) => {
+    setEditingDeptName(deptName);
+    setEditDeptValue(deptName);
+  };
+
+  // 💡 부서 수정 저장
+  const handleSaveDeptEdit = (oldName) => {
+    const newName = editDeptValue.trim();
+    if (!newName) return alert('부서명을 입력해 주세요.');
+    if (newName === oldName) {
+      setEditingDeptName(null);
+      return;
+    }
+
+    updateDepartment(oldName, newName);
+    setEditingDeptName(null);
+    alert(`부서명이 [${oldName}] ➔ [${newName}] (으)로 수정 변경되었습니다!`);
+  };
+
+  // 💡 부서 삭제
+  const handleDeleteDept = (deptName) => {
+    const count = validStaffs.filter(s => s.dept === deptName || s.team === deptName).length;
+    if (count > 0) {
+      if (!window.confirm(`[${deptName}] 부서에 현재 ${count}명의 사원이 소속되어 있습니다.\n정말 이 부서를 목록에서 삭제하시겠습니까?`)) {
+        return;
+      }
+    } else {
+      if (!window.confirm(`[${deptName}] 부서를 삭제하시겠습니까?`)) return;
+    }
+
+    deleteDepartment(deptName);
+    alert(`[${deptName}] 부서가 성공적으로 삭제되었습니다.`);
   };
 
   const filteredStaffs = validStaffs.filter(s => {
@@ -292,7 +342,7 @@ export default function StaffManagementPage() {
                     className="w-full p-2 border border-slate-200 rounded-xl font-semibold"
                   />
                   <datalist id="staff-dept-datalist">
-                    {activeDepartments.map(d => (
+                    {allDepartments.map(d => (
                       <option key={d} value={d} />
                     ))}
                   </datalist>
@@ -403,36 +453,111 @@ export default function StaffManagementPage() {
         </div>
       )}
 
-      {/* 2. 🏢 공식 부서/팀 관리 및 등록 모달 */}
+      {/* 2. 🏢 공식 부서/팀 CRUD 등록/수정/삭제 종합 관리 모달 */}
       {showDeptModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-md rounded-2xl shadow-xl p-6 space-y-4">
+          <div className="bg-white w-full max-w-lg rounded-2xl shadow-xl p-6 space-y-4">
             <div className="flex justify-between items-center border-b border-slate-100 pb-3">
               <div className="flex items-center space-x-2">
                 <Building2 className="w-5 h-5 text-sky-600" />
-                <h3 className="font-bold text-slate-800 text-base">공식 부서/팀 등록 및 관리</h3>
+                <h3 className="font-bold text-slate-800 text-base">공식 부서/팀 등록·수정·삭제 관리</h3>
               </div>
               <button type="button" onClick={() => setShowDeptModal(false)} className="text-slate-400 hover:text-slate-700">
                 <XCircle className="w-5 h-5" />
               </button>
             </div>
 
-            <p className="text-xs text-slate-500">
-              현재 사원 DB에 등재되어 운용 중인 부서/팀 목록입니다. 사원 등록 시 해당 부서를 선택하여 배정할 수 있습니다.
+            {/* 신규 부서 추가 입력 폼 */}
+            <form onSubmit={handleAddDeptSubmit} className="bg-sky-50 p-3 rounded-2xl border border-sky-100 space-y-2">
+              <label className="block text-xs font-bold text-sky-900">➕ 신규 부서/팀 등록</label>
+              <div className="flex items-center space-x-2">
+                <input
+                  type="text"
+                  placeholder="추가할 부서/팀명 입력 (예: 영업3팀)"
+                  value={newDeptInput}
+                  onChange={e => setNewDeptInput(e.target.value)}
+                  className="flex-1 p-2 border border-sky-200 rounded-xl text-xs font-bold bg-white text-slate-800 focus:outline-none focus:border-sky-500"
+                />
+                <button
+                  type="submit"
+                  className="flex items-center space-x-1 bg-sky-600 hover:bg-sky-700 text-white px-3.5 py-2 rounded-xl text-xs font-bold shadow-sm transition shrink-0"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>부서 등록</span>
+                </button>
+              </div>
+            </form>
+
+            <p className="text-xs text-slate-500 font-semibold">
+              등록된 부서 목록 (수정 클릭 시 부서명 변경, 삭제 클릭 시 전용 삭제):
             </p>
 
-            <div className="space-y-2 max-h-48 overflow-y-auto">
-              {activeDepartments.length === 0 ? (
-                <p className="text-xs text-slate-400 font-bold text-center py-4">등록된 부서가 없습니다.</p>
+            {/* 부서 목록 조작 리스트 */}
+            <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+              {allDepartments.length === 0 ? (
+                <p className="text-xs text-slate-400 font-bold text-center py-6">등록된 부서가 없습니다.</p>
               ) : (
-                activeDepartments.map((deptName) => (
-                  <div key={deptName} className="flex items-center justify-between bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-800">
-                    <span>🏢 {deptName}</span>
-                    <span className="text-[10px] text-sky-600 font-normal">
-                      ({validStaffs.filter(s => s.dept === deptName || s.team === deptName).length}명 소속)
-                    </span>
-                  </div>
-                ))
+                allDepartments.map((deptName) => {
+                  const isEditing = editingDeptName === deptName;
+                  const memberCount = validStaffs.filter(s => s.dept === deptName || s.team === deptName).length;
+
+                  return (
+                    <div key={deptName} className="flex items-center justify-between bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-800">
+                      {isEditing ? (
+                        <div className="flex items-center space-x-2 flex-1 mr-2">
+                          <input
+                            type="text"
+                            value={editDeptValue}
+                            onChange={e => setEditDeptValue(e.target.value)}
+                            className="flex-1 p-1.5 border border-sky-400 rounded-lg text-xs font-bold bg-white"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleSaveDeptEdit(deptName)}
+                            className="p-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition"
+                            title="수정 저장"
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditingDeptName(null)}
+                            className="p-1.5 bg-slate-200 text-slate-600 rounded-lg hover:bg-slate-300 transition"
+                            title="취소"
+                          >
+                            <XCircle className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="flex items-center space-x-2">
+                            <span>🏢 {deptName}</span>
+                            <span className="text-[10px] text-sky-600 font-normal">({memberCount}명 소속)</span>
+                          </div>
+
+                          <div className="flex items-center space-x-1">
+                            <button
+                              type="button"
+                              onClick={() => handleStartDeptEdit(deptName)}
+                              className="p-1.5 text-slate-500 hover:text-sky-600 hover:bg-sky-50 rounded-lg transition"
+                              title="부서명 수정"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteDept(deptName)}
+                              className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                              title="부서 삭제"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  );
+                })
               )}
             </div>
 

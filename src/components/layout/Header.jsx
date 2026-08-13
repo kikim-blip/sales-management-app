@@ -7,15 +7,15 @@ import UserProfileModal from '../common/UserProfileModal';
 
 export default function Header() {
   const { isLoggedIn, user, login, logout } = useGoogleAuth();
-  const { loading, refreshData, isUsingSheetsDB, selectedTeamGroup, setSelectedTeamGroup, staffs } = useData();
+  const { loading, refreshData, isUsingSheetsDB, selectedTeamGroup, setSelectedTeamGroup, staffs, departments } = useData();
   const [showProfileModal, setShowProfileModal] = useState(false);
 
   const isAdmin = user?.role === '관리자' || user?.email?.toLowerCase() === 'richkikim@gmail.com';
 
-  // 오직 사원 DB(05_사원관리)에 실제 등재된 부서/팀 목록만 추출 (테스트/더미 부서명 완전 제거)
-  const deptList = Array.from(new Set(
-    staffs.map(s => s.dept || s.team).filter(Boolean)
-  ));
+  const deptList = Array.from(new Set([
+    ...(departments || []),
+    ...staffs.map(s => s.dept || s.team).filter(Boolean)
+  ]));
 
   // 💡 일반사원/팀원은 본인 소속 부서만 고정 조회 (다른 팀 변경 불가)
   useEffect(() => {
