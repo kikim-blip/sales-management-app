@@ -283,18 +283,28 @@ export function DataProvider({ children }) {
 
   // --- 사원관리 DB CRUD ---
   const saveStaffToSheet = async (profileData) => {
+    const existing = staffs.find(s => (s.userCode && s.userCode === profileData.userCode) || (s.email && s.email === profileData.email?.toLowerCase()));
+    
+    const finalData = {
+      ...existing,
+      ...profileData
+    };
+
     const row = [
-      profileData.userCode,
-      profileData.userName,
-      profileData.companyCode,
-      profileData.email || user?.email || '',
-      profileData.dept || '기획예산부',
-      profileData.position || '담당자',
+      finalData.userCode,
+      finalData.userName,
+      finalData.companyCode,
+      finalData.email || user?.email || '',
+      finalData.dept || '기획예산부',
+      finalData.position || '담당자',
+      finalData.team || finalData.dept || '영업1팀',
+      finalData.role || '일반사원',
+      finalData.status || '승인완료',
     ];
 
     if (isLoggedIn && accessToken) {
       try {
-        const index = staffs.findIndex(s => (s.userCode && s.userCode === profileData.userCode) || (s.email && s.email === profileData.email?.toLowerCase()));
+        const index = staffs.findIndex(s => (s.userCode && s.userCode === finalData.userCode) || (s.email && s.email === finalData.email?.toLowerCase()));
         if (index !== -1) {
           const rowIndex = index + 2;
           await updateSheetRow(accessToken, '05_사원관리', rowIndex, row);
@@ -307,13 +317,13 @@ export function DataProvider({ children }) {
     }
 
     setStaffs(prev => {
-      const idx = prev.findIndex(s => (s.userCode && s.userCode === profileData.userCode) || (s.email && s.email === profileData.email?.toLowerCase()));
+      const idx = prev.findIndex(s => (s.userCode && s.userCode === finalData.userCode) || (s.email && s.email === finalData.email?.toLowerCase()));
       let next;
       if (idx !== -1) {
         next = [...prev];
-        next[idx] = { ...next[idx], ...profileData };
+        next[idx] = finalData;
       } else {
-        next = [...prev, profileData];
+        next = [...prev, finalData];
       }
       saveCache('staffs', next);
       return next;

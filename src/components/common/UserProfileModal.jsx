@@ -13,6 +13,8 @@ export default function UserProfileModal({ onClose }) {
     userName: user?.userName || '김광일',
     companyCode: user?.companyCode || '3',
     email: user?.email || '',
+    dept: user?.dept || '영업1팀',
+    team: user?.team || user?.dept || '영업1팀',
   });
 
   const handleSubmit = async (e) => {
@@ -23,7 +25,7 @@ export default function UserProfileModal({ onClose }) {
       await saveStaffToSheet(formData);
     }
 
-    alert(`사원 프로필 정보가 구글 시트 DB(05_사원관리) 및 브라우저에 연동 저장되었습니다!\n사원번호: ${formData.userCode} | 담당자: ${formData.userName} | 회사코드: ${formData.companyCode}`);
+    alert(`사원 프로필 정보가 구글 시트 DB(05_사원관리) 및 브라우저에 연동 저장되었습니다!\n사원번호: ${formData.userCode} | 담당자: ${formData.userName} | 부서: ${formData.dept} | 팀: ${formData.team}`);
     onClose();
   };
 
@@ -67,6 +69,31 @@ export default function UserProfileModal({ onClose }) {
               onChange={e => setFormData({ ...formData, userName: e.target.value })}
               className="w-full p-2.5 border border-slate-200 rounded-xl font-semibold"
             />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">부서명 *</label>
+              <input
+                type="text"
+                required
+                placeholder="예: 기획예산부"
+                value={formData.dept}
+                onChange={e => setFormData({ ...formData, dept: e.target.value })}
+                className="w-full p-2.5 border border-slate-200 rounded-xl font-semibold focus:border-sky-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">팀명 *</label>
+              <input
+                type="text"
+                required
+                placeholder="예: 영업1팀"
+                value={formData.team}
+                onChange={e => setFormData({ ...formData, team: e.target.value })}
+                className="w-full p-2.5 border border-slate-200 rounded-xl font-semibold focus:border-sky-500"
+              />
+            </div>
           </div>
 
           <div>
