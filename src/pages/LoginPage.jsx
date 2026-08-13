@@ -70,7 +70,7 @@ export default function LoginPage() {
         {/* 상단 로고 & 타이틀 헤더 */}
         <div className="bg-slate-900 text-white p-8 text-center relative">
           <div className="bg-white p-3 rounded-2xl mx-auto inline-block mb-3 shadow-lg">
-            <img src="/images/kyungsung_logo.svg" alt="경성문화사 로고" className="h-10 object-contain mx-auto" />
+            <img src="/images/kyungsung_logo.jpg" alt="경성문화사 로고" className="h-10 object-contain mx-auto" />
           </div>
           <h1 className="text-xl font-black tracking-wide text-white">영업미수관리 PWA</h1>
           <p className="text-xs text-slate-400 mt-1">통합 전표, 매출, 수금 및 팀별 그룹 관리 시스템</p>
@@ -119,39 +119,6 @@ export default function LoginPage() {
                 <LogIn className="w-5 h-5" />
                 <span>Google 계정으로 로그인</span>
               </button>
-
-              <div className="relative flex py-2 items-center">
-                <div className="flex-grow border-t border-slate-200"></div>
-                <span className="flex-shrink mx-4 text-[11px] text-slate-400 font-medium">또는 빠른 데모 로그인</span>
-                <div className="flex-grow border-t border-slate-200"></div>
-              </div>
-
-              {/* 빠른 데모 접속 버튼 */}
-              <div className="space-y-2">
-                <button
-                  type="button"
-                  onClick={() => handleDemoLogin('44', '김광일', '영업1팀')}
-                  className="w-full py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold flex items-center justify-between transition"
-                >
-                  <span className="flex items-center space-x-2">
-                    <Sparkles className="w-4 h-4 text-amber-500" />
-                    <span>[관리자] 44 - 김광일 사원 빠른 접속</span>
-                  </span>
-                  <span className="text-[10px] text-sky-600 font-semibold">입장하기 →</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleDemoLogin('85', '홍길동', '기획예산부')}
-                  className="w-full py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold flex items-center justify-between transition"
-                >
-                  <span className="flex items-center space-x-2">
-                    <User className="w-4 h-4 text-sky-500" />
-                    <span>[일반사원] 85 - 홍길동 (기획예산부) 접속</span>
-                  </span>
-                  <span className="text-[10px] text-sky-600 font-semibold">입장하기 →</span>
-                </button>
-              </div>
             </div>
           )}
 

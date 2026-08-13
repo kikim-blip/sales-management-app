@@ -23,7 +23,7 @@ export default function Header() {
   return (
     <header className="bg-white border-b border-slate-200 sticky top-0 z-30 px-4 py-3 sm:px-6 flex items-center justify-between shadow-sm">
       <div className="flex items-center space-x-3">
-        <img src="/images/kyungsung_logo.svg" alt="경성문화사 로고" className="h-9 object-contain" />
+        <img src="/images/kyungsung_logo.jpg" alt="경성문화사 로고" className="h-9 object-contain" />
         <div>
           <div className="flex items-center space-x-2">
             <h1 className="text-lg font-bold text-slate-800 leading-tight">영업미수관리 PWA</h1>

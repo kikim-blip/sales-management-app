@@ -276,7 +276,7 @@ export default function JobOrderModal({ customers = [], initialData = null, onSa
               {/* 우측: 공식 KYUNGSUNG 경성문화사 로고 이미지 + 결재란 */}
               <div className="flex flex-col items-end space-y-2 w-full sm:w-auto">
                 <div className="flex items-center space-x-1 mb-1">
-                  <img src="/images/kyungsung_logo.svg" alt="경성문화사 로고" className="h-8 object-contain" />
+                  <img src="/images/kyungsung_logo.jpg" alt="경성문화사 로고" className="h-8 object-contain" />
                 </div>
 
                 <div className="border-2 border-black text-center text-[11px] flex bg-white">
