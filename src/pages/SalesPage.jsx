@@ -1,7 +1,7 @@
 // src/pages/SalesPage.jsx
 import React, { useState } from 'react';
 import { useData } from '../context/DataContext';
-import { Plus, Calendar, Share2, Pencil, Trash2, ClipboardList, FileText, FileSearch, Printer, CheckCircle2, Truck, BarChart3, Download, Search } from 'lucide-react';
+import { Plus, Calendar, Share2, Pencil, Trash2, ClipboardList, FileText, FileSearch, Printer, CheckCircle2, Truck, BarChart3, Download, Search, Filter } from 'lucide-react';
 import JobOrderModal from '../components/common/JobOrderModal';
 import SelectJobOrderModal from '../components/common/SelectJobOrderModal';
 import QuotePrintModal from '../components/common/QuotePrintModal';
@@ -33,6 +33,7 @@ export default function SalesPage() {
   const [endDate, setEndDate] = useState(today);
   const [selectedMonth, setSelectedMonth] = useState(today.slice(0, 7)); // e.g. "2026-08"
   const [selectedYear, setSelectedYear] = useState(today.slice(0, 4)); // e.g. "2026"
+  const [selectedCustomerFilter, setSelectedCustomerFilter] = useState('ALL'); // 💡 특정 거래처 지정 검색
 
   // 팀 그룹 필터링 적용
   const filteredSales = sales.filter(s => {
@@ -250,19 +251,54 @@ export default function SalesPage() {
     }
   };
 
+  // 💡 정밀 날짜 정규화 헬퍼 (YYYY-MM-DD)
+  const normalizeDateStr = (rawDate) => {
+    if (!rawDate) return '';
+    const s = String(rawDate).trim().replace(/\./g, '-').replace(/\//g, '-').replace(/\s+/g, '');
+    const parts = s.split('T')[0].split('-');
+    if (parts.length >= 3) {
+      const y = parts[0];
+      const m = String(parts[1]).padStart(2, '0');
+      const d = String(parts[2]).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+    if (parts.length === 2) {
+      const y = parts[0];
+      const m = String(parts[1]).padStart(2, '0');
+      return `${y}-${m}`;
+    }
+    return s;
+  };
+
   // --- 📊 ERP 매출 조회 및 미수 보고서 생성 로직 ---
   const getFilteredByTime = () => {
     return filteredSales.filter(item => {
-      if (!item.reg_date && !item.receipt_date) return false;
-      const targetDate = item.reg_date || item.receipt_date;
+      // 1. 특정 거래처 지정 필터링
+      if (selectedCustomerFilter !== 'ALL') {
+        const cust = customers.find(c => c.id === item.customer_id);
+        const cName = cust ? cust.name : (item.customer_name || item.customer_id);
+        if (item.customer_id !== selectedCustomerFilter && cName !== selectedCustomerFilter) {
+          return false;
+        }
+      }
+
+      // 2. 일/월/년 날짜 기간 필터링
+      const rawDate = item.reg_date || item.receipt_date || item.delivery_date;
+      if (!rawDate) return true; // 날짜 미지정 건 포함
+
+      const normDate = normalizeDateStr(rawDate);
+
       if (timeResolution === 'day') {
-        return targetDate >= startDate && targetDate <= endDate;
+        if (startDate && endDate) {
+          return normDate >= startDate && normDate <= endDate;
+        }
+        return true;
       }
       if (timeResolution === 'month') {
-        return targetDate.startsWith(selectedMonth);
+        return normDate.startsWith(selectedMonth);
       }
       if (timeResolution === 'year') {
-        return targetDate.startsWith(selectedYear);
+        return normDate.startsWith(selectedYear);
       }
       return true;
     });
@@ -336,6 +372,10 @@ export default function SalesPage() {
   // ERP 엑셀 추출 (CSV)
   const handleExportCSV = () => {
     let title = `경성문화사_ERP_매출보고서_${timeResolution}별_${reportType}별`;
+    if (selectedCustomerFilter !== 'ALL') {
+      title += `_${selectedCustomerFilter}`;
+    }
+
     let headers = [];
     let rows = [];
 
@@ -370,7 +410,6 @@ export default function SalesPage() {
       });
     }
 
-    // UTF-8 BOM으로 기입하여 엑셀 깨짐 차단
     let csvContent = "\uFEFF" + headers.join(',') + '\n';
     rows.forEach(r => {
       csvContent += r.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',') + '\n';
@@ -560,7 +599,7 @@ export default function SalesPage() {
               <span>ERP 보고서 맞춤 조회 조건 설정</span>
             </h3>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs font-bold">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3.5 text-xs font-bold">
               {/* 1. 보고서 유형 */}
               <div>
                 <label className="block text-slate-600 mb-1.5">1. 보고서 현황 구분</label>
@@ -627,14 +666,14 @@ export default function SalesPage() {
                       type="date"
                       value={startDate}
                       onChange={e => setStartDate(e.target.value)}
-                      className="p-2 border border-slate-200 rounded-xl w-full text-center"
+                      className="p-1.5 border border-slate-200 rounded-xl w-full text-center"
                     />
                     <span className="text-slate-400">~</span>
                     <input
                       type="date"
                       value={endDate}
                       onChange={e => setEndDate(e.target.value)}
-                      className="p-2 border border-slate-200 rounded-xl w-full text-center"
+                      className="p-1.5 border border-slate-200 rounded-xl w-full text-center"
                     />
                   </div>
                 )}
@@ -644,7 +683,7 @@ export default function SalesPage() {
                     type="month"
                     value={selectedMonth}
                     onChange={e => setSelectedMonth(e.target.value)}
-                    className="p-2 border border-slate-200 rounded-xl w-full text-center"
+                    className="p-1.5 border border-slate-200 rounded-xl w-full text-center font-bold text-sky-700"
                   />
                 )}
 
@@ -652,7 +691,7 @@ export default function SalesPage() {
                   <select
                     value={selectedYear}
                     onChange={e => setSelectedYear(e.target.value)}
-                    className="p-2 border border-slate-200 rounded-xl w-full text-center"
+                    className="p-1.5 border border-slate-200 rounded-xl w-full text-center font-bold text-sky-700"
                   >
                     <option value="2026">2026 년</option>
                     <option value="2025">2025 년</option>
@@ -660,10 +699,30 @@ export default function SalesPage() {
                   </select>
                 )}
               </div>
+
+              {/* 4. 특정 거래처 지정 조회 필터 */}
+              <div>
+                <label className="block text-slate-600 mb-1.5">4. 특정 거래처 지정 조회</label>
+                <select
+                  value={selectedCustomerFilter}
+                  onChange={e => setSelectedCustomerFilter(e.target.value)}
+                  className="p-1.5 border border-slate-200 rounded-xl w-full font-bold text-slate-800 focus:border-sky-500"
+                >
+                  <option value="ALL">🏢 전체 거래처 보기</option>
+                  {customers.map(c => (
+                    <option key={c.id} value={c.name}>
+                      🏢 {c.name} {c.dept ? `(${c.dept})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             {/* 조회 다운로드 조작 구역 */}
-            <div className="flex justify-end pt-2">
+            <div className="flex justify-between items-center pt-2 border-t border-slate-100">
+              <span className="text-xs text-slate-500 font-semibold">
+                필터 결과: 총 <strong className="text-sky-600 font-bold">{currentReportSales.length}</strong> 건의 데이터가 검색되었습니다.
+              </span>
               <button
                 type="button"
                 onClick={handleExportCSV}
@@ -725,7 +784,7 @@ export default function SalesPage() {
                   {reportList.length === 0 ? (
                     <tr>
                       <td colSpan={10} className="p-10 text-center text-slate-400 font-bold">
-                        선택하신 조회 기간에 해당하는 매출 데이터가 없습니다.
+                        선택하신 조건(기간 및 거래처)에 해당하는 매출 데이터가 없습니다.
                       </td>
                     </tr>
                   ) : (

@@ -1,23 +1,28 @@
 // src/components/layout/Header.jsx
-import React, { useState } from 'react';
-import { Building2, LogIn, LogOut, RefreshCw, Database, UserCheck, Users } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Building2, LogIn, LogOut, RefreshCw, Database, UserCheck, Users, ShieldAlert } from 'lucide-react';
 import { useGoogleAuth } from '../../context/GoogleAuthContext';
 import { useData } from '../../context/DataContext';
 import UserProfileModal from '../common/UserProfileModal';
 
 export default function Header() {
   const { isLoggedIn, user, login, logout } = useGoogleAuth();
-  const { loading, refreshData, isUsingSheetsDB, selectedTeamGroup, setSelectedTeamGroup, staffs, customers } = useData();
+  const { loading, refreshData, isUsingSheetsDB, selectedTeamGroup, setSelectedTeamGroup, staffs } = useData();
   const [showProfileModal, setShowProfileModal] = useState(false);
 
-  // 동적 과/부서 목록 추출 (사원등록 DB 기준만 추출하여 거래처 부서 혼선 방지)
-  const deptList = Array.from(new Set([
-    '기획예산부',
-    '영업1팀',
-    '영업2팀',
-    '생산관리부',
-    ...staffs.map(s => s.dept || s.team).filter(Boolean),
-  ]));
+  const isAdmin = user?.role === '관리자' || user?.email?.toLowerCase() === 'richkikim@gmail.com';
+
+  // 오직 사원 DB(05_사원관리)에 실제 등재된 부서/팀 목록만 추출 (테스트/더미 부서명 완전 제거)
+  const deptList = Array.from(new Set(
+    staffs.map(s => s.dept || s.team).filter(Boolean)
+  ));
+
+  // 💡 일반사원/팀원은 본인 소속 부서만 고정 조회 (다른 팀 변경 불가)
+  useEffect(() => {
+    if (!isAdmin && user?.dept) {
+      setSelectedTeamGroup(user.dept);
+    }
+  }, [isAdmin, user?.dept, setSelectedTeamGroup]);
 
   return (
     <header className="bg-white border-b border-slate-200 sticky top-0 z-30 px-4 py-3 sm:px-6 flex items-center justify-between shadow-sm">
@@ -42,25 +47,32 @@ export default function Header() {
       </div>
 
       <div className="flex items-center space-x-2 sm:space-x-3">
-        {/* 💡 1. 팀별/부서별 데이터 그룹 셀렉터 (팀별 데이터 구분 운용) */}
-        <div className="flex items-center space-x-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-semibold text-slate-700 transition">
-          <Users className="w-3.5 h-3.5 text-sky-600" />
-          <span className="hidden md:inline font-bold text-slate-600">그룹/팀:</span>
-          <select
-            value={selectedTeamGroup}
-            onChange={(e) => setSelectedTeamGroup(e.target.value)}
-            className="bg-transparent font-extrabold text-sky-900 focus:outline-none text-xs cursor-pointer"
-          >
-            <option value="ALL">🏢 전체 팀/부서 보기</option>
-            {deptList.map(dept => (
-              <option key={dept} value={dept}>
-                🏢 {dept}
-              </option>
-            ))}
-          </select>
-        </div>
+        {/* 💡 1. 팀별/부서별 데이터 그룹 셀렉터 (관리자 전용 / 일반사원은 본인 팀 고정) */}
+        {isAdmin ? (
+          <div className="flex items-center space-x-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-semibold text-slate-700 transition">
+            <Users className="w-3.5 h-3.5 text-sky-600" />
+            <span className="hidden md:inline font-bold text-slate-600">그룹/팀 선택:</span>
+            <select
+              value={selectedTeamGroup}
+              onChange={(e) => setSelectedTeamGroup(e.target.value)}
+              className="bg-transparent font-extrabold text-sky-900 focus:outline-none text-xs cursor-pointer"
+            >
+              <option value="ALL">🏢 전체 팀/부서 보기</option>
+              {deptList.map(dept => (
+                <option key={dept} value={dept}>
+                  🏢 {dept}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : (
+          <div className="flex items-center space-x-1.5 bg-sky-50 border border-sky-200 rounded-xl px-3 py-1.5 text-xs font-extrabold text-sky-900 shadow-sm">
+            <Users className="w-3.5 h-3.5 text-sky-600" />
+            <span>소속 팀: {user?.dept || user?.team || '영업팀'}</span>
+          </div>
+        )}
 
-        {/* 💡 2. 사원 프로필 설정 버튼 (소속 과/부서 표시) */}
+        {/* 💡 2. 사원 프로필 설정 버튼 */}
         <button
           onClick={() => setShowProfileModal(true)}
           className="flex items-center space-x-1.5 bg-sky-50 hover:bg-sky-100 border border-sky-200 text-sky-800 px-3 py-1.5 rounded-xl text-xs font-semibold transition"
