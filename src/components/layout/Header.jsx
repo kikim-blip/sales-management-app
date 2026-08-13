@@ -10,14 +10,13 @@ export default function Header() {
   const { loading, refreshData, isUsingSheetsDB, selectedTeamGroup, setSelectedTeamGroup, staffs, customers } = useData();
   const [showProfileModal, setShowProfileModal] = useState(false);
 
-  // 동적 과/부서 목록 추출
+  // 동적 과/부서 목록 추출 (사원등록 DB 기준만 추출하여 거래처 부서 혼선 방지)
   const deptList = Array.from(new Set([
     '기획예산부',
     '영업1팀',
     '영업2팀',
     '생산관리부',
-    ...staffs.map(s => s.dept).filter(Boolean),
-    ...customers.map(c => c.dept).filter(Boolean),
+    ...staffs.map(s => s.dept || s.team).filter(Boolean),
   ]));
 
   return (
