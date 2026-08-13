@@ -69,7 +69,7 @@ export default function LoginPage() {
         
         {/* 상단 로고 & 타이틀 헤더 */}
         <div className="bg-slate-900 text-white p-8 text-center relative">
-          <div className="bg-white/10 backdrop-blur-md p-3 rounded-2xl mx-auto inline-block mb-3 border border-white/20">
+          <div className="bg-white p-3 rounded-2xl mx-auto inline-block mb-3 shadow-lg">
             <img src="/images/kyungsung_logo.svg" alt="경성문화사 로고" className="h-10 object-contain mx-auto" />
           </div>
           <h1 className="text-xl font-black tracking-wide text-white">영업미수관리 PWA</h1>
