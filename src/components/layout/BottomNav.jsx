@@ -6,9 +6,9 @@ import { LayoutDashboard, Users, ClipboardList, FileSpreadsheet, CreditCard, Shi
 import { useGoogleAuth } from '../../context/GoogleAuthContext';
 
 const navItems = [
-  { name: '대시보드', path: '/', icon: LayoutDashboard },
+  { name: '현황', path: '/', icon: LayoutDashboard },
   { name: '작업전표', path: '/job-orders', icon: ClipboardList },
-  { name: '매출/수금', path: '/sales', icon: FileSpreadsheet },
+  { name: '매출', path: '/sales', icon: FileSpreadsheet },
   { name: '거래처', path: '/customers', icon: Users },
   { name: '사용자', path: '/staffs', icon: Shield },
 ];

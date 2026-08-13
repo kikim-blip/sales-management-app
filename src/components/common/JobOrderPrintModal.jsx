@@ -1,12 +1,50 @@
 // src/components/common/JobOrderPrintModal.jsx
-import React, { useRef } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { X, Download, Printer, FileText, FileSpreadsheet, FileCode } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { exportJobOrderToHWP } from '../../services/hwpExportService';
+import { syncAndFetchTemplateSheet } from '../../services/googleSheetsApi';
+import { useGoogleAuth } from '../../context/GoogleAuthContext';
 
 export default function JobOrderPrintModal({ order, customer, onClose }) {
   const printRef = useRef();
   const excelTableRef = useRef();
+  const { accessToken } = useGoogleAuth();
+  const [templateRows, setTemplateRows] = useState([]);
+  const [templateLoading, setTemplateLoading] = useState(false);
+  const [templateError, setTemplateError] = useState('');
+
+  useEffect(() => {
+    if (!order || !accessToken) {
+      setTemplateRows([]);
+      setTemplateError('');
+      return;
+    }
+
+    let cancelled = false;
+    const codeNumber = order.code_number || order.id;
+
+    const loadTemplate = async () => {
+      try {
+        setTemplateLoading(true);
+        setTemplateError('');
+        const rows = await syncAndFetchTemplateSheet(accessToken, codeNumber);
+        if (!cancelled) {
+          setTemplateRows(rows || []);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setTemplateError(err.message || '작업전표 양식 로딩에 실패했습니다.');
+          setTemplateRows([]);
+        }
+      } finally {
+        if (!cancelled) setTemplateLoading(false);
+      }
+    };
+
+    loadTemplate();
+    return () => { cancelled = true; };
+  }, [accessToken, order]);
 
   if (!order) return null;
 
@@ -16,19 +54,79 @@ export default function JobOrderPrintModal({ order, customer, onClose }) {
   const custContact = customer ? customer.contact_person : (order.client_contact_person || '');
   const custPhone = customer ? customer.phone : (order.client_phone || '');
 
-  // 빈값 감싸기 헬퍼
   const v = (val, defaultVal = '') => {
     if (val === null || val === undefined || val === '') return defaultVal;
     return val;
   };
 
-  // 📊 엑셀 (.xlsx) 다운로드: HTML 테이블의 모든 colSpan 셀 병합 100% 자동 유지!
+  const normalizedTemplateRows = Array.isArray(templateRows)
+    ? templateRows
+        .map(row => Array.isArray(row) ? row.map(cell => (cell === null || cell === undefined ? '' : String(cell))) : [])
+        .filter(row => row.some(cell => cell && cell.trim() !== ''))
+    : [];
+
+  const getTemplateSheetExportConfig = () => {
+    const rows = normalizedTemplateRows;
+    const maxCols = rows.length ? Math.max(...rows.map(row => row.length)) : 10;
+
+    const widths = Array.from({ length: maxCols }, (_, index) => {
+      if (maxCols <= 10) {
+        if (index === 0) return { wch: 12 };
+        if (index === 1) return { wch: 16 };
+        if (index === 2) return { wch: 18 };
+        return { wch: 15 };
+      }
+      if (index === 0) return { wch: 12 };
+      if (index === 1) return { wch: 20 };
+      if (index === 2) return { wch: 14 };
+      if (index === 3) return { wch: 16 };
+      return { wch: 14 };
+    });
+
+    const rowHeights = rows.map((row, index) => {
+      if (index === 0 || index === 1) return { hpx: 28 };
+      if (row.some(cell => cell.length > 20)) return { hpx: 36 };
+      return { hpx: 22 };
+    });
+
+    const merges = [];
+    const targetRows = rows.length > 0 ? rows : [];
+    targetRows.forEach((row, rowIndex) => {
+      if (rowIndex === 0 && row.length >= 4) {
+        merges.push({ s: { r: rowIndex, c: 0 }, e: { r: rowIndex, c: 3 } });
+      }
+      if (rowIndex === 1 && row.length >= 5) {
+        merges.push({ s: { r: rowIndex, c: 0 }, e: { r: rowIndex, c: 4 } });
+      }
+    });
+
+    return { widths, rowHeights, merges };
+  };
+
   const handleExportExcel = () => {
-    if (!excelTableRef.current) return;
     const fileName = `경성문화사_작업전표_${order.code_number || 'ORDER'}_${today}.xlsx`;
-    
+
+    if (normalizedTemplateRows.length > 0) {
+      const maxCols = Math.max(...normalizedTemplateRows.map(row => row.length));
+      const sheetRows = normalizedTemplateRows.map(row => {
+        const padded = [...row];
+        while (padded.length < maxCols) padded.push('');
+        return padded;
+      });
+
+      const worksheet = XLSX.utils.aoa_to_sheet(sheetRows);
+      const { widths, rowHeights, merges } = getTemplateSheetExportConfig();
+      worksheet['!cols'] = widths;
+      worksheet['!rows'] = rowHeights;
+      if (merges.length) worksheet['!merges'] = merges;
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, '작업전표양식');
+      XLSX.writeFile(workbook, fileName);
+      return;
+    }
+
+    if (!excelTableRef.current) return;
     const worksheet = XLSX.utils.table_to_sheet(excelTableRef.current, { raw: true });
-    
     worksheet['!cols'] = [
       { wch: 15 }, { wch: 16 }, { wch: 16 }, { wch: 16 },
       { wch: 15 }, { wch: 16 }, { wch: 16 }, { wch: 12 },
@@ -42,6 +140,52 @@ export default function JobOrderPrintModal({ order, customer, onClose }) {
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const renderSheetTemplatePreview = () => {
+    if (!normalizedTemplateRows.length) return null;
+
+    const maxCols = Math.max(...normalizedTemplateRows.map(row => row.length));
+    const minHeight = 30;
+
+    return (
+      <div className="w-full overflow-auto border border-slate-300 bg-white print:border-none">
+        <div className="min-w-full bg-white" style={{ minWidth: `${Math.max(maxCols * 72, 720)}px` }}>
+          {normalizedTemplateRows.map((row, rowIndex) => (
+            <div
+              key={`sheet-row-${rowIndex}`}
+              className="flex border-b border-slate-300 last:border-b-0"
+              style={{ minHeight: rowIndex === 0 || rowIndex === 1 ? 38 : minHeight }}
+            >
+              {Array.from({ length: maxCols }).map((_, colIndex) => {
+                const value = row[colIndex] || '';
+                const isHeader = rowIndex < 2;
+                return (
+                  <div
+                    key={`sheet-cell-${rowIndex}-${colIndex}`}
+                    className="border-r border-slate-300 last:border-r-0 flex items-center px-1 py-0.5 text-[10px] text-slate-800"
+                    style={{
+                      flex: '1 0 0%',
+                      minWidth: colIndex === 0 ? 70 : 58,
+                      minHeight: rowIndex === 0 || rowIndex === 1 ? 38 : minHeight,
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      fontWeight: isHeader ? 700 : 500,
+                      backgroundColor: isHeader ? '#f8fafc' : '#ffffff',
+                      alignItems: 'center',
+                      justifyContent: colIndex === 0 ? 'center' : 'flex-start',
+                    }}
+                  >
+                    {value}
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -95,10 +239,31 @@ export default function JobOrderPrintModal({ order, customer, onClose }) {
 
         {/* 📄 업로드해 주신 HWP 서식과 100% 동일한 실물 종이 양식 (화면 뷰어 & PDF 출력) */}
         <div className="p-8 sm:p-10 overflow-y-auto flex-1 bg-white text-slate-900 font-sans text-xs">
-          <div id="printable-job-order-document" ref={printRef} className="bg-white p-4 border border-slate-300 print:border-none">
-            
-            {/* 1. 상단 레이아웃: [좌측: 코드번호 박스 & 큰 타이틀 '작 업 전 표'] | [우측: KYUNGSUNG 로고 & 결재란] */}
-            <div className="flex justify-between items-start mb-4">
+          {templateLoading && (
+            <div className="mb-4 rounded-xl border border-sky-200 bg-sky-50 p-3 text-xs text-sky-700 font-medium">
+              구글 시트 작업전표 양식을 불러오는 중입니다...
+            </div>
+          )}
+
+          {templateError && (
+            <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700 font-medium">
+              {templateError}
+              <span className="block mt-1 text-[11px] text-amber-800">
+                구글 시트 템플릿이 연결되지 않으면 기본 작업전표 서식으로 자동 대체됩니다.
+                배포 환경에 VITE_SPREADSHEET_ID와 Google Sheets 접근 권한이 있어야 시트 양식을 그대로 사용합니다.
+              </span>
+            </div>
+          )}
+
+          {normalizedTemplateRows.length > 0 ? (
+            <div className="bg-white p-2 border border-slate-300 print:border-none">
+              {renderSheetTemplatePreview()}
+            </div>
+          ) : (
+            <div id="printable-job-order-document" ref={printRef} className="bg-white p-4 border border-slate-300 print:border-none">
+              
+              {/* 1. 상단 레이아웃: [좌측: 코드번호 박스 & 큰 타이틀 '작 업 전 표'] | [우측: KYUNGSUNG 로고 & 결재란] */}
+              <div className="flex justify-between items-start mb-4">
               
               {/* 좌측: 코드번호 상자 + 작 업 전 표 타이틀 */}
               <div className="space-y-3">
@@ -353,6 +518,7 @@ export default function JobOrderPrintModal({ order, customer, onClose }) {
             </div>
 
           </div>
+        )}
         </div>
 
         {/* 📊 엑셀 다운로드 전용 HTML 테이블 */}

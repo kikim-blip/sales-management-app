@@ -185,8 +185,8 @@ export default function DashboardPage() {
       )}
 
       <div>
-        <h2 className="text-xl font-bold text-slate-800">영업 및 미수 현황 대시보드</h2>
-        <p className="text-xs text-slate-500 mt-1">긴급 납품 일정을 실시간으로 파악하고 소속 팀/과별 미수 내역을 통합 관리합니다.</p>
+        <h2 className="text-xl font-bold text-slate-800">업무 현황</h2>
+        <p className="text-xs text-slate-500 mt-1">납품 및 미수 상태를 확인합니다.</p>
       </div>
 
       {/* 요약 현황 카운터 3종 */}
@@ -227,9 +227,9 @@ export default function DashboardPage() {
         <div className="px-5 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-900 text-white">
           <div className="flex items-center space-x-2">
             <Clock className="w-5 h-5 text-amber-400 animate-pulse" />
-            <h3 className="font-bold text-sm text-white">🚨 납품 일정 급건 우선 리스트 (D-Day 순)</h3>
+            <h3 className="font-bold text-sm text-white">납품 일정</h3>
           </div>
-          <span className="text-xs font-semibold text-slate-300">총 {urgentDeliveryList.length}건 수록</span>
+          <span className="text-xs font-semibold text-slate-300">{urgentDeliveryList.length}건</span>
         </div>
 
         <div className="divide-y divide-slate-100 max-h-[420px] overflow-y-auto">
@@ -324,7 +324,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* 2. 고객사별 미수금 현황 카드 grid */}
+      {/* 2. 거래처별 미수 현황 카드 */}
       <div>
         <h3 className="font-bold text-slate-800 text-base mb-3">고객사별 미수 관리 현황</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

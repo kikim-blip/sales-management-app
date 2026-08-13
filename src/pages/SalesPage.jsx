@@ -1,14 +1,14 @@
 // src/pages/SalesPage.jsx
 import React, { useState } from 'react';
 import { useData } from '../context/DataContext';
-import { Plus, Calendar, Share2, Pencil, Trash2, ClipboardList, FileText, FileSearch, Printer, CheckCircle2, Truck, BarChart3, Download, Search, Filter } from 'lucide-react';
+import { Plus, Calendar, Share2, Pencil, Trash2, ClipboardList, FileText, FileSearch, Printer, CheckCircle2, Truck, BarChart3, Download, Search, Filter, XCircle } from 'lucide-react';
 import JobOrderModal from '../components/common/JobOrderModal';
 import SelectJobOrderModal from '../components/common/SelectJobOrderModal';
 import QuotePrintModal from '../components/common/QuotePrintModal';
 import JobOrderPrintModal from '../components/common/JobOrderPrintModal';
 
 export default function SalesPage() {
-  const { sales, customers, jobOrders, addSales, updateSales, deleteSales, addJobOrder, addPayment, selectedTeamGroup } = useData();
+  const { sales, customers, jobOrders, payments, addSales, updateSales, deleteSales, addJobOrder, addPayment, selectedTeamGroup } = useData();
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [submitting, setSubmitting] = useState(false);
@@ -34,6 +34,33 @@ export default function SalesPage() {
   const [selectedMonth, setSelectedMonth] = useState(today.slice(0, 7)); // e.g. "2026-08"
   const [selectedYear, setSelectedYear] = useState(today.slice(0, 4)); // e.g. "2026"
   const [selectedCustomerFilter, setSelectedCustomerFilter] = useState('ALL'); // 💡 특정 거래처 지정 검색
+  const [listSearchText, setListSearchText] = useState('');
+  const [listCustomerFilter, setListCustomerFilter] = useState('ALL');
+  const [listStatusFilter, setListStatusFilter] = useState('ALL');
+  const [listStartDate, setListStartDate] = useState(() => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - 1);
+    return d.toISOString().split('T')[0];
+  });
+  const [listEndDate, setListEndDate] = useState(today);
+
+  function normalizeDateStr(rawDate) {
+    if (!rawDate) return '';
+    const s = String(rawDate).trim().replace(/\./g, '-').replace(/\//g, '-').replace(/\s+/g, '');
+    const parts = s.split('T')[0].split('-');
+    if (parts.length >= 3) {
+      const y = parts[0];
+      const m = String(parts[1]).padStart(2, '0');
+      const d = String(parts[2]).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+    if (parts.length === 2) {
+      const y = parts[0];
+      const m = String(parts[1]).padStart(2, '0');
+      return `${y}-${m}`;
+    }
+    return s;
+  }
 
   // 팀 그룹 필터링 적용
   const filteredSales = sales.filter(s => {
@@ -42,6 +69,33 @@ export default function SalesPage() {
     const cust = customers.find(c => c.id === s.customer_id);
     if (cust && cust.dept === selectedTeamGroup) return true;
     return false;
+  }).filter(item => {
+    const cust = customers.find(c => c.id === item.customer_id);
+    const customerLabel = cust ? cust.name : (item.customer_name || item.customer_id || '');
+    const text = `${item.title || ''} ${customerLabel} ${item.content || ''} ${item.note || ''}`.toLowerCase();
+
+    if (listSearchText.trim() && !text.includes(listSearchText.trim().toLowerCase())) {
+      return false;
+    }
+
+    if (listCustomerFilter !== 'ALL') {
+      const matchesCustomer = customerLabel === listCustomerFilter || item.customer_id === listCustomerFilter;
+      if (!matchesCustomer) return false;
+    }
+
+    if (listStatusFilter !== 'ALL' && (item.billing_schedule || '진행중') !== listStatusFilter) {
+      return false;
+    }
+
+    const regDate = normalizeDateStr(item.reg_date || item.receipt_date || item.delivery_date);
+    if (regDate && listStartDate && regDate < listStartDate) {
+      return false;
+    }
+    if (regDate && listEndDate && regDate > listEndDate) {
+      return false;
+    }
+
+    return true;
   });
 
   const defaultForm = {
@@ -251,25 +305,6 @@ export default function SalesPage() {
     }
   };
 
-  // 💡 정밀 날짜 정규화 헬퍼 (YYYY-MM-DD)
-  const normalizeDateStr = (rawDate) => {
-    if (!rawDate) return '';
-    const s = String(rawDate).trim().replace(/\./g, '-').replace(/\//g, '-').replace(/\s+/g, '');
-    const parts = s.split('T')[0].split('-');
-    if (parts.length >= 3) {
-      const y = parts[0];
-      const m = String(parts[1]).padStart(2, '0');
-      const d = String(parts[2]).padStart(2, '0');
-      return `${y}-${m}-${d}`;
-    }
-    if (parts.length === 2) {
-      const y = parts[0];
-      const m = String(parts[1]).padStart(2, '0');
-      return `${y}-${m}`;
-    }
-    return s;
-  };
-
   // --- 📊 ERP 매출 조회 및 미수 보고서 생성 로직 ---
   const getFilteredByTime = () => {
     return filteredSales.filter(item => {
@@ -425,6 +460,114 @@ export default function SalesPage() {
     document.body.removeChild(link);
   };
 
+  const buildLedgerEntries = () => {
+    const filteredLedgerSales = sales.filter((sale) => {
+      const cust = customers.find((c) => c.id === sale.customer_id);
+      const customerName = cust ? cust.name : (sale.customer_name || sale.customer_id || '');
+
+      if (selectedCustomerFilter !== 'ALL' && customerName !== selectedCustomerFilter && sale.customer_id !== selectedCustomerFilter) {
+        return false;
+      }
+
+      const dateValue = normalizeDateStr(sale.reg_date || sale.receipt_date || sale.delivery_date);
+      if (!dateValue) return true;
+      if (startDate && dateValue < startDate) return false;
+      if (endDate && dateValue > endDate) return false;
+      return true;
+    });
+
+    const filteredLedgerPayments = payments.filter((payment) => {
+      const cust = customers.find((c) => c.id === payment.customer_id);
+      const customerName = cust ? cust.name : (payment.customer_name || payment.customer_id || '');
+
+      if (selectedCustomerFilter !== 'ALL' && customerName !== selectedCustomerFilter && payment.customer_id !== selectedCustomerFilter) {
+        return false;
+      }
+
+      const dateValue = normalizeDateStr(payment.payment_date);
+      if (!dateValue) return true;
+      if (startDate && dateValue < startDate) return false;
+      if (endDate && dateValue > endDate) return false;
+      return true;
+    });
+
+    const entries = [];
+
+    filteredLedgerSales.forEach((sale) => {
+      const cust = customers.find((c) => c.id === sale.customer_id);
+      const customerName = cust ? cust.name : (sale.customer_name || sale.customer_id || '미지정 거래처');
+      entries.push({
+        date: normalizeDateStr(sale.reg_date || sale.receipt_date || sale.delivery_date),
+        customer: customerName,
+        kind: '매출',
+        description: sale.title || '매출 건',
+        sales: Number(sale.total_price || 0),
+        payment: 0,
+        balance: 0,
+      });
+    });
+
+    filteredLedgerPayments.forEach((payment) => {
+      const cust = customers.find((c) => c.id === payment.customer_id);
+      const customerName = cust ? cust.name : (payment.customer_name || payment.customer_id || '미지정 거래처');
+      entries.push({
+        date: normalizeDateStr(payment.payment_date),
+        customer: customerName,
+        kind: '수금',
+        description: '수금 처리',
+        sales: 0,
+        payment: Number(payment.amount || 0),
+        balance: 0,
+      });
+    });
+
+    entries.sort((a, b) => (a.date || '9999-12-31').localeCompare(b.date || '9999-12-31'));
+
+    let runningBalance = 0;
+    const finalEntries = entries.map((entry) => {
+      runningBalance += entry.kind === '매출' ? entry.sales : -entry.payment;
+      return {
+        ...entry,
+        balance: runningBalance,
+      };
+    });
+
+    return finalEntries;
+  };
+
+  const handleExportLedgerCSV = () => {
+    const ledgerEntries = buildLedgerEntries();
+    const selectedLabel = selectedCustomerFilter === 'ALL' ? '전체거래처' : selectedCustomerFilter;
+    const fileName = `경성문화사_거래원장_${selectedLabel}_${startDate || 'ALL'}_~_${endDate || 'ALL'}.csv`;
+
+    const headers = ['거래일', '거래처', '구분', '적요', '매출금액', '수금금액', '잔액'];
+    const rows = ledgerEntries.map((entry) => [
+      entry.date,
+      entry.customer,
+      entry.kind,
+      entry.description,
+      entry.sales,
+      entry.payment,
+      entry.balance,
+    ]);
+
+    const csv = [headers, ...rows]
+      .map((row) => row.map((cell) => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(','))
+      .join('\n');
+
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const ledgerEntries = buildLedgerEntries();
+
   const renderStatusBadge = (status) => {
     if (status === '청구완료') {
       return <span className="bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs px-2.5 py-1 rounded-lg font-extrabold flex items-center space-x-1"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /><span>청구완료 (수금완료)</span></span>;
@@ -441,8 +584,8 @@ export default function SalesPage() {
       {/* 타이틀 및 버튼 */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h2 className="text-xl font-bold text-slate-800">매출 및 견적 관리</h2>
-          <p className="text-xs text-slate-500 mt-0.5">업무 수주 진행, 미수 잔액 현황, 일/월/년 매출 조회를 ERP 수준으로 조회합니다.</p>
+          <h2 className="text-xl font-bold text-slate-800">매출 관리</h2>
+          <p className="text-xs text-slate-500 mt-0.5">수주 · 미수 · 기간별 조회</p>
         </div>
 
         <div className="flex items-center space-x-2">
@@ -451,7 +594,7 @@ export default function SalesPage() {
             className="flex items-center justify-center space-x-1.5 bg-rose-600 hover:bg-rose-700 text-white px-3.5 py-2 rounded-xl text-xs font-bold shadow-sm transition"
           >
             <Printer className="w-4 h-4" />
-            <span>실물 전표 인쇄</span>
+            <span>전표 출력</span>
           </button>
 
           <button
@@ -459,7 +602,7 @@ export default function SalesPage() {
             className="flex items-center justify-center space-x-1.5 bg-slate-800 hover:bg-slate-900 text-white px-3.5 py-2 rounded-xl text-xs font-semibold shadow-sm transition"
           >
             <ClipboardList className="w-4 h-4 text-sky-400" />
-            <span>의뢰 전표 접수</span>
+            <span>전표 등록</span>
           </button>
 
           <button
@@ -467,8 +610,93 @@ export default function SalesPage() {
             className="flex items-center justify-center space-x-1.5 bg-sky-600 hover:bg-sky-700 text-white px-4 py-2 rounded-xl text-xs font-semibold shadow-sm transition"
           >
             <Plus className="w-4 h-4" />
-            <span>매출/견적 등록</span>
+            <span>신규 등록</span>
           </button>
+        </div>
+      </div>
+
+      {/* 상세 조회 필터: 거래처 / 기간 / 상태 / 검색어 */}
+      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 space-y-3">
+        <div className="flex items-center gap-2 text-slate-700 font-bold text-sm">
+          <Filter className="w-4 h-4 text-sky-600" />
+          <span>조회 조건</span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+          <div className="md:col-span-2 relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input
+              value={listSearchText}
+              onChange={(e) => setListSearchText(e.target.value)}
+              placeholder="거래처명, 작업명, 내용, 비고 검색"
+              className="w-full pl-9 pr-3 py-2.5 border border-slate-200 rounded-xl text-xs font-medium focus:border-sky-500 focus:outline-none"
+            />
+          </div>
+
+          <select
+            value={listCustomerFilter}
+            onChange={(e) => setListCustomerFilter(e.target.value)}
+            className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-xs font-medium focus:border-sky-500 focus:outline-none"
+          >
+            <option value="ALL">전체 거래처</option>
+            {customers.map((cust) => (
+              <option key={cust.id} value={cust.name}>{cust.name}</option>
+            ))}
+          </select>
+
+          <select
+            value={listStatusFilter}
+            onChange={(e) => setListStatusFilter(e.target.value)}
+            className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-xs font-medium focus:border-sky-500 focus:outline-none"
+          >
+            <option value="ALL">전체 상태</option>
+            <option value="진행중">진행중</option>
+            <option value="납품완료">납품완료</option>
+            <option value="청구완료">청구완료</option>
+          </select>
+
+          <button
+            type="button"
+            onClick={() => {
+              setListSearchText('');
+              setListCustomerFilter('ALL');
+              setListStatusFilter('ALL');
+              setListStartDate(() => {
+                const d = new Date();
+                d.setMonth(d.getMonth() - 1);
+                return d.toISOString().split('T')[0];
+              });
+              setListEndDate(today);
+            }}
+            className="flex items-center justify-center gap-1 px-3 py-2.5 text-xs font-bold text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-50"
+          >
+            <XCircle className="w-3.5 h-3.5" />
+            초기화
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <label className="flex items-center gap-2 text-xs font-medium text-slate-600">
+            <Calendar className="w-4 h-4 text-sky-600" />
+            <span>시작일</span>
+            <input
+              type="date"
+              value={listStartDate}
+              onChange={(e) => setListStartDate(e.target.value)}
+              className="flex-1 px-2.5 py-2 border border-slate-200 rounded-xl text-xs font-medium"
+            />
+          </label>
+
+          <label className="flex items-center gap-2 text-xs font-medium text-slate-600">
+            <Calendar className="w-4 h-4 text-sky-600" />
+            <span>종료일</span>
+            <input
+              type="date"
+              value={listEndDate}
+              onChange={(e) => setListEndDate(e.target.value)}
+              className="flex-1 px-2.5 py-2 border border-slate-200 rounded-xl text-xs font-medium"
+            />
+          </label>
         </div>
       </div>
 
@@ -480,7 +708,7 @@ export default function SalesPage() {
             reportTab === 'list' ? 'border-sky-600 text-sky-600 bg-white' : 'border-transparent text-slate-500 hover:text-slate-800'
           }`}
         >
-          📄 수주 매출 기록 목록
+          목록
         </button>
         <button
           onClick={() => setReportTab('erp')}
@@ -488,7 +716,7 @@ export default function SalesPage() {
             reportTab === 'erp' ? 'border-sky-600 text-sky-600 bg-white' : 'border-transparent text-slate-500 hover:text-slate-800'
           }`}
         >
-          📊 ERP 매출 분석 및 미수 통계 보고서
+          분석
         </button>
       </div>
 
@@ -552,7 +780,7 @@ export default function SalesPage() {
                           className="flex items-center space-x-1 px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition mr-1"
                         >
                           <FileText className="w-3.5 h-3.5 text-sky-600" />
-                          <span>견적서 출력</span>
+                          <span>인쇄</span>
                         </button>
 
                         <button
@@ -596,7 +824,7 @@ export default function SalesPage() {
           <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
             <h3 className="font-extrabold text-slate-800 text-sm flex items-center space-x-2">
               <BarChart3 className="w-4.5 h-4.5 text-sky-600" />
-              <span>ERP 보고서 맞춤 조회 조건 설정</span>
+              <span>분석 조건</span>
             </h3>
 
             <div className="grid grid-cols-1 md:grid-cols-4 gap-3.5 text-xs font-bold">
@@ -723,14 +951,68 @@ export default function SalesPage() {
               <span className="text-xs text-slate-500 font-semibold">
                 필터 결과: 총 <strong className="text-sky-600 font-bold">{currentReportSales.length}</strong> 건의 데이터가 검색되었습니다.
               </span>
-              <button
-                type="button"
-                onClick={handleExportCSV}
-                className="flex items-center space-x-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-md transition"
-              >
-                <Download className="w-4 h-4" />
-                <span>📥 엑셀 보고서 다운로드 (CSV)</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleExportLedgerCSV}
+                  className="flex items-center space-x-1.5 bg-violet-600 hover:bg-violet-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-md transition"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>📒 거래원장 추출 (CSV)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExportCSV}
+                  className="flex items-center space-x-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-md transition"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>📥 엑셀 보고서 다운로드 (CSV)</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* 거래원장 상세 테이블 */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="px-4 py-3 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+              <h4 className="font-extrabold text-sm text-slate-700">거래원장</h4>
+              <span className="text-[10px] text-slate-500">{selectedCustomerFilter === 'ALL' ? '전체 거래처' : selectedCustomerFilter} / {startDate || '시작일'} ~ {endDate || '종료일'}</span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs border-collapse">
+                <thead className="bg-slate-50 text-slate-700 uppercase font-extrabold border-b border-slate-200">
+                  <tr>
+                    <th className="p-3 text-left">거래일</th>
+                    <th className="p-3 text-left">거래처</th>
+                    <th className="p-3 text-left">구분</th>
+                    <th className="p-3 text-left">적요</th>
+                    <th className="p-3 text-right">매출금액</th>
+                    <th className="p-3 text-right">수금금액</th>
+                    <th className="p-3 text-right">잔액</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-slate-800">
+                  {ledgerEntries.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="p-10 text-center text-slate-400 font-bold">선택한 조건에 해당하는 거래원장 내역이 없습니다.</td>
+                    </tr>
+                  ) : (
+                    ledgerEntries.map((entry, idx) => (
+                      <tr key={`${entry.date}-${entry.customer}-${entry.kind}-${idx}`} className="hover:bg-slate-50 transition">
+                        <td className="p-3 font-mono text-slate-500">{entry.date || '-'}</td>
+                        <td className="p-3 font-bold">{entry.customer}</td>
+                        <td className={`p-3 font-bold ${entry.kind === '매출' ? 'text-blue-700' : 'text-emerald-700'}`}>{entry.kind}</td>
+                        <td className="p-3">{entry.description}</td>
+                        <td className="p-3 text-right font-mono">{entry.sales ? `₩ ${entry.sales.toLocaleString()}` : '-'}</td>
+                        <td className="p-3 text-right font-mono text-emerald-700">{entry.payment ? `₩ ${entry.payment.toLocaleString()}` : '-'}</td>
+                        <td className={`p-3 text-right font-mono font-bold ${entry.balance >= 0 ? 'text-slate-800' : 'text-rose-600'}`}>
+                          ₩ {Math.abs(entry.balance).toLocaleString()}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
 

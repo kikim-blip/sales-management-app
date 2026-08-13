@@ -5,11 +5,11 @@ import { LayoutDashboard, Users, ClipboardList, FileSpreadsheet, Shield } from '
 import { useGoogleAuth } from '../../context/GoogleAuthContext';
 
 const navItems = [
-  { name: '통합 대시보드', path: '/', icon: LayoutDashboard },
-  { name: '작업전표 관리', path: '/job-orders', icon: ClipboardList },
-  { name: '매출 및 수금 관리', path: '/sales', icon: FileSpreadsheet },
-  { name: '거래처(고객) 관리', path: '/customers', icon: Users },
-  { name: '사용자(사원) 승인 관리', path: '/staffs', icon: Shield },
+  { name: '현황', path: '/', icon: LayoutDashboard },
+  { name: '작업전표', path: '/job-orders', icon: ClipboardList },
+  { name: '매출', path: '/sales', icon: FileSpreadsheet },
+  { name: '거래처', path: '/customers', icon: Users },
+  { name: '사용자', path: '/staffs', icon: Shield },
 ];
 
 export default function Sidebar() {

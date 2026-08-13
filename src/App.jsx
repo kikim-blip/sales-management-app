@@ -41,7 +41,7 @@ export default function App() {
             <Route path="/job-orders" element={<JobOrderPage />} />
             <Route path="/sales" element={<SalesPage />} />
             <Route path="/payments" element={<PaymentPage />} />
-            <Route path="/staffs" element={isAdmin ? <StaffManagementPage /> : <div className="text-center py-20 font-bold text-slate-400">접근 권한이 없습니다. 관리자만 이용할 수 있는 메뉴입니다.</div>} />
+            <Route path="/staffs" element={isAdmin ? <StaffManagementPage /> : <div className="text-center py-20 font-bold text-slate-400">관리자 전용 메뉴입니다.</div>} />
           </Routes>
         </main>
       </div>

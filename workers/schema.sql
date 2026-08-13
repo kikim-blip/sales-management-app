@@ -147,3 +147,26 @@ INSERT OR IGNORE INTO teams (name) VALUES
   ('영업2팀'),
   ('기획팀'),
   ('생산팀');
+
+-- 기본 관리자 및 샘플 데이터 삽입
+INSERT OR IGNORE INTO staffs (user_code, user_name, company_code, email, dept, position, team, role, status, updated_at)
+VALUES ('44', '김광일', '3', 'richkikim@gmail.com', '세종영업본부', '담당자', '영업1조', '관리자', '승인완료', datetime('now', 'localtime'));
+
+INSERT OR IGNORE INTO customers (id, name, dept, contact_person, phone, email, sales_manager, updated_at)
+VALUES ('CUST-001', '(주)테크솔루션', '영업본부', '김철수 부장', '010-1234-5678', 'tech@sample.com', '김광일', datetime('now', 'localtime'));
+INSERT OR IGNORE INTO customers (id, name, dept, contact_person, phone, email, sales_manager, updated_at)
+VALUES ('CUST-002', '한빛디자인', '기획부', '이영희 팀장', '010-9876-5432', 'design@sample.com', '김광일', datetime('now', 'localtime'));
+INSERT OR IGNORE INTO customers (id, name, dept, contact_person, phone, email, sales_manager, updated_at)
+VALUES ('CUST-003', '미래글로벌', '영업본부', '박민수 과장', '010-5555-4444', 'future@sample.com', '김광일', datetime('now', 'localtime'));
+
+INSERT OR IGNORE INTO sales (id, reg_date, receipt_date, delivery_date, delivery_time, customer_id, title, content, note, billing_schedule, type, supply_price, tax, total_price, calendar_synced, superthread_synced, dept, updated_at)
+VALUES ('SALE-101', '2026-08-01', '2026-08-01', '2026-08-05', '14:00', 'CUST-001', '웹사이트 개발 1차 납품', '반응형 UI 템플릿 개발 및 구글 연동', '특이사항 없음', '청구완료', '매출', 3000000, 300000, 3300000, 1, 1, '영업본부', datetime('now', 'localtime'));
+INSERT OR IGNORE INTO sales (id, reg_date, receipt_date, delivery_date, delivery_time, customer_id, title, content, note, billing_schedule, type, supply_price, tax, total_price, calendar_synced, superthread_synced, dept, updated_at)
+VALUES ('SALE-102', '2026-08-03', '2026-08-03', '2026-08-10', '10:00', 'CUST-002', '브랜드 로고 디자인', 'CI/BI 시안 3종 제작', '수정요청 접수중', '청구대기', '견적', 1500000, 150000, 1650000, 1, 0, '기획부', datetime('now', 'localtime'));
+INSERT OR IGNORE INTO sales (id, reg_date, receipt_date, delivery_date, delivery_time, customer_id, title, content, note, billing_schedule, type, supply_price, tax, total_price, calendar_synced, superthread_synced, dept, updated_at)
+VALUES ('SALE-103', '2026-08-05', '2026-08-05', '2026-08-12', '17:00', 'CUST-003', '서버 구축 시스템', '클라우드 인프라 세팅', '납품 예정', '청구완료', '매출', 5000000, 500000, 5500000, 0, 0, '영업본부', datetime('now', 'localtime'));
+
+INSERT OR IGNORE INTO payments (id, payment_date, customer_id, amount, method, dept, updated_at)
+VALUES ('PAY-201', '2026-08-07', 'CUST-001', 2000000, '계좌이체', '영업본부', datetime('now', 'localtime'));
+INSERT OR IGNORE INTO payments (id, payment_date, customer_id, amount, method, dept, updated_at)
+VALUES ('PAY-202', '2026-08-09', 'CUST-003', 1500000, '카드결제', '영업본부', datetime('now', 'localtime'));

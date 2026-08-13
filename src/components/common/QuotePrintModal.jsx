@@ -1,5 +1,5 @@
 // src/components/common/QuotePrintModal.jsx
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { X, Download, Printer, FileText, Stamp, Layers } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { useGoogleAuth } from '../../context/GoogleAuthContext';
@@ -7,6 +7,7 @@ import { useGoogleAuth } from '../../context/GoogleAuthContext';
 export default function QuotePrintModal({ quote, customer, onClose }) {
   const { user } = useGoogleAuth();
   const printRef = useRef();
+  const [isComparative, setIsComparative] = useState(false);
 
   if (!quote) return null;
 
@@ -20,7 +21,6 @@ export default function QuotePrintModal({ quote, customer, onClose }) {
   const userCode = user?.userCode || '84';
 
   // 비교견적서 모드 인가?
-  const [isComparative, setIsComparative] = React.useState(false);
 
   // 비교견적 타사 (비교B사) 자동 계산 마진율 12% 높게 설정
   const compPriceB = Math.round((quote.supply_price || 0) * 1.12);

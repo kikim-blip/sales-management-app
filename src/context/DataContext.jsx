@@ -68,7 +68,10 @@ export function DataProvider({ children }) {
         setPayments(data.payments);
         saveCache('payments', data.payments);
       }
-      if (data.jobOrders) {
+      if (Array.isArray(data.jobOrders)) {
+        if (data.jobOrders.length > 0) {
+          localStorage.removeItem('d1_cache_jobOrders');
+        }
         setJobOrders(data.jobOrders);
         saveCache('jobOrders', data.jobOrders);
       }

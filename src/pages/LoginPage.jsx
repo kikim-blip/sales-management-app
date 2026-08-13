@@ -72,8 +72,8 @@ export default function LoginPage() {
           <div className="bg-white p-3 rounded-2xl mx-auto inline-block mb-3 shadow-lg">
             <img src="/images/kyungsung_logo.jpg" alt="경성문화사 로고" className="h-10 object-contain mx-auto" />
           </div>
-          <h1 className="text-xl font-black tracking-wide text-white">영업미수관리 PWA</h1>
-          <p className="text-xs text-slate-400 mt-1">통합 전표, 매출, 수금 및 팀별 그룹 관리 시스템</p>
+          <h1 className="text-xl font-black tracking-wide text-white">영업미수관리</h1>
+          <p className="text-xs text-slate-400 mt-1">매출 · 수금 · 전표 관리</p>
         </div>
 
         {/* 탭 전환: [사원 로그인] vs [미등록 가입 신청] */}
@@ -107,8 +107,8 @@ export default function LoginPage() {
           {activeTab === 'login' && (
             <div className="space-y-6">
               <div className="text-center space-y-1">
-                <h3 className="font-bold text-slate-800 text-base">로그인하여 시스템 시작하기</h3>
-                <p className="text-xs text-slate-500">Google 계정을 통해 안전하게 데이터베이스에 접근합니다.</p>
+                <h3 className="font-bold text-slate-800 text-base">로그인</h3>
+                <p className="text-xs text-slate-500">Google 계정으로 시스템에 접속합니다.</p>
               </div>
 
               {/* 구글 공식 로그인 버튼 */}
@@ -149,8 +149,8 @@ export default function LoginPage() {
               ) : (
                 <form onSubmit={handleRegisterSubmit} className="space-y-3.5">
                   <div className="text-center mb-3">
-                    <h3 className="font-bold text-slate-800 text-sm">미등록 사원 신규 가입 신청</h3>
-                    <p className="text-[11px] text-slate-500 mt-0.5">관리자가 등록한 지정 부서를 선택해 가입 신청합니다.</p>
+                    <h3 className="font-bold text-slate-800 text-sm">신규 계정 신청</h3>
+                    <p className="text-[11px] text-slate-500 mt-0.5">소속 부서와 팀을 선택해 신청합니다.</p>
                   </div>
 
                   <div className="grid grid-cols-2 gap-2.5">
@@ -258,7 +258,7 @@ export default function LoginPage() {
 
         {/* 하단 푸터 텍스트 */}
         <div className="bg-slate-50 border-t border-slate-100 p-4 text-center text-[10px] text-slate-400">
-          ⓒ KYUNGSUNG 경성문화사 영업미수관리 PWA. All rights reserved.
+          ⓒ KYUNGSUNG 경성문화사 영업미수관리. All rights reserved.
         </div>
       </div>
     </div>
