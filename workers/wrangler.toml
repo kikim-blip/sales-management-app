@@ -1,0 +1,9 @@
+name = "sales-management-api"
+main = "src/index.js"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "sales-management-db"
+database_id = "PLACEHOLDER_UPDATE_AFTER_CREATE"
