@@ -6,15 +6,20 @@ import { useData } from '../../context/DataContext';
 
 export default function UserProfileModal({ onClose }) {
   const { user, updateUserProfile } = useGoogleAuth();
-  const { saveStaffToSheet, isUsingSheetsDB } = useData();
+  const { saveStaffToSheet, isUsingSheetsDB, departments, staffs } = useData();
+
+  const allDepartments = Array.from(new Set([
+    ...(departments || []),
+    ...(staffs || []).map(s => s.dept || s.team).filter(Boolean)
+  ]));
 
   const [formData, setFormData] = useState({
     userCode: user?.userCode || '44',
     userName: user?.userName || '김광일',
     companyCode: user?.companyCode || '3',
     email: user?.email || '',
-    dept: user?.dept || '',
-    team: user?.team || user?.dept || '',
+    dept: user?.dept || (allDepartments[0] || '세종영업본부'),
+    team: user?.team || user?.dept || '영업1조',
   });
 
   const handleSubmit = async (e) => {
@@ -73,15 +78,23 @@ export default function UserProfileModal({ onClose }) {
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">부서명 *</label>
-              <input
-                type="text"
+              <label className="block text-xs font-semibold text-slate-600 mb-1">소속 부서 선택 *</label>
+              <select
                 required
-                placeholder="예: 기획예산부"
                 value={formData.dept}
                 onChange={e => setFormData({ ...formData, dept: e.target.value })}
-                className="w-full p-2.5 border border-slate-200 rounded-xl font-semibold focus:border-sky-500"
-              />
+                className="w-full p-2.5 border border-slate-200 rounded-xl font-bold text-slate-800 focus:border-sky-500 bg-white cursor-pointer"
+              >
+                {allDepartments.length === 0 ? (
+                  <option value="세종영업본부">🏢 세종영업본부</option>
+                ) : (
+                  allDepartments.map(deptName => (
+                    <option key={deptName} value={deptName}>
+                      🏢 {deptName}
+                    </option>
+                  ))
+                )}
+              </select>
             </div>
             <div>
               <label className="block text-xs font-semibold text-slate-600 mb-1">팀명 *</label>

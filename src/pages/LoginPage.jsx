@@ -6,15 +6,23 @@ import { useData } from '../context/DataContext';
 
 export default function LoginPage() {
   const { login, updateUserProfile } = useGoogleAuth();
-  const { saveStaffToSheet } = useData();
+  const { saveStaffToSheet, departments, staffs } = useData();
 
   const [activeTab, setActiveTab] = useState('login'); // 'login' | 'register'
   const [submitting, setSubmitting] = useState(false);
   const [registerSuccess, setRegisterSuccess] = useState(false);
 
+  // 💡 관리자가 등록/운용 중인 공식 부서/팀 목록만 추출
+  const availableDepartments = Array.from(new Set([
+    ...(departments || []),
+    ...(staffs || []).map(s => s.dept || s.team).filter(Boolean)
+  ]));
+
+  const defaultDept = availableDepartments[0] || '세종영업본부';
+
   const [regForm, setRegForm] = useState({
-    dept: '영업1팀',
-    team: '영업1팀',
+    dept: defaultDept,
+    team: defaultDept,
     userName: '',
     userCode: '',
     companyCode: '3',
@@ -22,21 +30,6 @@ export default function LoginPage() {
     role: '일반사원',
     status: '승인대기',
   });
-
-  // 체험 / 데모 빠른 로그인 헬퍼
-  const handleDemoLogin = (userCode = '44', userName = '김광일', dept = '영업1팀') => {
-    updateUserProfile({
-      userCode,
-      userName,
-      companyCode: '3',
-      dept,
-      role: '관리자',
-      status: '승인완료',
-    });
-    // 체험 모드용 토큰 시뮬레이션
-    localStorage.setItem('google_access_token', 'demo_access_token_active');
-    window.location.reload();
-  };
 
   // 회원가입 신청 제출
   const handleRegisterSubmit = async (e) => {
@@ -48,6 +41,7 @@ export default function LoginPage() {
       setSubmitting(true);
       await saveStaffToSheet({
         ...regForm,
+        team: regForm.team || regForm.dept,
         status: '승인대기',
         role: '일반사원',
       });
@@ -150,27 +144,36 @@ export default function LoginPage() {
                 <form onSubmit={handleRegisterSubmit} className="space-y-3.5">
                   <div className="text-center mb-3">
                     <h3 className="font-bold text-slate-800 text-sm">미등록 사원 신규 가입 신청</h3>
-                    <p className="text-[11px] text-slate-500 mt-0.5">신청 정보를 제출하시면 관리자 확인 후 즉시 승인 처리됩니다.</p>
+                    <p className="text-[11px] text-slate-500 mt-0.5">관리자가 등록한 지정 부서를 선택해 가입 신청합니다.</p>
                   </div>
 
                   <div className="grid grid-cols-2 gap-2.5">
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">소속 부서명 *</label>
-                      <input
-                        type="text"
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">소속 부서 선택 *</label>
+                      <select
                         required
-                        placeholder="예: 기획예산부"
                         value={regForm.dept}
-                        onChange={e => setRegForm({ ...regForm, dept: e.target.value })}
-                        className="w-full p-2 border border-slate-200 rounded-xl text-xs font-semibold focus:border-sky-500"
-                      />
+                        onChange={e => setRegForm({ ...regForm, dept: e.target.value, team: e.target.value })}
+                        className="w-full p-2 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:border-sky-500 cursor-pointer bg-white"
+                      >
+                        {availableDepartments.length === 0 ? (
+                          <option value="세종영업본부">🏢 세종영업본부</option>
+                        ) : (
+                          availableDepartments.map(deptName => (
+                            <option key={deptName} value={deptName}>
+                              🏢 {deptName}
+                            </option>
+                          ))
+                        )}
+                      </select>
                     </div>
+
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">팀명 *</label>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">세부 팀명 *</label>
                       <input
                         type="text"
                         required
-                        placeholder="예: 영업1팀"
+                        placeholder="예: 영업1조"
                         value={regForm.team}
                         onChange={e => setRegForm({ ...regForm, team: e.target.value })}
                         className="w-full p-2 border border-slate-200 rounded-xl text-xs font-semibold focus:border-sky-500"

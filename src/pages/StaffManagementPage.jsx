@@ -331,21 +331,23 @@ export default function StaffManagementPage() {
             <div className="space-y-3 text-xs">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">부서명 *</label>
-                  <input
-                    type="text"
-                    list="staff-dept-datalist"
+                  <label className="block font-bold text-slate-700 mb-1">소속 부서 선택 *</label>
+                  <select
                     required
-                    placeholder="부서명 선택 또는 입력"
                     value={formData.dept}
                     onChange={e => setFormData({ ...formData, dept: e.target.value })}
-                    className="w-full p-2 border border-slate-200 rounded-xl font-semibold"
-                  />
-                  <datalist id="staff-dept-datalist">
-                    {allDepartments.map(d => (
-                      <option key={d} value={d} />
-                    ))}
-                  </datalist>
+                    className="w-full p-2 border border-slate-200 rounded-xl font-bold text-slate-800 focus:border-sky-500 bg-white cursor-pointer"
+                  >
+                    {allDepartments.length === 0 ? (
+                      <option value="세종영업본부">🏢 세종영업본부</option>
+                    ) : (
+                      allDepartments.map(d => (
+                        <option key={d} value={d}>
+                          🏢 {d}
+                        </option>
+                      ))
+                    )}
+                  </select>
                 </div>
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">팀명 *</label>
