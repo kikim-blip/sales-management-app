@@ -7,7 +7,7 @@ import JobOrderModal from '../components/common/JobOrderModal';
 import JobOrderPrintModal from '../components/common/JobOrderPrintModal';
 
 export default function JobOrderPage() {
-  const { customers, sales, addSales, jobOrders, addJobOrder, updateJobOrder, deleteJobOrder } = useData();
+  const { customers, sales, addSales, jobOrders, addJobOrder, updateJobOrder, deleteJobOrder, selectedTeamGroup } = useData();
   const { user } = useGoogleAuth();
 
   const today = new Date().toISOString().split('T')[0];
@@ -15,6 +15,14 @@ export default function JobOrderPage() {
   const [showModal, setShowModal] = useState(false);
   const [editingOrder, setEditingOrder] = useState(null);
   const [printingOrder, setPrintingOrder] = useState(null);
+
+  const filteredJobOrders = jobOrders.filter(o => {
+    if (!selectedTeamGroup || selectedTeamGroup === 'ALL') return true;
+    if (o.dept && o.dept === selectedTeamGroup) return true;
+    const cust = customers.find(c => c.id === o.customer_id);
+    if (cust && cust.dept === selectedTeamGroup) return true;
+    return false;
+  });
 
   // 작업전표 저장 또는 수정 (구글 시트 04_작업전표DB 연동)
   const handleSaveJobOrder = async (orderData) => {
@@ -101,13 +109,13 @@ export default function JobOrderPage() {
 
       {/* 등록된 작업전표 목록 */}
       <div className="space-y-4">
-        {jobOrders.length === 0 ? (
+        {filteredJobOrders.length === 0 ? (
           <div className="bg-white p-12 text-center rounded-2xl border border-slate-200 text-slate-400 space-y-3">
             <ClipboardList className="w-10 h-10 mx-auto text-slate-300" />
             <p className="text-sm font-medium">등록된 작업전표가 없습니다. 상단 [작업전표 작성] 버튼을 클릭해 보세요.</p>
           </div>
         ) : (
-          jobOrders.map((order) => {
+          filteredJobOrders.map((order) => {
             const cust = customers.find(c => c.id === order.customer_id);
             return (
               <div key={order.code_number || order.id} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4 hover:border-sky-300 transition">

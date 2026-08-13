@@ -5,7 +5,7 @@ import { Plus, CreditCard, Calendar, Pencil, Trash2, FileSearch } from 'lucide-r
 import SelectJobOrderModal from '../components/common/SelectJobOrderModal';
 
 export default function PaymentPage() {
-  const { payments, customers, jobOrders, addPayment, updatePayment, deletePayment } = useData();
+  const { payments, customers, jobOrders, addPayment, updatePayment, deletePayment, selectedTeamGroup } = useData();
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [submitting, setSubmitting] = useState(false);
@@ -13,6 +13,14 @@ export default function PaymentPage() {
   const [showSelectJobModal, setShowSelectJobModal] = useState(false);
 
   const today = new Date().toISOString().split('T')[0];
+
+  const filteredPayments = payments.filter(p => {
+    if (!selectedTeamGroup || selectedTeamGroup === 'ALL') return true;
+    if (p.dept && p.dept === selectedTeamGroup) return true;
+    const cust = customers.find(c => c.id === p.customer_id);
+    if (cust && cust.dept === selectedTeamGroup) return true;
+    return false;
+  });
   const defaultForm = {
     payment_date: today,
     customer_id: '',
@@ -150,7 +158,7 @@ export default function PaymentPage() {
 
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="divide-y divide-slate-100">
-          {payments.map((p, idx) => {
+          {filteredPayments.map((p, idx) => {
             const cust = customers.find(c => c.id === p.customer_id);
             return (
               <div key={p.id || idx} className="p-4 sm:p-5 flex items-center justify-between hover:bg-slate-50">

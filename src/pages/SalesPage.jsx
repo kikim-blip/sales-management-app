@@ -8,7 +8,7 @@ import QuotePrintModal from '../components/common/QuotePrintModal';
 import JobOrderPrintModal from '../components/common/JobOrderPrintModal';
 
 export default function SalesPage() {
-  const { sales, customers, jobOrders, addSales, updateSales, deleteSales, addJobOrder, addPayment } = useData();
+  const { sales, customers, jobOrders, addSales, updateSales, deleteSales, addJobOrder, addPayment, selectedTeamGroup } = useData();
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [submitting, setSubmitting] = useState(false);
@@ -20,6 +20,14 @@ export default function SalesPage() {
   const [printingJobOrder, setPrintingJobOrder] = useState(null);
 
   const today = new Date().toISOString().split('T')[0];
+
+  const filteredSales = sales.filter(s => {
+    if (!selectedTeamGroup || selectedTeamGroup === 'ALL') return true;
+    if (s.dept && s.dept === selectedTeamGroup) return true;
+    const cust = customers.find(c => c.id === s.customer_id);
+    if (cust && cust.dept === selectedTeamGroup) return true;
+    return false;
+  });
 
   const defaultForm = {
     reg_date: today,
@@ -282,7 +290,7 @@ export default function SalesPage() {
       </div>
 
       <div className="space-y-3">
-        {sales.map((item, idx) => {
+        {filteredSales.map((item, idx) => {
           const cust = customers.find(c => c.id === item.customer_id);
           return (
             <div key={item.id || idx} className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3 relative group">
@@ -363,7 +371,7 @@ export default function SalesPage() {
                       onClick={() => handleCollectPayment(item)}
                       className="flex items-center space-x-1 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1 rounded-xl text-xs font-bold transition shadow-sm animate-pulse"
                     >
-                      <DollarSign className="w-3.5 h-3.5" />
+                      <span className="font-extrabold text-xs">₩</span>
                       <span>수금 처리 (청구완료)</span>
                     </button>
                   )}

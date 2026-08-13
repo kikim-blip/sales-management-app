@@ -5,7 +5,7 @@ import { useGoogleAuth } from '../context/GoogleAuthContext';
 import { Plus, Search, Pencil, Trash2 } from 'lucide-react';
 
 export default function CustomerPage() {
-  const { customers, addCustomer, updateCustomer, deleteCustomer } = useData();
+  const { customers, addCustomer, updateCustomer, deleteCustomer, selectedTeamGroup } = useData();
   const { user } = useGoogleAuth();
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -79,9 +79,20 @@ export default function CustomerPage() {
     }
   };
 
-  const filtered = customers.filter(
-    c => (c.name || '').includes(searchTerm) || (c.dept || '').includes(searchTerm) || (c.contact_person || '').includes(searchTerm) || (c.sales_manager || '').includes(searchTerm)
-  );
+  const filtered = customers.filter(c => {
+    const matchesSearch =
+      (c.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (c.dept || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (c.contact_person || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (c.sales_manager || '').toLowerCase().includes(searchTerm.toLowerCase());
+
+    const matchesTeam =
+      !selectedTeamGroup ||
+      selectedTeamGroup === 'ALL' ||
+      c.dept === selectedTeamGroup;
+
+    return matchesSearch && matchesTeam;
+  });
 
   return (
     <div className="space-y-5">

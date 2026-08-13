@@ -531,6 +531,8 @@ export function DataProvider({ children }) {
     });
   };
 
+  const [selectedTeamGroup, setSelectedTeamGroup] = useState('ALL');
+
   return (
     <DataContext.Provider
       value={{
@@ -541,6 +543,8 @@ export function DataProvider({ children }) {
         jobOrders,
         loading,
         error,
+        selectedTeamGroup,
+        setSelectedTeamGroup,
         refreshData: (force = true) => fetchAllData(force),
         saveStaffToSheet,
         addJobOrder,
