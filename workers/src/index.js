@@ -25,20 +25,16 @@ function error(message, status = 400) {
 }
 
 async function ensureInitialData(db) {
+  // 부서/팀 기본 데이터만 확인 (사용자 데이터는 앱에서 직접 입력)
   const counts = await db.prepare(`
     SELECT
-      (SELECT COUNT(*) FROM customers) AS customers,
-      (SELECT COUNT(*) FROM sales) AS sales,
-      (SELECT COUNT(*) FROM payments) AS payments,
-      (SELECT COUNT(*) FROM job_orders) AS job_orders,
-      (SELECT COUNT(*) FROM staffs) AS staffs,
       (SELECT COUNT(*) FROM departments) AS departments,
-      (SELECT COUNT(*) FROM teams) AS teams
+      (SELECT COUNT(*) FROM teams) AS teams,
+      (SELECT COUNT(*) FROM staffs) AS staffs
   `).first();
 
-  const hasAllCoreData = Number(counts?.customers || 0) > 0 && Number(counts?.sales || 0) > 0 && Number(counts?.payments || 0) > 0 && Number(counts?.job_orders || 0) > 0 && Number(counts?.staffs || 0) > 0 && Number(counts?.departments || 0) > 0 && Number(counts?.teams || 0) > 0;
-
-  if (hasAllCoreData) return;
+  const hasDeptAndTeam = Number(counts?.departments || 0) > 0 && Number(counts?.teams || 0) > 0;
+  if (hasDeptAndTeam) return;
 
   const defaultDepartments = ['세종영업본부', '기획예산부', '생산관리부', '영업본부'];
   const defaultTeams = ['영업1조', '영업2조', '영업3조', '영업4조', '영업1팀', '영업2팀', '기획팀', '생산팀'];
@@ -51,94 +47,17 @@ async function ensureInitialData(db) {
     await db.prepare('INSERT OR IGNORE INTO teams (name) VALUES (?)').bind(team).run();
   }
 
-  await db.prepare(`
-    INSERT OR IGNORE INTO staffs (user_code, user_name, company_code, email, dept, position, team, role, status, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))
-  `).bind('44', '김광일', '3', 'richkikim@gmail.com', '세종영업본부', '담당자', '영업1조', '관리자', '승인완료').run();
-
-  await db.prepare(`
-    INSERT OR IGNORE INTO customers (id, name, dept, contact_person, phone, email, sales_manager, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))
-  `).bind('CUST-001', '(주)테크솔루션', '영업본부', '김철수 부장', '010-1234-5678', 'tech@sample.com', '김광일').run();
-  await db.prepare(`
-    INSERT OR IGNORE INTO customers (id, name, dept, contact_person, phone, email, sales_manager, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))
-  `).bind('CUST-002', '한빛디자인', '기획부', '이영희 팀장', '010-9876-5432', 'design@sample.com', '김광일').run();
-  await db.prepare(`
-    INSERT OR IGNORE INTO customers (id, name, dept, contact_person, phone, email, sales_manager, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))
-  `).bind('CUST-003', '미래글로벌', '영업본부', '박민수 과장', '010-5555-4444', 'future@sample.com', '김광일').run();
-
-  await db.prepare(`
-    INSERT OR IGNORE INTO sales (id, reg_date, receipt_date, delivery_date, delivery_time, customer_id, title, content, note, billing_schedule, type, supply_price, tax, total_price, calendar_synced, superthread_synced, dept, updated_at)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now', 'localtime'))
-  `).bind('SALE-101', '2026-08-01', '2026-08-01', '2026-08-05', '14:00', 'CUST-001', '웹사이트 개발 1차 납품', '반응형 UI 템플릿 개발 및 구글 연동', '특이사항 없음', '청구완료', '매출', 3000000, 300000, 3300000, 1, 1, '영업본부').run();
-  await db.prepare(`
-    INSERT OR IGNORE INTO sales (id, reg_date, receipt_date, delivery_date, delivery_time, customer_id, title, content, note, billing_schedule, type, supply_price, tax, total_price, calendar_synced, superthread_synced, dept, updated_at)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now', 'localtime'))
-  `).bind('SALE-102', '2026-08-03', '2026-08-03', '2026-08-10', '10:00', 'CUST-002', '브랜드 로고 디자인', 'CI/BI 시안 3종 제작', '수정요청 접수중', '청구대기', '견적', 1500000, 150000, 1650000, 1, 0, '기획부').run();
-  await db.prepare(`
-    INSERT OR IGNORE INTO sales (id, reg_date, receipt_date, delivery_date, delivery_time, customer_id, title, content, note, billing_schedule, type, supply_price, tax, total_price, calendar_synced, superthread_synced, dept, updated_at)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now', 'localtime'))
-  `).bind('SALE-103', '2026-08-05', '2026-08-05', '2026-08-12', '17:00', 'CUST-003', '서버 구축 시스템', '클라우드 인프라 세팅', '납품 예정', '청구완료', '매출', 5000000, 500000, 5500000, 0, 0, '영업본부').run();
-
-  await db.prepare(`
-    INSERT OR IGNORE INTO payments (id, payment_date, customer_id, amount, method, dept, updated_at)
-    VALUES (?,?,?,?,?,?,datetime('now', 'localtime'))
-  `).bind('PAY-201', '2026-08-07', 'CUST-001', 2000000, '계좌이체', '영업본부').run();
-  await db.prepare(`
-    INSERT OR IGNORE INTO payments (id, payment_date, customer_id, amount, method, dept, updated_at)
-    VALUES (?,?,?,?,?,?,datetime('now', 'localtime'))
-  `).bind('PAY-202', '2026-08-09', 'CUST-003', 1500000, '카드결제', '영업본부').run();
-
-  await db.prepare(`
-    INSERT OR IGNORE INTO job_orders (
-      id, code_number, manager_name, receipt_date, delivery_date, delivery_time,
-      customer_id, dept, title, spec, pages, duplex, quantity, estimated_price,
-      client_contact_person, client_phone, client_email, email_receipt_time,
-      cover_job, cover_paper, cover_print, coating, inner_job, inner_paper, inner_print,
-      interleaf_paper, binding, draft_email, draft_group, mail_sender,
-      cover_proof_date, inner_proof_date, proof_method, planning, photography,
-      illustration, copyright_web, production_progress, delivery_destination,
-      cover_related, inner_related, request_note, editor_name, designer_name, status, updated_at
-    ) VALUES (
-      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime')
-    )
-  `).bind(
-    'JO-1001', '44 - 250813 - 3001', '김광일', '2026-08-01', '2026-08-13', '14:00',
-    'CUST-001', '영업본부', '웹사이트 개발 1차 납품', '반응형 UI 템플릿', '32', '단면', 1, 3300000,
-    '김철수 부장', '010-1234-5678', 'tech@sample.com', '09:00',
-    '홈페이지 제작', '시트지', '컬러 1도', '코팅 없음', '페이지 디자인', '80g', '단면 인쇄', '없음', '본딩 없음',
-    'design@sample.com', '디자인팀', '김광일', '2026-08-02', '2026-08-03', '메일교정',
-    '기획안 검토', '실사촬영', '일러스트 1종', '필수 동의', '1차 초안 검수', '서울 본사',
-    '반응형 웹 화면 구성 및 CMS 연동', '랜딩 페이지 중심 구성', '기본 요청 사항입니다.', '홍길동', '이순신', '의뢰접수'
-  ).run();
-
-  await db.prepare(`
-    INSERT OR IGNORE INTO job_orders (
-      id, code_number, manager_name, receipt_date, delivery_date, delivery_time,
-      customer_id, dept, title, spec, pages, duplex, quantity, estimated_price,
-      client_contact_person, client_phone, client_email, email_receipt_time,
-      cover_job, cover_paper, cover_print, coating, inner_job, inner_paper, inner_print,
-      interleaf_paper, binding, draft_email, draft_group, mail_sender,
-      cover_proof_date, inner_proof_date, proof_method, planning, photography,
-      illustration, copyright_web, production_progress, delivery_destination,
-      cover_related, inner_related, request_note, editor_name, designer_name, status, updated_at
-    ) VALUES (
-      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime')
-    )
-  `).bind(
-    'JO-1002', '44 - 250814 - 3002', '김광일', '2026-08-03', '2026-08-14', '10:00',
-    'CUST-002', '기획부', '브랜드 로고 디자인', 'CI/BI 시안 3종', '20', '양면', 1, 1650000,
-    '이영희 팀장', '010-9876-5432', 'design@sample.com', '08:30',
-    '브랜드 로고', '아트지', '단색 2도', '없음', '브랜드 메시지 구성', '80g', '컬러 인쇄', '없음', '본딩 없음',
-    'brand@sample.com', '기획팀', '홍보담당', '2026-08-04', '2026-08-05', '메일교정',
-    '브랜드 톤 정리', '상품 촬영', '로고 가이드 제작', '필수 동의', '시안 수정 2회', '서울 본사',
-    '브랜드 인지도를 높이는 시안 제작', '콘셉트 기반 디자인', '수정 요청 반영 예정', '김민수', '박영희', '진행중'
-  ).run();
+  // 기본 관리자 계정이 없을 경우에만 추가
+  const staffCount = Number(counts?.staffs || 0);
+  if (staffCount === 0) {
+    await db.prepare(`
+      INSERT OR IGNORE INTO staffs (user_code, user_name, company_code, email, dept, position, team, role, status, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))
+    `).bind('44', '김광일', '3', 'richkikim@gmail.com', '세종영업본부', '담당자', '영업1조', '관리자', '승인완료').run();
+  }
 }
+
+
 
 // ─── ID 생성 헬퍼 ───────────────────────────────────────────────
 function generateId(prefix) {
