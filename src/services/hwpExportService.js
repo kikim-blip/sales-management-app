@@ -64,7 +64,7 @@ export async function exportJobOrderToHWP(order, customer) {
           </tr>
           <tr style="height:35px;">
             <td class="val">${v(order.manager_name)}</td>
-            <td class="val">김광일</td>
+            <td></td>
             <td></td>
           </tr>
         </table>
@@ -202,7 +202,7 @@ export async function exportJobOrderToHWP(order, customer) {
   <table style="border:none; margin-top:10px; font-weight:bold; font-size:10pt;">
     <tr>
       <td style="border:none; text-align:left; width:50%;">
-        표지 작업자 : <span class="val">${v(order.editor_name, order.manager_name || '김광일')}</span>
+        표지 작업자 : <span class="val">${v(order.editor_name)}</span>
       </td>
       <td style="border:none; text-align:right; width:50%;">
         내지 작업자 : <span class="val">${v(order.designer_name, '-')}</span>

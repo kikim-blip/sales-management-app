@@ -132,7 +132,7 @@ export default function JobOrderPrintModal({ order, customer, onClose }) {
                     </div>
                     <div className="grid grid-cols-3 divide-x divide-black h-9 font-bold text-rose-600">
                       <div className="flex items-center justify-center">{v(order.manager_name)}</div>
-                      <div className="flex items-center justify-center">김광일</div>
+                      <div className="flex items-center justify-center"></div>
                       <div className="flex items-center justify-center"></div>
                     </div>
                   </div>
@@ -344,7 +344,7 @@ export default function JobOrderPrintModal({ order, customer, onClose }) {
             <div className="flex justify-between items-center mt-3 px-8 text-xs font-bold text-black">
               <div className="flex items-center space-x-2">
                 <span>표지 작업자 :</span>
-                <span className="text-rose-600 font-extrabold">{v(order.editor_name, order.manager_name || '김광일')}</span>
+                <span className="text-rose-600 font-extrabold">{v(order.editor_name)}</span>
               </div>
               <div className="flex items-center space-x-2">
                 <span>내지 작업자 :</span>
@@ -373,7 +373,7 @@ export default function JobOrderPrintModal({ order, customer, onClose }) {
                 <td colSpan={2}></td>
                 <td></td>
                 <td style={{ color: '#dc2626', textAlign: 'center' }}>{v(order.manager_name)}</td>
-                <td style={{ color: '#dc2626', textAlign: 'center' }}>김광일</td>
+                <td></td>
                 <td></td>
               </tr>
               <tr>
@@ -483,7 +483,7 @@ export default function JobOrderPrintModal({ order, customer, onClose }) {
                 <td colSpan={10} style={{ fontSize: '10px' }}>※ 원칙: 영업자는 6하원칙에 따라 작업자가 쉽게 이해 하도록 작업내용을 구체적으로 작성하여 요청 바라며 작업자는 업무를 배당받고 실제 작업착수시에 영업자에게 재차 요청업무를 확인 후 진행 당부 드립니다.</td>
               </tr>
               <tr>
-                <td colSpan={5} style={{ fontWeight: 'bold' }}>표지 작업자 : {v(order.editor_name, order.manager_name || '김광일')}</td>
+                <td colSpan={5} style={{ fontWeight: 'bold' }}>표지 작업자 : {v(order.editor_name)}</td>
                 <td colSpan={5} style={{ fontWeight: 'bold' }}>내지 작업자 : {v(order.designer_name, '-')}</td>
               </tr>
             </tbody>

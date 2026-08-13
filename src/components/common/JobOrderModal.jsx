@@ -102,7 +102,7 @@ export default function JobOrderModal({ customers = [], initialData = null, onSa
     cover_related: initialData?.cover_related || '',
     inner_related: initialData?.inner_related || '',
     request_note: initialData?.request_note || '',
-    editor_name: initialData?.editor_name || userName,
+    editor_name: initialData?.editor_name || '',
     designer_name: initialData?.designer_name || '',
   });
 
@@ -296,7 +296,7 @@ export default function JobOrderModal({ customers = [], initialData = null, onSa
                         onChange={e => setFormData({ ...formData, manager_name: e.target.value })}
                         className="w-full text-center font-bold text-rose-600 bg-transparent border-none focus:outline-none"
                       />
-                      <div className="flex items-center justify-center">김광일</div>
+                      <div className="flex items-center justify-center"></div>
                       <div className="flex items-center justify-center"></div>
                     </div>
                   </div>
