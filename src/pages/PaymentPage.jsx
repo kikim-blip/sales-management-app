@@ -43,11 +43,23 @@ export default function PaymentPage() {
     alert(`[${order.code_number}] ${order.title} 전표의 금액(${(order.estimated_price || 0).toLocaleString()}원)과 고객사 정보가 수금 폼에 반영되었습니다!`);
   };
 
-  // 고객사명 입력 또는 선택 시
+  // 💡 고객사명, 과/부서명, 담당자명, 영업담당자 확장 스마트 검색 매칭
   const handleCustomerNameChange = (typedName) => {
     setCustomerNameInput(typedName);
-    const matched = customers.find(c => c.name.trim() === typedName.trim());
+    const cleaned = typedName.trim().toLowerCase();
+
+    const matched = customers.find(c => 
+      (c.name || '').toLowerCase() === cleaned ||
+      (c.dept || '').toLowerCase() === cleaned ||
+      (c.contact_person || '').toLowerCase() === cleaned ||
+      (c.sales_manager || '').toLowerCase() === cleaned ||
+      `${c.name} ${c.dept}`.toLowerCase().includes(cleaned) ||
+      `${c.name} (${c.dept})`.toLowerCase().includes(cleaned) ||
+      `${c.name} - ${c.contact_person}`.toLowerCase().includes(cleaned)
+    );
+
     if (matched) {
+      setCustomerNameInput(matched.name);
       setFormData(prev => ({
         ...prev,
         customer_id: matched.id,
@@ -225,7 +237,11 @@ export default function PaymentPage() {
                   />
                   <datalist id="payment-customer-list">
                     {customers.map(c => (
-                      <option key={c.id} value={c.name} />
+                      <React.Fragment key={c.id}>
+                        <option value={c.name} label={`${c.dept ? `[${c.dept}] ` : ''}${c.contact_person ? `담당: ${c.contact_person}` : ''}`} />
+                        {c.contact_person && <option value={c.contact_person} label={`고객사: ${c.name}`} />}
+                        {c.dept && <option value={c.dept} label={`고객사: ${c.name}`} />}
+                      </React.Fragment>
                     ))}
                   </datalist>
                 </div>

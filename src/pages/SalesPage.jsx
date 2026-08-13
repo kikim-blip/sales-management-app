@@ -79,11 +79,23 @@ export default function SalesPage() {
     alert(`[${order.code_number}] ${order.title} 전표 정보가 매출 폼에 자동 입력되었습니다!`);
   };
 
-  // 고객사명 입력 또는 검색 선택 시 처리
+  // 💡 고객사명, 과/부서명, 담당자명, 영업담당자 확장 스마트 검색 매칭
   const handleCustomerNameChange = (typedName) => {
     setCustomerNameInput(typedName);
-    const matched = customers.find(c => c.name.trim() === typedName.trim());
+    const cleaned = typedName.trim().toLowerCase();
+
+    const matched = customers.find(c => 
+      (c.name || '').toLowerCase() === cleaned ||
+      (c.dept || '').toLowerCase() === cleaned ||
+      (c.contact_person || '').toLowerCase() === cleaned ||
+      (c.sales_manager || '').toLowerCase() === cleaned ||
+      `${c.name} ${c.dept}`.toLowerCase().includes(cleaned) ||
+      `${c.name} (${c.dept})`.toLowerCase().includes(cleaned) ||
+      `${c.name} - ${c.contact_person}`.toLowerCase().includes(cleaned)
+    );
+
     if (matched) {
+      setCustomerNameInput(matched.name);
       setFormData(prev => ({
         ...prev,
         customer_id: matched.id,
@@ -407,7 +419,11 @@ export default function SalesPage() {
                   />
                   <datalist id="sales-customer-list">
                     {customers.map(c => (
-                      <option key={c.id} value={c.name} />
+                      <React.Fragment key={c.id}>
+                        <option value={c.name} label={`${c.dept ? `[${c.dept}] ` : ''}${c.contact_person ? `담당: ${c.contact_person}` : ''}`} />
+                        {c.contact_person && <option value={c.contact_person} label={`고객사: ${c.name}`} />}
+                        {c.dept && <option value={c.dept} label={`고객사: ${c.name}`} />}
+                      </React.Fragment>
                     ))}
                   </datalist>
                 </div>
