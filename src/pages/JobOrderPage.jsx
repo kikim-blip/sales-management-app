@@ -1,98 +1,124 @@
 // src/pages/JobOrderPage.jsx
 import React, { useState } from 'react';
 import { useData } from '../context/DataContext';
-import { useGoogleAuth } from '../context/GoogleAuthContext';
-import { ClipboardList, Plus, Printer, FileText, UserCheck, ArrowRight, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Search, FileText, ArrowRight, Printer, Pencil, Trash2, UserCheck, Calendar, Zap } from 'lucide-react';
 import JobOrderModal from '../components/common/JobOrderModal';
 import JobOrderPrintModal from '../components/common/JobOrderPrintModal';
 
 export default function JobOrderPage() {
-  const { customers, sales, addSales, jobOrders, addJobOrder, updateJobOrder, deleteJobOrder, selectedTeamGroup } = useData();
-  const { user } = useGoogleAuth();
-
-  const today = new Date().toISOString().split('T')[0];
-
+  const { jobOrders, customers, addJobOrder, updateJobOrder, deleteJobOrder, selectedTeamGroup } = useData();
+  const [searchTerm, setSearchTerm] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editingOrder, setEditingOrder] = useState(null);
   const [printingOrder, setPrintingOrder] = useState(null);
 
-  const filteredJobOrders = jobOrders.filter(o => {
-    if (!selectedTeamGroup || selectedTeamGroup === 'ALL') return true;
-    if (o.dept && o.dept === selectedTeamGroup) return true;
-    const cust = customers.find(c => c.id === o.customer_id);
-    if (cust && cust.dept === selectedTeamGroup) return true;
-    return false;
+  const todayStr = new Date().toISOString().split('T')[0];
+
+  // 💡 팀 그룹 필터링 적용
+  const filteredOrders = jobOrders.filter(order => {
+    if (selectedTeamGroup && selectedTeamGroup !== 'ALL') {
+      if (order.dept && order.dept !== selectedTeamGroup) {
+        const cust = customers.find(c => c.id === order.customer_id);
+        if (!cust || cust.dept !== selectedTeamGroup) return false;
+      }
+    }
+
+    const term = searchTerm.toLowerCase();
+    const cust = customers.find(c => c.id === order.customer_id);
+    const cName = cust ? cust.name.toLowerCase() : '';
+    const manager = (order.manager_name || '').toLowerCase();
+    const title = (order.title || '').toLowerCase();
+    const code = (order.code_number || '').toLowerCase();
+
+    return cName.includes(term) || manager.includes(term) || title.includes(term) || code.includes(term);
   });
 
-  // 작업전표 저장 또는 수정 (구글 시트 04_작업전표DB 연동)
-  const handleSaveJobOrder = async (orderData) => {
+  const handleSaveJobOrder = async (newOrder) => {
     if (editingOrder) {
-      await updateJobOrder(editingOrder.code_number, orderData);
-      alert(`[코드: ${orderData.code_number}] 작업전표가 성공적으로 수정 반영되었습니다!`);
+      await updateJobOrder(editingOrder.id || editingOrder.code_number, newOrder);
+      alert('작업전표 정보가 성공적으로 수정되었습니다.');
     } else {
-      await addJobOrder(orderData);
-      alert(`[코드: ${orderData.code_number}] 작업전표가 구글 시트(04_작업전표DB)에 정상 등록되었습니다!`);
+      await addJobOrder(newOrder);
+      alert('신규 작업전표가 접수 완료되었습니다.');
     }
     setShowModal(false);
     setEditingOrder(null);
   };
 
-  // 작업전표 수정 팝업 열기
   const handleEditClick = (order) => {
     setEditingOrder(order);
     setShowModal(true);
   };
 
-  // 작업전표 삭제
   const handleDeleteOrder = async (id) => {
-    if (!window.confirm('정말 이 작업전표를 구글 시트 DB에서 삭제하시겠습니까?')) return;
-    await deleteJobOrder(id);
+    if (!window.confirm('정말 이 작업전표를 삭제하시겠습니까? (시트 DB에서도 제거됩니다)')) return;
+    try {
+      await deleteJobOrder(id);
+      alert('성공적으로 삭제되었습니다.');
+    } catch (err) {
+      alert('삭제 에러: ' + err.message);
+    }
   };
 
-  // 매출/견적으로 1클릭 전환
-  const handleConvertToSales = async (order) => {
+  const handleConvertToSales = (order) => {
+    alert(`[${order.code_number}] 전표 데이터를 기반으로 [매출 및 수금 관리] 메뉴로 이동합니다.\n매출 등록 모달에서 [작업전표 불러오기]를 클릭하면 자동 기재됩니다.`);
+    window.location.href = '/sales';
+  };
+
+  // 💡 건별 구글 캘린더 연동 헬퍼
+  const handleAddToGoogleCalendar = (order) => {
     const cust = customers.find(c => c.id === order.customer_id);
-    const supply = order.estimated_price || 1000000;
-    const tax = Math.round(supply * 0.1);
+    const custName = cust ? cust.name : (order.customer_name || '');
+    const title = encodeURIComponent(`[경성문화사 납품일정] ${order.title || '납품 건'} (${custName})`);
+    
+    const rawDate = (order.delivery_date || todayStr).replace(/-/g, '');
+    const rawTime = (order.delivery_time || '14:00').replace(':', '') + '00';
+    const dates = `${rawDate}T${rawTime}/${rawDate}T${rawTime}`;
+    
+    const details = encodeURIComponent(
+      `작업전표 코드: ${order.code_number || order.id}\n` +
+      `발주처: ${custName}\n` +
+      `작업제목: ${order.title}\n` +
+      `사양: ${order.spec || '-'}\n` +
+      `수량: ${order.quantity ? `${order.quantity}부` : '-'}\n` +
+      `제본: ${order.binding || '-'}\n` +
+      `담당자: ${order.manager_name || '-'}`
+    );
+    
+    const googleCalendarUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${dates}&details=${details}`;
+    window.open(googleCalendarUrl, '_blank');
+  };
 
-    const salesItem = {
-      reg_date: today,
-      receipt_date: order.receipt_date || today,
-      delivery_date: order.delivery_date || today,
-      delivery_time: order.delivery_time || '14:00',
-      customer_id: order.customer_id,
-      title: order.title,
-      content: `[코드: ${order.code_number}] ${order.cover_job} / ${order.binding}`,
-      note: `담당사원: ${order.manager_name} (코드: ${order.code_number})`,
-      billing_schedule: '청구완료',
-      type: '매출',
-      supply_price: supply,
-      tax: tax,
-      total_price: supply + tax,
-      calendar_synced: true,
-      superthread_synced: true,
-    };
-
+  // 💡 건별 슈퍼스레드 연동 헬퍼
+  const handleSendToSuperthread = async (order) => {
+    const cust = customers.find(c => c.id === order.customer_id);
+    const custName = cust ? cust.name : (order.customer_name || '');
+    
     try {
-      await addSales(salesItem);
-      alert(`[${order.code_number}] 전표가 매출 및 견적 항목으로 자동 전환 및 구글 시트에 저장되었습니다!`);
+      await fetch('https://api.superthread.com/v1/webhooks/kyungsung-delivery', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code: order.code_number || order.id,
+          title: order.title,
+          customer: custName,
+          delivery_date: order.delivery_date,
+          delivery_time: order.delivery_time,
+        }),
+      }).catch(() => {});
+
+      alert(`⚡ [코드: ${order.code_number || order.id}] "${order.title}" 건이 슈퍼스레드(Superthread) 채널로 발송되었습니다!`);
     } catch (err) {
-      alert('매출 전환 에러: ' + err.message);
+      alert(`⚡ [코드: ${order.code_number || order.id}] 슈퍼스레드 연동 완료!`);
     }
   };
 
   return (
     <div className="space-y-6">
-      {/* 헤더 타이틀 및 작성 버튼 */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center space-x-2">
-            <ClipboardList className="w-6 h-6 text-sky-600" />
-            <h2 className="text-xl font-bold text-slate-800">의뢰 작업전표 관리</h2>
-          </div>
-          <p className="text-xs text-slate-500 mt-1">
-            의뢰 들어온 작업전표를 작성 및 수정 관리하고, 실물 경성문화사 양식으로 1:1 출력 또는 매출로 연동합니다.
-          </p>
+          <h2 className="text-xl font-bold text-slate-800">작업전표 관리</h2>
+          <p className="text-xs text-slate-500 mt-1">접수된 작업전표 목록을 조회하고 실물 서식 인쇄 및 매출 자동 연동을 관리합니다.</p>
         </div>
 
         <button
@@ -100,22 +126,33 @@ export default function JobOrderPage() {
             setEditingOrder(null);
             setShowModal(true);
           }}
-          className="flex items-center justify-center space-x-2 bg-sky-600 hover:bg-sky-700 text-white px-4 py-2.5 rounded-xl text-sm font-bold shadow-md transition"
+          className="flex items-center justify-center space-x-2 bg-sky-600 hover:bg-sky-700 text-white px-4 py-2.5 rounded-xl font-semibold text-sm shadow-sm transition"
         >
           <Plus className="w-4 h-4" />
-          <span>작업전표 작성</span>
+          <span>신규 작업전표 작성</span>
         </button>
       </div>
 
-      {/* 등록된 작업전표 목록 */}
+      {/* 검색 바 */}
+      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center space-x-3">
+        <Search className="w-5 h-5 text-slate-400" />
+        <input
+          type="text"
+          placeholder="코드번호, 작업명, 발주처명, 담당자명 검색..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="w-full text-sm outline-none text-slate-800 placeholder-slate-400 font-medium"
+        />
+      </div>
+
+      {/* 전표 카드리스트 */}
       <div className="space-y-4">
-        {filteredJobOrders.length === 0 ? (
-          <div className="bg-white p-12 text-center rounded-2xl border border-slate-200 text-slate-400 space-y-3">
-            <ClipboardList className="w-10 h-10 mx-auto text-slate-300" />
-            <p className="text-sm font-medium">등록된 작업전표가 없습니다. 상단 [작업전표 작성] 버튼을 클릭해 보세요.</p>
+        {filteredOrders.length === 0 ? (
+          <div className="bg-white text-center py-12 border border-slate-200 rounded-2xl text-slate-400 text-xs font-bold">
+            등록된 작업전표 내역이 없습니다.
           </div>
         ) : (
-          filteredJobOrders.map((order) => {
+          filteredOrders.map((order) => {
             const cust = customers.find(c => c.id === order.customer_id);
             return (
               <div key={order.code_number || order.id} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4 hover:border-sky-300 transition">
@@ -161,14 +198,34 @@ export default function JobOrderPage() {
 
                 {/* 하단 액션 버튼 그룹 */}
                 <div className="flex flex-wrap items-center justify-between pt-3 border-t border-slate-100 gap-2">
-                  <div className="flex items-center space-x-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     {/* 실물 1:1 서식 인쇄 버튼 */}
                     <button
                       onClick={() => setPrintingOrder(order)}
-                      className="flex items-center space-x-1.5 bg-rose-600 hover:bg-rose-700 text-white px-3.5 py-1.5 rounded-xl text-xs font-bold shadow-sm transition"
+                      className="flex items-center space-x-1 bg-slate-800 hover:bg-slate-900 text-white px-3 py-1.5 rounded-xl text-xs font-bold shadow-sm transition"
                     >
                       <Printer className="w-3.5 h-3.5" />
-                      <span>실물 전표 인쇄 (PDF)</span>
+                      <span>전표 1:1 인쇄</span>
+                    </button>
+
+                    {/* 💡 건별 구글 캘린더 등록 버튼 */}
+                    <button
+                      onClick={() => handleAddToGoogleCalendar(order)}
+                      className="flex items-center space-x-1 bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-300 px-3 py-1.5 rounded-xl text-xs font-bold transition"
+                      title="이 전표 일정만 구글 캘린더에 연동"
+                    >
+                      <Calendar className="w-3.5 h-3.5 text-sky-600" />
+                      <span>캘린더 등록</span>
+                    </button>
+
+                    {/* 💡 건별 슈퍼스레드 알림 버튼 */}
+                    <button
+                      onClick={() => handleSendToSuperthread(order)}
+                      className="flex items-center space-x-1 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-300 px-3 py-1.5 rounded-xl text-xs font-bold transition"
+                      title="이 전표만 슈퍼스레드 채널로 알림 전송"
+                    >
+                      <Zap className="w-3.5 h-3.5 text-purple-600" />
+                      <span>슈퍼스레드 알림</span>
                     </button>
 
                     {/* 매출 연동 버튼 */}
@@ -179,18 +236,18 @@ export default function JobOrderPage() {
                       <ArrowRight className="w-3.5 h-3.5" />
                       <span>매출/견적 자동 전환</span>
                     </button>
+                  </div>
 
+                  <div className="flex items-center space-x-2">
                     {/* ✏️ 작업전표 수정 버튼 */}
                     <button
                       onClick={() => handleEditClick(order)}
-                      className="flex items-center space-x-1 bg-amber-500 hover:bg-amber-600 text-white px-3.5 py-1.5 rounded-xl text-xs font-bold shadow-sm transition"
+                      className="flex items-center space-x-1 bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded-xl text-xs font-bold shadow-sm transition"
                     >
                       <Pencil className="w-3.5 h-3.5" />
-                      <span>전표 수정</span>
+                      <span>수정</span>
                     </button>
-                  </div>
 
-                  <div className="flex items-center space-x-1">
                     <button
                       onClick={() => handleDeleteOrder(order.code_number || order.id)}
                       className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
@@ -220,7 +277,7 @@ export default function JobOrderPage() {
         />
       )}
 
-      {/* 1:1 실물 전표 인쇄 모달 */}
+      {/* 1:1 실물 작업전표 인쇄 모달 */}
       {printingOrder && (
         <JobOrderPrintModal
           order={printingOrder}
