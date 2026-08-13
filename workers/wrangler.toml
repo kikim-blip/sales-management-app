@@ -6,4 +6,4 @@ compatibility_flags = ["nodejs_compat"]
 [[d1_databases]]
 binding = "DB"
 database_name = "sales-management-db"
-database_id = "PLACEHOLDER_UPDATE_AFTER_CREATE"
+database_id = "29705521-c0cf-46f0-9b08-6814536d107e"
