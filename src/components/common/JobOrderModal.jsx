@@ -1,6 +1,6 @@
 // src/components/common/JobOrderModal.jsx
 import React, { useState } from 'react';
-import { X, CheckCircle2, UserCheck, Hash, Save } from 'lucide-react';
+import { X, CheckCircle2, UserCheck, Hash, Save, AlertTriangle } from 'lucide-react';
 import { useGoogleAuth } from '../../context/GoogleAuthContext';
 import { useData } from '../../context/DataContext';
 
@@ -23,17 +23,17 @@ export default function JobOrderModal({ customers = [], initialData = null, onSa
   const companyCode = user?.companyCode || '3';
 
   const getInitialSeq = () => {
-    if (initialData?.seq) return initialData.seq;
-    const saved = localStorage.getItem('last_job_sequence_info');
-    if (saved) {
-      try {
+    try {
+      if (initialData?.seq) return initialData.seq;
+      const saved = localStorage.getItem('last_job_sequence_info');
+      if (saved) {
         const parsed = JSON.parse(saved);
-        if (parsed.year === currentYear) {
+        if (parsed && parsed.year === currentYear) {
           return Number(parsed.seq || 277) + 1;
         }
-      } catch (e) {
-        console.error(e);
       }
+    } catch (e) {
+      console.warn('Seq calculation error:', e);
     }
     return 277;
   };
@@ -43,11 +43,15 @@ export default function JobOrderModal({ customers = [], initialData = null, onSa
   const generatedCode = initialData?.code_number || `${userCode} - ${dateYYMMDD} - ${companyCode}${formattedSeq}`;
 
   const getInitialCustomerName = () => {
-    if (initialData?.customer_name) return initialData.customer_name;
-    if (initialData?.customer_id && Array.isArray(customers)) {
-      const found = customers.find(c => c && c.id === initialData.customer_id);
-      if (found) return found.name;
-      return initialData.customer_id;
+    try {
+      if (initialData?.customer_name) return initialData.customer_name;
+      if (initialData?.customer_id && Array.isArray(customers)) {
+        const found = customers.find(c => c && c.id === initialData.customer_id);
+        if (found) return found.name;
+        return initialData.customer_id;
+      }
+    } catch (e) {
+      console.warn('Cust name error:', e);
     }
     return '';
   };
@@ -116,7 +120,8 @@ export default function JobOrderModal({ customers = [], initialData = null, onSa
 
   const handleCustomerNameChange = (typedName) => {
     setCustomerNameInput(typedName);
-    const matched = (customers || []).find(c => c && c.name && c.name.trim() === typedName.trim());
+    const safeCustomers = Array.isArray(customers) ? customers : [];
+    const matched = safeCustomers.find(c => c && c.name && c.name.trim() === typedName.trim());
     if (matched) {
       setFormData(prev => ({
         ...prev,
@@ -154,10 +159,11 @@ export default function JobOrderModal({ customers = [], initialData = null, onSa
 
     try {
       setSubmitting(true);
+      const safeCustomers = Array.isArray(customers) ? customers : [];
       let targetCustId = formData.customer_id;
-      const matched = customers.find(c => c.name.trim() === customerNameInput.trim());
+      const matched = safeCustomers.find(c => c && c.name && c.name.trim() === customerNameInput.trim());
 
-      if (!matched && customerNameInput.trim()) {
+      if (!matched && customerNameInput.trim() && typeof addCustomer === 'function') {
         const newCust = await addCustomer({
           name: customerNameInput.trim(),
           dept: formData.dept || '',
@@ -166,16 +172,20 @@ export default function JobOrderModal({ customers = [], initialData = null, onSa
           email: formData.client_email || '',
           sales_manager: userName,
         });
-        targetCustId = newCust.id;
+        if (newCust && newCust.id) targetCustId = newCust.id;
       } else if (matched) {
         targetCustId = matched.id;
       }
 
       if (!isEditMode) {
-        localStorage.setItem('last_job_sequence_info', JSON.stringify({
-          year: currentYear,
-          seq: seqNumber
-        }));
+        try {
+          localStorage.setItem('last_job_sequence_info', JSON.stringify({
+            year: currentYear,
+            seq: seqNumber
+          }));
+        } catch (e) {
+          console.warn('Storage save error:', e);
+        }
       }
 
       const finalOrderData = {
@@ -184,13 +194,17 @@ export default function JobOrderModal({ customers = [], initialData = null, onSa
         customer_name: customerNameInput.trim(),
       };
 
-      await onSave(finalOrderData);
+      if (typeof onSave === 'function') {
+        await onSave(finalOrderData);
+      }
     } catch (err) {
       alert('저장 에러: ' + err.message);
     } finally {
       setSubmitting(false);
     }
   };
+
+  const safeCustomersList = Array.isArray(customers) ? customers : [];
 
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
@@ -202,9 +216,9 @@ export default function JobOrderModal({ customers = [], initialData = null, onSa
         {/* 상단 모달 헤더 */}
         <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
           <div className="flex items-center space-x-2">
-            <ClipboardList className="w-5 h-5 text-sky-600" />
+            <span className="font-extrabold text-sky-700 bg-sky-100 px-2 py-0.5 rounded text-xs">작업전표</span>
             <h3 className="font-bold text-slate-800 text-base">
-              {isEditMode ? '의뢰 작업전표 수정 (실물 양식 폼)' : '의뢰 작업전표 상세 접수 (실물 양식 폼)'}
+              {isEditMode ? '의뢰 작업전표 수정 (실물 1:1 종이 양식 폼)' : '의뢰 작업전표 상세 접수 (실물 1:1 종이 양식 폼)'}
             </h3>
           </div>
 
@@ -215,7 +229,7 @@ export default function JobOrderModal({ customers = [], initialData = null, onSa
               className="flex items-center space-x-1.5 bg-sky-600 hover:bg-sky-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-sm transition disabled:opacity-50"
             >
               <Save className="w-4 h-4" />
-              <span>{submitting ? '저장 중...' : (isEditMode ? '전표 수정 저장' : '작업전표 접수 완료')}</span>
+              <span>{submitting ? '저장 중...' : (isEditMode ? '전표 수정 저장' : '작업전표 접수 저장')}</span>
             </button>
             <button type="button" onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-xl">
               <X className="w-5 h-5" />
@@ -223,11 +237,11 @@ export default function JobOrderModal({ customers = [], initialData = null, onSa
           </div>
         </div>
 
-        {/* 📄 경성문화사 실물 작업전표 1:1 종이 양식 접수 폼 (PDF 샘플과 100% 동일한 테이블 입력 레이아웃) */}
+        {/* 📄 경성문화사 실물 작업전표 1:1 종이 양식 접수 폼 */}
         <div className="p-6 sm:p-8 overflow-y-auto flex-1 bg-white text-slate-900 font-sans text-xs">
           <div className="bg-white p-4 border border-slate-300 rounded-xl space-y-4">
             
-            {/* 1. 상단 레이아웃: [좌측: 코드번호 박스 & 큰 타이틀 '작 업 전 표'] | [우측: KYUNGSUNG 로고 & 결재란] */}
+            {/* 1. 상단 레이아웃: [좌측: 코드번호 박스 & 큰 타이틀 '작 업 전 표'] | [우측: 공식 KYUNGSUNG 로고 & 결재란] */}
             <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
               
               {/* 좌측: 코드번호 상자 + 작 업 전 표 타이틀 */}
@@ -259,12 +273,10 @@ export default function JobOrderModal({ customers = [], initialData = null, onSa
                 </h1>
               </div>
 
-              {/* 우측: KYUNGSUNG 경성문화사 로고 + 결재란 */}
+              {/* 우측: 공식 KYUNGSUNG 경성문화사 로고 이미지 + 결재란 */}
               <div className="flex flex-col items-end space-y-2 w-full sm:w-auto">
-                <div className="flex items-center space-x-1.5">
-                  <div className="w-4 h-4 bg-sky-600 clip-triangle flex-shrink-0" style={{ clipPath: 'polygon(50% 0%, 0% 100%, 100% 100%)' }}></div>
-                  <span className="font-black text-sky-800 tracking-wider text-base">KYUNGSUNG</span>
-                  <span className="font-extrabold text-black text-sm">경성문화사</span>
+                <div className="flex items-center space-x-1 mb-1">
+                  <img src="/images/kyungsung_logo.svg" alt="경성문화사 로고" className="h-8 object-contain" />
                 </div>
 
                 <div className="border-2 border-black text-center text-[11px] flex bg-white">
@@ -325,7 +337,6 @@ export default function JobOrderModal({ customers = [], initialData = null, onSa
             {/* 3. HWP 양식과 100% 동일한 1:1 실물 표 입력 테이블 */}
             <div className="border-2 border-black divide-y-2 divide-black bg-white">
               
-              {/* 기본 정보 입력 섹션 */}
               <div className="divide-y divide-black">
                 
                 {/* Row 1: 발주처 & 과/부서 */}
@@ -342,8 +353,8 @@ export default function JobOrderModal({ customers = [], initialData = null, onSa
                       className="w-full p-1.5 border border-slate-300 rounded font-bold text-rose-600 text-xs focus:ring-1 focus:ring-sky-500"
                     />
                     <datalist id="job-customer-list">
-                      {(customers || []).map(c => (
-                        <option key={c.id || c.name} value={c.name} />
+                      {safeCustomersList.map(c => (
+                        <option key={c?.id || c?.name} value={c?.name} />
                       ))}
                     </datalist>
                   </div>
@@ -469,7 +480,7 @@ export default function JobOrderModal({ customers = [], initialData = null, onSa
 
               </div>
 
-              {/* 하단 인쇄/용지 사양 입력 섹션 (HWP와 100% 동일) */}
+              {/* 하단 인쇄/용지 사양 입력 섹션 */}
               <div className="divide-y divide-black">
                 
                 {/* Row 6: 표지작업 & 표지용지 */}

@@ -114,12 +114,10 @@ export default function JobOrderPrintModal({ order, customer, onClose }) {
                 </h1>
               </div>
 
-              {/* 우측: KYUNGSUNG 경성문화사 로고 + 결재란 */}
+              {/* 우측: 공식 KYUNGSUNG 경성문화사 로고 이미지 + 결재란 */}
               <div className="flex flex-col items-end space-y-2">
-                <div className="flex items-center space-x-1.5">
-                  <div className="w-4 h-4 bg-sky-600 clip-triangle flex-shrink-0" style={{ clipPath: 'polygon(50% 0%, 0% 100%, 100% 100%)' }}></div>
-                  <span className="font-black text-sky-800 tracking-wider text-base">KYUNGSUNG</span>
-                  <span className="font-extrabold text-black text-sm">경성문화사</span>
+                <div className="flex items-center space-x-1 mb-1">
+                  <img src="/images/kyungsung_logo.svg" alt="경성문화사 로고" className="h-8 object-contain" />
                 </div>
 
                 <div className="border-2 border-black text-center text-[11px] flex bg-white">

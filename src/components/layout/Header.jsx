@@ -23,9 +23,7 @@ export default function Header() {
   return (
     <header className="bg-white border-b border-slate-200 sticky top-0 z-30 px-4 py-3 sm:px-6 flex items-center justify-between shadow-sm">
       <div className="flex items-center space-x-3">
-        <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-sky-600 to-blue-500 flex items-center justify-center text-white font-bold shadow-md shadow-sky-100">
-          <Building2 className="w-6 h-6" />
-        </div>
+        <img src="/images/kyungsung_logo.svg" alt="경성문화사 로고" className="h-9 object-contain" />
         <div>
           <div className="flex items-center space-x-2">
             <h1 className="text-lg font-bold text-slate-800 leading-tight">영업미수관리 PWA</h1>

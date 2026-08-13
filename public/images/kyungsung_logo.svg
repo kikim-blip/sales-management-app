@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 450 120" width="100%" height="100%">
+  <g transform="translate(10, 15)">
+    <!-- Main Italic Bold KyungSung Text -->
+    <text x="0" y="85" font-family="'Arial Black', 'Trebuchet MS', sans-serif" font-size="78" font-weight="900" font-style="italic" fill="#0252b8" letter-spacing="-1.5">KyungSung</text>
+    
+    <!-- Top Right Emblem (Light Blue & Dark Blue & Gray Triangles) -->
+    <g transform="translate(225, 5) scale(1.1)">
+      <!-- Top Gray Wing -->
+      <path d="M 25,25 Q 18,5 35,0 Q 42,15 25,25 Z" fill="#b0c4de"/>
+      <!-- Main Light Blue Wing -->
+      <path d="M 15,10 Q 30,0 45,15 Q 35,35 15,10 Z" fill="#29b6f6"/>
+      <!-- Right Deep Blue Wing -->
+      <path d="M 32,15 Q 52,20 40,40 Q 25,30 32,15 Z" fill="#0277bd"/>
+    </g>
+    
+    <!-- Right Korean Text: 경성문화사 -->
+    <text x="260" y="82" font-family="'Malgun Gothic', 'Noto Sans KR', sans-serif" font-size="44" font-weight="900" fill="#374151" letter-spacing="-1">경성문화사</text>
+  </g>
+</svg>
