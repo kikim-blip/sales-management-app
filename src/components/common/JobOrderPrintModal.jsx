@@ -315,7 +315,19 @@ export default function JobOrderPrintModal({ order, customer, onClose }) {
                   <div className="col-span-10 p-2 text-rose-600 font-semibold min-h-[36px]">{v(order.inner_related)}</div>
                 </div>
 
-                {/* Row 18: <요청사항> */}
+                {/* Row 18: <표지관련> & <내지관련> 양옆 나란히 반반 박스 (PDF 샘플과 100% 동일) */}
+                <div className="grid grid-cols-2 divide-x divide-black border-b border-black min-h-[75px]">
+                  <div className="p-2 space-y-1">
+                    <p className="font-bold text-black text-[11px]">&lt;표지관련&gt;</p>
+                    <p className="text-rose-600 whitespace-pre-wrap font-semibold">{v(order.cover_related)}</p>
+                  </div>
+                  <div className="p-2 space-y-1">
+                    <p className="font-bold text-black text-[11px]">&lt;내지관련&gt;</p>
+                    <p className="text-rose-600 whitespace-pre-wrap font-semibold">{v(order.inner_related)}</p>
+                  </div>
+                </div>
+
+                {/* Row 19: <요청사항> */}
                 <div className="p-3 min-h-[90px]">
                   <p className="font-bold text-black mb-1.5 text-[11px]">&lt;요청사항&gt;</p>
                   <p className="text-rose-600 whitespace-pre-wrap font-semibold leading-relaxed">{v(order.request_note)}</p>
