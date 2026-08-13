@@ -3,6 +3,8 @@ import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { LayoutDashboard, Users, ClipboardList, FileSpreadsheet, CreditCard, Shield } from 'lucide-react';
 
+import { useGoogleAuth } from '../../context/GoogleAuthContext';
+
 const navItems = [
   { name: '대시보드', path: '/', icon: LayoutDashboard },
   { name: '작업전표', path: '/job-orders', icon: ClipboardList },
@@ -12,9 +14,19 @@ const navItems = [
 ];
 
 export default function BottomNav() {
+  const { user } = useGoogleAuth();
+  const isAdmin = user?.role === '관리자' || user?.email?.toLowerCase() === 'richkikim@gmail.com';
+
+  const visibleNavItems = navItems.filter(item => {
+    if (item.path === '/staffs') {
+      return isAdmin;
+    }
+    return true;
+  });
+
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-200 z-40 px-1 py-1 flex justify-around shadow-lg">
-      {navItems.map((item) => {
+      {visibleNavItems.map((item) => {
         const Icon = item.icon;
         return (
           <NavLink

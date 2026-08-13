@@ -13,8 +13,7 @@ export default function StaffManagementPage() {
   const [editingStaff, setEditingStaff] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const currentUserRole = user?.role || '관리자'; // 기본 관리자 권한
-  const isAdmin = currentUserRole === '관리자' || user?.userCode === '44';
+  const isAdmin = user?.role === '관리자' || user?.email?.toLowerCase() === 'richkikim@gmail.com';
 
   const defaultForm = {
     dept: user?.dept || '영업1팀',
@@ -24,6 +23,7 @@ export default function StaffManagementPage() {
     companyCode: '3',
     role: '일반사원',
     status: '승인완료',
+    email: '',
   };
 
   const [formData, setFormData] = useState(defaultForm);
@@ -44,6 +44,7 @@ export default function StaffManagementPage() {
       companyCode: s.companyCode || '3',
       role: s.role || '일반사원',
       status: s.status || '승인완료',
+      email: s.email || '',
     });
     setShowModal(true);
   };
@@ -329,6 +330,17 @@ export default function StaffManagementPage() {
                     className="w-full p-2 border border-slate-200 rounded-xl font-mono"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">구글 로그인 계정 (이메일)</label>
+                <input
+                  type="email"
+                  placeholder="예: user@gmail.com"
+                  value={formData.email}
+                  onChange={e => setFormData({ ...formData, email: e.target.value })}
+                  className="w-full p-2 border border-slate-200 rounded-xl font-mono text-xs"
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-3">

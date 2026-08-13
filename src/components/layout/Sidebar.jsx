@@ -17,12 +17,21 @@ export default function Sidebar() {
   const { user } = useGoogleAuth();
   const [showProfileModal, setShowProfileModal] = useState(false);
 
+  const isAdmin = user?.role === '관리자' || user?.email?.toLowerCase() === 'richkikim@gmail.com';
+
+  const visibleNavItems = navItems.filter(item => {
+    if (item.path === '/staffs') {
+      return isAdmin;
+    }
+    return true;
+  });
+
   return (
     <aside className="hidden md:flex flex-col justify-between w-64 bg-white border-r border-slate-200 min-h-[calc(100vh-65px)] p-4">
       <div>
         <div className="text-xs font-semibold text-slate-400 mb-4 px-3 tracking-wider uppercase">메인 메뉴</div>
         <nav className="space-y-1">
-          {navItems.map((item) => {
+          {visibleNavItems.map((item) => {
             const Icon = item.icon;
             return (
               <NavLink

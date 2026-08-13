@@ -15,12 +15,14 @@ import StaffManagementPage from './pages/StaffManagementPage';
 import LoginPage from './pages/LoginPage';
 
 export default function App() {
-  const { isLoggedIn } = useGoogleAuth();
+  const { isLoggedIn, user } = useGoogleAuth();
 
   // 💡 최초 접속 시 로그인되지 않은 사용자는 메인 화면을 숨기고 로그인 & 회원가입 신청 게이트만 표시!
   if (!isLoggedIn) {
     return <LoginPage />;
   }
+
+  const isAdmin = user?.role === '관리자' || user?.email?.toLowerCase() === 'richkikim@gmail.com';
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">
@@ -39,7 +41,7 @@ export default function App() {
             <Route path="/job-orders" element={<JobOrderPage />} />
             <Route path="/sales" element={<SalesPage />} />
             <Route path="/payments" element={<PaymentPage />} />
-            <Route path="/staffs" element={<StaffManagementPage />} />
+            <Route path="/staffs" element={isAdmin ? <StaffManagementPage /> : <div className="text-center py-20 font-bold text-slate-400">접근 권한이 없습니다. 관리자만 이용할 수 있는 메뉴입니다.</div>} />
           </Routes>
         </main>
       </div>
