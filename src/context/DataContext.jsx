@@ -295,9 +295,9 @@ export function DataProvider({ children }) {
       finalData.userName,
       finalData.companyCode,
       finalData.email || user?.email || '',
-      finalData.dept || '기획예산부',
+      finalData.dept || '',
       finalData.position || '담당자',
-      finalData.team || finalData.dept || '영업1팀',
+      finalData.team || finalData.dept || '',
       finalData.role || '일반사원',
       finalData.status || '승인완료',
     ];

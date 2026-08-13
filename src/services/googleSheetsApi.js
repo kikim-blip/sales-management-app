@@ -218,17 +218,19 @@ export function parsePayments(rows) {
 }
 
 export function parseStaffs(rows) {
-  return rows.map((row) => ({
-    userCode: String(row[0] || ''),
-    userName: String(row[1] || ''),
-    companyCode: String(row[2] || ''),
-    email: String(row[3] || '').trim().toLowerCase(),
-    dept: String(row[4] || ''),
-    position: String(row[5] || '담당자'),
-    team: String(row[6] || row[4] || '영업1팀'),
-    role: String(row[7] || '일반사원'),
-    status: String(row[8] || '승인완료'),
-  }));
+  return rows
+    .map((row) => ({
+      userCode: String(row[0] || ''),
+      userName: String(row[1] || ''),
+      companyCode: String(row[2] || ''),
+      email: String(row[3] || '').trim().toLowerCase(),
+      dept: String(row[4] || ''),
+      position: String(row[5] || '담당자'),
+      team: String(row[6] || row[4] || ''),
+      role: String(row[7] || '일반사원'),
+      status: String(row[8] || '승인완료'),
+    }))
+    .filter((s) => s.userName || s.userCode || s.email);
 }
 
 export function parseJobOrders(rows) {

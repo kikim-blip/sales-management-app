@@ -13,8 +13,8 @@ export default function UserProfileModal({ onClose }) {
     userName: user?.userName || '김광일',
     companyCode: user?.companyCode || '3',
     email: user?.email || '',
-    dept: user?.dept || '영업1팀',
-    team: user?.team || user?.dept || '영업1팀',
+    dept: user?.dept || '',
+    team: user?.team || user?.dept || '',
   });
 
   const handleSubmit = async (e) => {
