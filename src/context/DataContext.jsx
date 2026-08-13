@@ -294,7 +294,7 @@ export function DataProvider({ children }) {
 
     if (isLoggedIn && accessToken) {
       try {
-        const index = staffs.findIndex(s => s.email === profileData.email?.toLowerCase());
+        const index = staffs.findIndex(s => (s.userCode && s.userCode === profileData.userCode) || (s.email && s.email === profileData.email?.toLowerCase()));
         if (index !== -1) {
           const rowIndex = index + 2;
           await updateSheetRow(accessToken, '05_사원관리', rowIndex, row);
@@ -307,7 +307,7 @@ export function DataProvider({ children }) {
     }
 
     setStaffs(prev => {
-      const idx = prev.findIndex(s => s.email === profileData.email?.toLowerCase());
+      const idx = prev.findIndex(s => (s.userCode && s.userCode === profileData.userCode) || (s.email && s.email === profileData.email?.toLowerCase()));
       let next;
       if (idx !== -1) {
         next = [...prev];
@@ -315,6 +315,31 @@ export function DataProvider({ children }) {
       } else {
         next = [...prev, profileData];
       }
+      saveCache('staffs', next);
+      return next;
+    });
+  };
+
+  const deleteStaff = async (targetUserCodeOrEmail) => {
+    const index = staffs.findIndex(s => 
+      s.userCode === targetUserCodeOrEmail || 
+      s.code === targetUserCodeOrEmail || 
+      (s.userName && s.userName === targetUserCodeOrEmail) ||
+      (s.email && s.email.toLowerCase() === String(targetUserCodeOrEmail).toLowerCase())
+    );
+    if (index === -1) return;
+    const rowIndex = index + 2;
+
+    if (isLoggedIn && accessToken) {
+      try {
+        await clearSheetRow(accessToken, '05_사원관리', rowIndex);
+      } catch (err) {
+        console.error('사원 삭제 에러:', err);
+      }
+    }
+
+    setStaffs(prev => {
+      const next = prev.filter((_, i) => i !== index);
       saveCache('staffs', next);
       return next;
     });
@@ -547,6 +572,7 @@ export function DataProvider({ children }) {
         setSelectedTeamGroup,
         refreshData: (force = true) => fetchAllData(force),
         saveStaffToSheet,
+        deleteStaff,
         addJobOrder,
         updateJobOrder,
         deleteJobOrder,

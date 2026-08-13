@@ -5,7 +5,7 @@ import { useGoogleAuth } from '../context/GoogleAuthContext';
 import { Users, UserPlus, Shield, CheckCircle2, XCircle, Clock, Search, Pencil, Trash2, KeyRound } from 'lucide-react';
 
 export default function StaffManagementPage() {
-  const { staffs, saveStaffToSheet, selectedTeamGroup } = useData();
+  const { staffs, saveStaffToSheet, deleteStaff, selectedTeamGroup } = useData();
   const { user } = useGoogleAuth();
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -74,6 +74,20 @@ export default function StaffManagementPage() {
       alert(`[${staffItem.userName}] 사원의 가입 상태가 [${newStatus}] 처리되었습니다.`);
     } catch (err) {
       alert('승인 처리 실패: ' + err.message);
+    }
+  };
+
+  // 💡 사원 삭제 처리
+  const handleDeleteStaffItem = async (s) => {
+    if (!isAdmin) return alert('관리자만 사원 삭제 권한이 있습니다.');
+    const sName = s.userName || s.name || '';
+    const sCode = s.userCode || s.code || '';
+    if (!window.confirm(`정말 사원 [${sName} (${sCode})] 정보를 DB에서 완전히 삭제하시겠습니까?`)) return;
+    try {
+      await deleteStaff(sCode || sName || s.email);
+      alert(`[${sName}] 사원 정보가 DB에서 성공적으로 삭제되었습니다.`);
+    } catch (err) {
+      alert('삭제 에러: ' + err.message);
     }
   };
 
@@ -223,10 +237,17 @@ export default function StaffManagementPage() {
                             )}
                             <button
                               onClick={() => openEditModal(s)}
-                              className="p-1 text-slate-400 hover:text-sky-600 rounded-lg"
+                              className="p-1 text-slate-400 hover:text-sky-600 hover:bg-sky-50 rounded-lg transition"
                               title="정보 수정"
                             >
                               <Pencil className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteStaffItem(s)}
+                              className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                              title="사원 정보 완전 삭제"
+                            >
+                              <Trash2 className="w-4 h-4" />
                             </button>
                           </div>
                         </td>
