@@ -8,10 +8,11 @@ import { useGoogleAuth } from '../../context/GoogleAuthContext';
 const navItems = [
   { name: '현황', path: '/', icon: LayoutDashboard },
   { name: '작업전표', path: '/job-orders', icon: ClipboardList },
-  { name: '매출', path: '/sales', icon: FileSpreadsheet },
-  { name: '거래처', path: '/customers', icon: Users },
+  { name: '매출관리', path: '/sales', icon: FileSpreadsheet },
+  { name: '고객관리', path: '/customers', icon: Users },
   { name: '사용자', path: '/staffs', icon: Shield },
 ];
+
 
 export default function BottomNav() {
   const { user } = useGoogleAuth();
