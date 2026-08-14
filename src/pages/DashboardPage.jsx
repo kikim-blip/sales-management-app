@@ -726,7 +726,7 @@ export default function DashboardPage() {
           </button>
         </div>
 
-        <div className="divide-y divide-slate-100 max-h-[520px] overflow-y-auto">
+        <div className="divide-y divide-slate-100 min-h-[650px] max-h-[780px] overflow-y-auto">
           {urgentDeliveryList.length === 0 ? (
             <div className="p-8 text-center text-slate-400 text-xs">
               등록된 납품 일정이 없습니다.
