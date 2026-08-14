@@ -299,7 +299,8 @@ export function parseSales(rows) {
     title: String(row[6] || ''),
     content: String(row[7] || ''),
     note: String(row[8] || ''),
-    billing_schedule: String(row[9] || '청구완료'),
+    billing_schedule: String(row[9] || '진행중'),
+
     type: String(row[10] || '매출'),
     supply_price: Number(String(row[11]).replace(/[^0-9.-]+/g, '')) || 0,
     tax: Number(String(row[12]).replace(/[^0-9.-]+/g, '')) || 0,
