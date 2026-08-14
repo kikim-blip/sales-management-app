@@ -2,14 +2,15 @@
 import React, { useState } from 'react';
 import { useData } from '../context/DataContext';
 import { useGoogleAuth } from '../context/GoogleAuthContext';
-import { AlertCircle, FileText, RefreshCw, ChevronRight, Clock, AlertTriangle, Calendar, Printer, CheckCircle2, Users, Share2, Zap, Pencil, Truck, XCircle } from 'lucide-react';
+import { AlertCircle, FileText, RefreshCw, ChevronRight, Clock, AlertTriangle, Calendar, Printer, CheckCircle2, Users, Share2, Zap, Pencil, Truck, XCircle, Plus, Search } from 'lucide-react';
 import CustomerDetailModal from '../components/common/CustomerDetailModal';
 import JobOrderPrintModal from '../components/common/JobOrderPrintModal';
 import JobOrderModal from '../components/common/JobOrderModal';
 
 export default function DashboardPage() {
-  const { customers, sales, payments, jobOrders, loading, error, selectedTeamGroup, updateJobOrder, updateSales } = useData();
+  const { customers, sales, payments, jobOrders, loading, error, selectedTeamGroup, updateJobOrder, updateSales, addSales, addCustomer } = useData();
   const { user } = useGoogleAuth();
+
   
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [printingOrder, setPrintingOrder] = useState(null);
@@ -258,6 +259,154 @@ export default function DashboardPage() {
     }
   };
 
+  // 💡 대시보드 직접 신규 매출/견적 등록 상태
+  const loggedInUserName = user?.name || '관리자';
+  const [showNewSaleModal, setShowNewSaleModal] = useState(false);
+  const [submittingSale, setSubmittingSale] = useState(false);
+  const [customerNameInput, setCustomerNameInput] = useState('');
+  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
+
+  const defaultNewSaleForm = {
+    reg_date: todayStr,
+    receipt_date: todayStr,
+    customer_id: '',
+    customer_name: '',
+    dept: selectedTeamGroup && selectedTeamGroup !== 'ALL' ? selectedTeamGroup : '',
+    contact_person: '',
+    phone: '',
+    email: '',
+    sales_manager: loggedInUserName,
+    title: '',
+    content: '',
+    note: '',
+    delivery_date: todayStr,
+    delivery_time: '14:00',
+    supply_price: '',
+    tax: 0,
+    total_price: '',
+    billing_schedule: '진행중',
+    type: '매출',
+    calendar_synced: false,
+    superthread_synced: false,
+  };
+
+  const [newSaleFormData, setNewSaleFormData] = useState(defaultNewSaleForm);
+
+  const openNewSaleModal = () => {
+    setNewSaleFormData(defaultNewSaleForm);
+    setCustomerNameInput('');
+    setShowCustomerDropdown(false);
+    setShowNewSaleModal(true);
+  };
+
+  // 공급가액 입력 시 -> 부가세(10%) 및 총 청구금액 자동 계산
+  const handleNewSalePriceChange = (val) => {
+    if (val === '') {
+      setNewSaleFormData(prev => ({
+        ...prev,
+        supply_price: '',
+        tax: 0,
+        total_price: '',
+      }));
+      return;
+    }
+    const supply = Number(val) || 0;
+    const tax = Math.round(supply * 0.1);
+    setNewSaleFormData(prev => ({
+      ...prev,
+      supply_price: supply,
+      tax: tax,
+      total_price: supply + tax,
+    }));
+  };
+
+  // 총 청구금액(VAT 포함) 입력 시 -> 공급가액 및 부가세(10%) 자동 역산
+  const handleNewSaleTotalPriceChange = (val) => {
+    if (val === '') {
+      setNewSaleFormData(prev => ({
+        ...prev,
+        total_price: '',
+        supply_price: '',
+        tax: 0,
+      }));
+      return;
+    }
+    const total = Number(val) || 0;
+    const supply = Math.round(total / 1.1);
+    const tax = total - supply;
+    setNewSaleFormData(prev => ({
+      ...prev,
+      total_price: total,
+      supply_price: supply,
+      tax: tax,
+    }));
+  };
+
+  // 고객 선택 핸들러
+  const handleSelectCustomer = (cust) => {
+    setCustomerNameInput(cust.name);
+    setNewSaleFormData(prev => ({
+      ...prev,
+      customer_id: cust.id,
+      customer_name: cust.name,
+      dept: cust.dept || prev.dept,
+      contact_person: cust.contact_person || '',
+      phone: cust.phone || '',
+      email: cust.email || '',
+      sales_manager: cust.sales_manager || loggedInUserName,
+    }));
+    setShowCustomerDropdown(false);
+  };
+
+  // 신규 매출 제출 핸들러
+  const handleSubmitNewSale = async (e) => {
+    e.preventDefault();
+    const custName = (customerNameInput || newSaleFormData.customer_name || '').trim();
+    if (!custName) return alert('고객사명을 입력하거나 선택해 주세요.');
+    if (!newSaleFormData.title) return alert('작업명을 입력해 주세요.');
+
+    try {
+      setSubmittingSale(true);
+      let targetCustomerId = newSaleFormData.customer_id;
+
+      const matchedCust = customers.find(c => 
+        (targetCustomerId && c.id === targetCustomerId) ||
+        ((c.name || '').trim().toLowerCase() === custName.toLowerCase() && 
+         (c.dept || '').trim().toLowerCase() === (newSaleFormData.dept || '').trim().toLowerCase())
+      );
+
+      if (!matchedCust) {
+        const newCustData = {
+          name: custName,
+          dept: newSaleFormData.dept || '',
+          contact_person: newSaleFormData.contact_person || '',
+          phone: newSaleFormData.phone || '',
+          email: newSaleFormData.email || '',
+          sales_manager: newSaleFormData.sales_manager || loggedInUserName,
+        };
+        const savedCust = await addCustomer(newCustData);
+        targetCustomerId = savedCust?.id || `CUST-${Date.now()}`;
+      } else {
+        targetCustomerId = matchedCust.id;
+      }
+
+      const salePayload = {
+        ...newSaleFormData,
+        customer_id: targetCustomerId,
+        customer_name: custName,
+      };
+
+      await addSales(salePayload);
+      alert(!matchedCust ? '신규 고객 정보가 함께 저장되고, 매출이 등록되었습니다!' : '신규 매출이 정상 등록되었습니다!');
+      setShowNewSaleModal(false);
+    } catch (err) {
+      alert('저장 에러: ' + err.message);
+    } finally {
+      setSubmittingSale(false);
+    }
+  };
+
+
 
   if (loading) {
     return (
@@ -333,13 +482,25 @@ export default function DashboardPage() {
 
       {/* 🚨 1. 실시간 납품 일정 급건 순서 리스트 (원하는 건별 캘린더/슈퍼스레드/전표수정/인쇄 버튼 탑재) */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-900 text-white">
-          <div className="flex items-center space-x-2">
+        <div className="px-5 py-3.5 border-b border-slate-100 flex justify-between items-center bg-slate-900 text-white">
+          <div className="flex items-center space-x-2.5">
             <Clock className="w-5 h-5 text-amber-400 animate-pulse" />
             <h3 className="font-bold text-sm text-white">납품 일정</h3>
+            <span className="text-[11px] font-bold text-slate-300 bg-slate-800 px-2 py-0.5 rounded-full border border-slate-700">
+              {urgentDeliveryList.length}건
+            </span>
           </div>
-          <span className="text-xs font-semibold text-slate-300">{urgentDeliveryList.length}건</span>
+
+          <button
+            onClick={openNewSaleModal}
+            className="flex items-center space-x-1.5 bg-sky-600 hover:bg-sky-500 text-white px-3 py-1.5 rounded-xl text-xs font-bold shadow-sm transition active:scale-95 border border-sky-400/30"
+            title="신규 매출/견적 수동 등록 팝업 열기"
+          >
+            <Plus className="w-4 h-4" />
+            <span>신규 매출/견적 등록</span>
+          </button>
         </div>
+
 
         <div className="divide-y divide-slate-100 max-h-[420px] overflow-y-auto">
           {urgentDeliveryList.length === 0 ? (
@@ -628,6 +789,277 @@ export default function DashboardPage() {
                 className="px-4 py-2 rounded-xl text-xs font-medium bg-sky-600 text-white hover:bg-sky-700 shadow-sm"
               >
                 변경사항 저장
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* 💡 대시보드 신규 매출/견적 수동 등록 모달 */}
+
+      {showNewSaleModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <form onSubmit={handleSubmitNewSale} className="bg-white w-full max-w-lg rounded-2xl shadow-xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <div className="flex items-center space-x-2">
+                <div className="w-8 h-8 rounded-xl bg-sky-100 text-sky-700 flex items-center justify-center font-bold">
+                  <Plus className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-800 text-sm">신규 매출/견적 수동 등록</h3>
+                  <p className="text-[11px] text-slate-400 font-medium">대시보드 빠른 접수</p>
+                </div>
+              </div>
+              <button 
+                type="button" 
+                onClick={() => setShowNewSaleModal(false)} 
+                className="text-slate-400 hover:text-slate-700"
+              >
+                <XCircle className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex space-x-4 text-xs font-bold text-slate-700">
+              <label className="flex items-center space-x-1.5 cursor-pointer">
+                <input
+                  type="radio"
+                  name="dashboardSaleType"
+                  value="매출"
+                  checked={newSaleFormData.type === '매출'}
+                  onChange={e => setNewSaleFormData({ ...newSaleFormData, type: e.target.value })}
+                  className="text-sky-600 focus:ring-sky-500"
+                />
+                <span>매출 건</span>
+              </label>
+              <label className="flex items-center space-x-1.5 cursor-pointer">
+                <input
+                  type="radio"
+                  name="dashboardSaleType"
+                  value="견적"
+                  checked={newSaleFormData.type === '견적'}
+                  onChange={e => setNewSaleFormData({ ...newSaleFormData, type: e.target.value })}
+                  className="text-sky-600 focus:ring-sky-500"
+                />
+                <span>견적 건</span>
+              </label>
+            </div>
+
+            {/* 거래처 정보 입력 영역 */}
+            <div className="bg-slate-50/70 p-3.5 rounded-xl border border-slate-200/80 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-700 flex items-center space-x-1">
+                  <span>🏢 고객(거래처) 정보</span>
+                </span>
+                <span className="text-[11px] text-sky-600 font-semibold">+ 저장 시 신규 고객 자동 등록</span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* 1. 고객사명 실시간 검색 드롭다운 */}
+                <div className="relative">
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">고객사명 *</label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="고객사명 검색 또는 직접 입력"
+                      value={customerNameInput}
+                      onChange={e => {
+                        setCustomerNameInput(e.target.value);
+                        setNewSaleFormData({ ...newSaleFormData, customer_name: e.target.value });
+                        setShowCustomerDropdown(true);
+                      }}
+                      onFocus={() => setShowCustomerDropdown(true)}
+                      className="w-full p-2.5 pr-7 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                    />
+                    {customerNameInput && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCustomerNameInput('');
+                          setNewSaleFormData({
+                            ...newSaleFormData,
+                            customer_id: '',
+                            customer_name: '',
+                            dept: '',
+                            contact_person: '',
+                            phone: '',
+                            email: '',
+                          });
+                        }}
+                        className="absolute right-2 top-2.5 text-slate-400 hover:text-slate-600 text-xs font-bold"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+
+                  {showCustomerDropdown && customerNameInput.trim() && (
+                    <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto divide-y divide-slate-100 text-xs">
+                      {customers
+                        .filter(c => 
+                          (c.name || '').toLowerCase().includes(customerNameInput.toLowerCase()) ||
+                          (c.dept || '').toLowerCase().includes(customerNameInput.toLowerCase()) ||
+                          (c.contact_person || '').toLowerCase().includes(customerNameInput.toLowerCase())
+                        )
+                        .map(c => (
+                          <div
+                            key={c.id}
+                            onClick={() => handleSelectCustomer(c)}
+                            className="p-2.5 hover:bg-sky-50 cursor-pointer flex flex-col"
+                          >
+                            <span className="font-bold text-slate-800">{c.name} {c.dept ? `(${c.dept})` : ''}</span>
+                            <span className="text-[11px] text-slate-400">
+                              {c.contact_person ? `담당: ${c.contact_person}` : ''} {c.phone ? `| ${c.phone}` : ''}
+                            </span>
+                          </div>
+                        ))}
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">과/부서명</label>
+                  <input
+                    type="text"
+                    placeholder="예: 해상풍력발전위원회"
+                    value={newSaleFormData.dept}
+                    onChange={e => setNewSaleFormData({ ...newSaleFormData, dept: e.target.value })}
+                    className="w-full p-2.5 border border-slate-200 rounded-xl text-xs"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">담당자 성명</label>
+                  <input
+                    type="text"
+                    placeholder="담당자 이름"
+                    value={newSaleFormData.contact_person}
+                    onChange={e => setNewSaleFormData({ ...newSaleFormData, contact_person: e.target.value })}
+                    className="w-full p-2.5 border border-slate-200 rounded-xl text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">담당자 연락처</label>
+                  <input
+                    type="text"
+                    placeholder="010-0000-0000"
+                    value={newSaleFormData.phone}
+                    onChange={e => setNewSaleFormData({ ...newSaleFormData, phone: e.target.value })}
+                    className="w-full p-2.5 border border-slate-200 rounded-xl text-xs"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* 작업 정보 */}
+            <div className="space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">작업명 (제목) *</label>
+                  <input
+                    type="text"
+                    placeholder="작업 제목 입력"
+                    value={newSaleFormData.title}
+                    onChange={e => setNewSaleFormData({ ...newSaleFormData, title: e.target.value })}
+                    className="w-full p-2.5 border border-slate-200 rounded-xl text-xs font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">진행 상태</label>
+                  <select
+                    value={newSaleFormData.billing_schedule}
+                    onChange={e => setNewSaleFormData({ ...newSaleFormData, billing_schedule: e.target.value })}
+                    className="w-full p-2.5 border border-slate-200 rounded-xl text-xs font-bold text-slate-800"
+                  >
+                    <option value="진행중">⏳ 진행중</option>
+                    <option value="납품완료">🚚 납품완료</option>
+                    <option value="청구완료">✅ 청구완료 (수금완료)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* 금액 양방향 자동 계산 */}
+              <div className="space-y-1.5">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">공급가액 (원)</label>
+                    <input
+                      type="number"
+                      placeholder="0"
+                      value={newSaleFormData.supply_price}
+                      onChange={e => handleNewSalePriceChange(e.target.value)}
+                      className="w-full p-2.5 border border-slate-200 rounded-xl text-xs font-semibold focus:border-sky-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">총 청구금액 (VAT포함)</label>
+                    <input
+                      type="number"
+                      placeholder="0"
+                      value={newSaleFormData.total_price}
+                      onChange={e => handleNewSaleTotalPriceChange(e.target.value)}
+                      className="w-full p-2.5 bg-sky-50/40 border border-sky-200 rounded-xl font-bold text-sky-800 text-xs focus:border-sky-500"
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-between items-center text-[11px] text-slate-400 px-1">
+                  <span>💡 공급가액 또는 총액 중 하나만 입력해도 자동 계산</span>
+                  {Number(newSaleFormData.tax) > 0 && (
+                    <span className="font-semibold text-sky-700 bg-sky-50 px-2 py-0.5 rounded border border-sky-100">
+                      부가세: ₩{Number(newSaleFormData.tax).toLocaleString()}원
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">납품 예정일</label>
+                  <input
+                    type="date"
+                    value={newSaleFormData.delivery_date}
+                    onChange={e => setNewSaleFormData({ ...newSaleFormData, delivery_date: e.target.value })}
+                    className="w-full p-2.5 border border-slate-200 rounded-xl text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">납품 시간</label>
+                  <input
+                    type="time"
+                    value={newSaleFormData.delivery_time}
+                    onChange={e => setNewSaleFormData({ ...newSaleFormData, delivery_time: e.target.value })}
+                    className="w-full p-2.5 border border-slate-200 rounded-xl text-xs"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">작업 상세 내용</label>
+                <textarea
+                  rows={2}
+                  placeholder="작업 상세 내용 입력"
+                  value={newSaleFormData.content}
+                  onChange={e => setNewSaleFormData({ ...newSaleFormData, content: e.target.value })}
+                  className="w-full p-2.5 border border-slate-200 rounded-xl text-xs"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end space-x-2 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setShowNewSaleModal(false)}
+                className="px-4 py-2 rounded-xl text-xs font-medium text-slate-500 hover:bg-slate-100"
+              >
+                취소
+              </button>
+              <button
+                type="submit"
+                disabled={submittingSale}
+                className="px-4 py-2 rounded-xl text-xs font-medium bg-sky-600 text-white hover:bg-sky-700 disabled:opacity-50 shadow-sm"
+              >
+                {submittingSale ? '저장 중...' : '저장하기'}
               </button>
             </div>
           </form>
