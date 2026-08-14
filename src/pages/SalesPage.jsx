@@ -412,6 +412,8 @@ export default function SalesPage() {
     try {
       setSubmitting(true);
 
+      let targetCustomerId = '';
+
       // 1. 기존 고객 목록에서 동일한 고객사명 + 부서 + 담당자 성명이 모두 일치하는지 확인
       const inputName = custName.toLowerCase();
       const inputDept = (formData.dept || '').trim().toLowerCase();
@@ -439,6 +441,7 @@ export default function SalesPage() {
       } else {
         targetCustomerId = matchedCust.id;
       }
+
 
 
       const salePayload = {
@@ -920,10 +923,27 @@ export default function SalesPage() {
                         <h3 className="font-bold text-slate-800 text-base">{item.title}</h3>
                         {renderStatusBadge(item.billing_schedule)}
                       </div>
-                      <p className="text-xs font-semibold text-sky-600 mt-1">
-                        발주처: {cust ? `${cust.name} (${cust.dept || '부서 미지정'})` : item.customer_name}
+                      <p className="text-xs font-bold text-sky-700 mt-1">
+                        발주처: {cust ? `${cust.name}${cust.dept ? ` (${cust.dept})` : ''}` : (item.customer_name || '미지정')}
                       </p>
+                      {/* 💡 발주처 밑 담당자 이름, 연락처, 이메일, 영업담당자 표시 */}
+                      {(() => {
+                        const contactPerson = cust?.contact_person || item.contact_person || '';
+                        const phone = cust?.phone || item.phone || '';
+                        const email = cust?.email || item.email || '';
+                        const manager = item.sales_manager || cust?.sales_manager || '';
+                        if (!contactPerson && !phone && !email && !manager) return null;
+                        return (
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-slate-600 mt-0.5 font-medium">
+                            {contactPerson && <span>👤 담당: <strong className="text-slate-800">{contactPerson}</strong></span>}
+                            {phone && <span>📞 {phone}</span>}
+                            {email && <span>✉️ {email}</span>}
+                            {manager && <span className="text-rose-600 font-semibold">💼 영업: {manager}</span>}
+                          </div>
+                        );
+                      })()}
                     </div>
+
 
                     <div className="flex flex-col items-end space-y-1">
                       <span className="text-lg font-black text-slate-900">₩ {(item.total_price || 0).toLocaleString()} 원</span>
@@ -1063,10 +1083,27 @@ export default function SalesPage() {
                           <h3 className="font-bold text-slate-800 text-base">{item.title}</h3>
                           {renderStatusBadge(item.billing_schedule)}
                         </div>
-                        <p className="text-xs font-semibold text-sky-600 mt-1">
-                          발주처: {cust ? `${cust.name} (${cust.dept || '부서 미지정'})` : item.customer_name}
+                        <p className="text-xs font-bold text-sky-700 mt-1">
+                          발주처: {cust ? `${cust.name}${cust.dept ? ` (${cust.dept})` : ''}` : (item.customer_name || '미지정')}
                         </p>
+                        {/* 💡 발주처 밑 담당자 이름, 연락처, 이메일, 영업담당자 표시 */}
+                        {(() => {
+                          const contactPerson = cust?.contact_person || item.contact_person || '';
+                          const phone = cust?.phone || item.phone || '';
+                          const email = cust?.email || item.email || '';
+                          const manager = item.sales_manager || cust?.sales_manager || '';
+                          if (!contactPerson && !phone && !email && !manager) return null;
+                          return (
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-slate-600 mt-0.5 font-medium">
+                              {contactPerson && <span>👤 담당: <strong className="text-slate-800">{contactPerson}</strong></span>}
+                              {phone && <span>📞 {phone}</span>}
+                              {email && <span>✉️ {email}</span>}
+                              {manager && <span className="text-rose-600 font-semibold">💼 영업: {manager}</span>}
+                            </div>
+                          );
+                        })()}
                       </div>
+
 
                       <div className="flex flex-col items-end space-y-1">
                         <span className="text-lg font-black text-rose-600">₩ {(item.total_price || 0).toLocaleString()} 원</span>

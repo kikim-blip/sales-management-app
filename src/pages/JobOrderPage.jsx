@@ -200,12 +200,29 @@ export default function JobOrderPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div className="sm:col-span-2 space-y-1">
                     <h3 className="text-base font-extrabold text-slate-900">{order.title}</h3>
-                    <p className="text-xs font-semibold text-sky-600">
-                      발주처: {cust ? `${cust.name} - ${cust.dept}` : (order.customer_name || order.customer_id)} (담당: {order.client_contact_person || '미지정'})
+                    <p className="text-xs font-bold text-sky-700">
+                      발주처: {cust ? `${cust.name}${cust.dept ? ` (${cust.dept})` : ''}` : (order.customer_name || order.customer_id || '미지정')}
                     </p>
-                    <p className="text-xs text-slate-500 pt-1">
+
+                    {(() => {
+                      const contactPerson = cust?.contact_person || order.client_contact_person || '';
+                      const phone = cust?.phone || order.client_phone || '';
+                      const email = cust?.email || order.client_email || '';
+                      const manager = order.manager_name || cust?.sales_manager || '';
+                      if (!contactPerson && !phone && !email && !manager) return null;
+                      return (
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-slate-600 font-medium">
+                          {contactPerson && <span>👤 담당: <strong className="text-slate-800">{contactPerson}</strong></span>}
+                          {phone && <span>📞 {phone}</span>}
+                          {email && <span>✉️ {email}</span>}
+                          {manager && <span className="text-rose-600 font-semibold">💼 영업: {manager}</span>}
+                        </div>
+                      );
+                    })()}
+                    <p className="text-xs text-slate-500 pt-0.5">
                       규격: {order.spec} | 수량: {order.quantity}부 | 제본: {order.binding} | 표지: {order.cover_job}
                     </p>
+
                   </div>
 
                   <div className="flex sm:flex-col justify-between sm:justify-center sm:items-end text-right">

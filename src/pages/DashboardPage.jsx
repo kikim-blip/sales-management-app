@@ -367,7 +367,9 @@ export default function DashboardPage() {
 
     try {
       setSubmittingSale(true);
+      let targetCustomerId = '';
       // 1. 기존 고객 목록에서 동일한 고객사명 + 부서 + 담당자 성명이 모두 일치하는지 확인
+
       const inputName = custName.toLowerCase();
       const inputDept = (newSaleFormData.dept || '').trim().toLowerCase();
       const inputContact = (newSaleFormData.contact_person || '').trim().toLowerCase();
@@ -537,15 +539,34 @@ export default function DashboardPage() {
                       </h4>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600">
-                      <span>
-                        발주처: <strong className="text-slate-800">{item.customerNameDisplay}</strong>
-                      </span>
-                      <span>
+                    <div className="flex flex-col gap-1 text-xs text-slate-600">
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                        <span>
+                          발주처: <strong className="text-slate-800">{item.customerNameDisplay}</strong>
+                        </span>
+                        {(() => {
+                          const cust = customers.find(c => c.id === item.customer_id);
+                          const contactPerson = cust?.contact_person || item.client_contact_person || item.contact_person || '';
+                          const phone = cust?.phone || item.client_phone || item.phone || '';
+                          const email = cust?.email || item.client_email || item.email || '';
+                          const manager = item.manager_name || item.sales_manager || cust?.sales_manager || '';
+                          if (!contactPerson && !phone && !email && !manager) return null;
+                          return (
+                            <span className="flex flex-wrap items-center gap-x-2 text-[11px] text-slate-500 font-medium">
+                              {contactPerson && <span>👤 담당: <strong className="text-slate-700">{contactPerson}</strong></span>}
+                              {phone && <span>📞 {phone}</span>}
+                              {email && <span>✉️ {email}</span>}
+                              {manager && <span className="text-rose-600 font-semibold">💼 영업: {manager}</span>}
+                            </span>
+                          );
+                        })()}
+                      </div>
+                      <div className="text-xs text-slate-500">
                         {item.detailsText}
-                      </span>
+                      </div>
                     </div>
                   </div>
+
 
                   <div className="flex flex-wrap items-center space-x-1.5 justify-end flex-shrink-0 pt-2 lg:pt-0 border-t lg:border-t-0 border-slate-100">
                     <div className="text-right mr-2 hidden sm:block">
@@ -653,12 +674,16 @@ export default function DashboardPage() {
                         <span className="text-[11px] font-normal text-slate-500">({cust.dept})</span>
                       )}
                     </h3>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      담당자: {cust.contact_person || '미지정'} ({cust.phone || '연락처 없음'})
-                    </p>
+                    <div className="text-[11px] text-slate-500 mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-0.5">
+                      <span>👤 {cust.contact_person || '담당자 미지정'}</span>
+                      {cust.phone && <span>📞 {cust.phone}</span>}
+                      {cust.email && <span>✉️ {cust.email}</span>}
+                      {cust.sales_manager && <span className="text-rose-600 font-semibold">💼 {cust.sales_manager}</span>}
+                    </div>
                   </div>
-                  <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-sky-600 transition" />
+                  <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-sky-600 transition flex-shrink-0" />
                 </div>
+
 
                 <div className="grid grid-cols-3 gap-2 text-center text-xs">
                   <div className="bg-slate-50 p-2 rounded-xl">
