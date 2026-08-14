@@ -87,9 +87,9 @@ export default function DashboardPage() {
     return { diffDays, label: `📅 D-${diffDays}`, color: 'bg-slate-100 text-slate-700 border-slate-200' };
   };
 
-  // 🚨 납품 일정 급건 순 정렬 리스트 생성 (작업전표 + 직접 등록된 매출 납품일정 통합)
+  // 🚨 납품 일정 급건 순 정렬 리스트 생성 (미완료 진행 건만 노출: 납품완료/청구완료 완료건 제외)
   const jobItems = filteredJobOrders
-    .filter(o => o.delivery_date)
+    .filter(o => o.delivery_date && o.status !== '납품완료' && o.status !== '완료')
     .map(order => {
       const dday = getDDayInfo(order.delivery_date);
       const cust = customers.find(c => c.id === order.customer_id);
@@ -105,7 +105,7 @@ export default function DashboardPage() {
     });
 
   const saleItems = filteredSales
-    .filter(s => s.delivery_date)
+    .filter(s => s.delivery_date && s.billing_schedule !== '납품완료' && s.billing_schedule !== '청구완료')
     .filter(s => {
       // 작업전표에서 파생된 중복 건 제외
       const matchedJob = filteredJobOrders.find(j => 
@@ -128,6 +128,7 @@ export default function DashboardPage() {
         detailsText: `구분: [${sale.type || '매출'}] ${sale.billing_schedule || '진행중'} | 내용: ${contentDesc || '세부내용 없음'}${sale.total_price ? ` | 금액: ₩${Number(sale.total_price).toLocaleString()}원` : ''}`,
       };
     });
+
 
   const urgentDeliveryList = [...jobItems, ...saleItems]
     .sort((a, b) => {
