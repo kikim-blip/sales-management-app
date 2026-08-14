@@ -1115,21 +1115,25 @@ export default function SalesPage() {
               const cust = customers.find(c => c.id === item.customer_id);
               return (
                 <div key={item.id || idx} className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3 relative group">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <div className="flex items-center space-x-2">
-                        <span className={`text-xs font-bold px-2 py-0.5 rounded ${
+                  <div className="flex flex-col lg:flex-row lg:justify-between lg:items-start gap-3">
+                    
+                    {/* ── 좌측: 작업명, 발주처, 담당자, 접수일/납품일 뱃지 ── */}
+                    <div className="space-y-1.5 min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className={`text-xs font-bold px-2 py-0.5 rounded flex-shrink-0 ${
                           item.type === '매출' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'
                         }`}>
                           {item.type}
                         </span>
-                        <h3 className="font-bold text-slate-800 text-base">{item.title}</h3>
+                        <h3 className="font-extrabold text-slate-900 text-base break-words">{item.title}</h3>
                         {renderStatusBadge(item.billing_schedule)}
                       </div>
-                      <p className="text-xs font-bold text-sky-700 mt-1">
+
+                      <p className="text-xs font-bold text-sky-700">
                         발주처: {cust ? `${cust.name}${cust.dept ? ` (${cust.dept})` : ''}` : (item.customer_name || '미지정')}
                       </p>
-                      {/* 💡 발주처 밑 담당자 이름, 연락처, 이메일, 영업담당자 표시 */}
+
+                      {/* 발주처 밑 담당자 이름, 연락처, 이메일, 영업담당자 */}
                       {(() => {
                         const contactPerson = cust?.contact_person || item.contact_person || '';
                         const phone = cust?.phone || item.phone || '';
@@ -1137,7 +1141,7 @@ export default function SalesPage() {
                         const manager = item.sales_manager || cust?.sales_manager || '';
                         if (!contactPerson && !phone && !email && !manager) return null;
                         return (
-                          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-slate-600 mt-0.5 font-medium">
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-slate-600 font-medium">
                             {contactPerson && <span>👤 담당: <strong className="text-slate-800">{contactPerson}</strong></span>}
                             {phone && <span>📞 {phone}</span>}
                             {email && <span>✉️ {email}</span>}
@@ -1145,29 +1149,43 @@ export default function SalesPage() {
                           </div>
                         );
                       })()}
+
+                      {/* 💡 📅 접수일자 & 🚚 납품예정일 직관적 뱃지 */}
+                      <div className="flex flex-wrap items-center gap-2 pt-1">
+                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-slate-100 text-slate-700 px-2.5 py-0.5 rounded-lg border border-slate-200">
+                          <Calendar className="w-3 h-3 text-sky-600" />
+                          <span>접수일: <strong>{item.receipt_date || item.reg_date || '-'}</strong></span>
+                        </span>
+                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-emerald-50 text-emerald-800 px-2.5 py-0.5 rounded-lg border border-emerald-200">
+                          <Truck className="w-3 h-3 text-emerald-600" />
+                          <span>납품일: <strong>{item.delivery_date || '-'}</strong> {item.delivery_time ? `(${item.delivery_time})` : ''}</span>
+                        </span>
+                      </div>
                     </div>
 
-
-                    <div className="flex flex-col items-end space-y-1">
-                      <span className="text-lg font-black text-slate-900">₩ {(item.total_price || 0).toLocaleString()} 원</span>
-                      <p className="text-[11px] text-slate-400 font-bold">공급가: ₩ {(item.supply_price || 0).toLocaleString()}원</p>
+                    {/* ── 우측: 금액 & 버튼 (줄바꿈 없이 깔끔한 nowrap 툴바) ── */}
+                    <div className="flex flex-col lg:items-end space-y-2 flex-shrink-0">
+                      <div className="flex lg:flex-col items-baseline lg:items-end justify-between gap-2">
+                        <span className="text-lg font-black text-slate-900">₩ {(item.total_price || 0).toLocaleString()} 원</span>
+                        <p className="text-[11px] text-slate-400 font-bold">공급가: ₩ {(item.supply_price || 0).toLocaleString()}원</p>
+                      </div>
                       
-                      <div className="flex items-center space-x-1 pt-1">
+                      <div className="flex flex-wrap items-center lg:justify-end gap-1.5">
                         {item.billing_schedule !== '청구완료' && (
                           <>
                             {item.billing_schedule !== '납품완료' && (
                               <button
                                 onClick={() => handleMarkDelivered(item)}
-                                className="flex items-center space-x-1 px-2.5 py-1 bg-slate-100 hover:bg-sky-50 hover:text-sky-700 text-slate-600 border border-slate-200 rounded-lg text-xs font-bold transition mr-1"
+                                className="whitespace-nowrap inline-flex items-center space-x-1 px-2.5 py-1.5 bg-slate-100 hover:bg-sky-50 hover:text-sky-700 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition"
                                 title="납품완료 처리"
                               >
-                                <Truck className="w-3.5 h-3.5" />
+                                <Truck className="w-3.5 h-3.5 text-sky-600" />
                                 <span>납품 처리</span>
                               </button>
                             )}
                             <button
                               onClick={() => handleCollectPayment(item)}
-                              className="flex items-center space-x-1 px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-lg text-xs font-bold transition mr-1"
+                              className="whitespace-nowrap inline-flex items-center space-x-1 px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl text-xs font-bold transition shadow-sm"
                               title="수금 등록 및 청구완료 전환"
                             >
                               <span>₩ 수금 처리</span>
@@ -1177,7 +1195,7 @@ export default function SalesPage() {
 
                         <button
                           onClick={() => setEstimatingSale({ sale: item, customer: cust })}
-                          className="flex items-center space-x-1 px-2.5 py-1 bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-300 rounded-lg text-xs font-bold transition mr-1"
+                          className="whitespace-nowrap inline-flex items-center space-x-1 px-2.5 py-1.5 bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-300 rounded-xl text-xs font-bold transition"
                           title="견적서 작성 및 세부 단가 산출 (매출액 자동 반영)"
                         >
                           <Calculator className="w-3.5 h-3.5 text-sky-600" />
@@ -1186,16 +1204,15 @@ export default function SalesPage() {
 
                         <button
                           onClick={() => setPrintingQuote({ quote: item, customer: cust })}
-                          className="flex items-center space-x-1 px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition mr-1"
+                          className="whitespace-nowrap inline-flex items-center space-x-1 px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-xl text-xs font-semibold transition"
                         >
                           <FileText className="w-3.5 h-3.5 text-sky-600" />
                           <span>인쇄</span>
                         </button>
 
-
                         <button
                           onClick={() => handleCreateJobOrderFromSale(item)}
-                          className="flex items-center space-x-1 px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-lg text-xs font-bold transition mr-1 shadow-sm"
+                          className="whitespace-nowrap inline-flex items-center space-x-1 px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-xl text-xs font-bold transition shadow-sm"
                           title="이 매출 건의 정보로 신규 작업전표 작성"
                         >
                           <ClipboardList className="w-3.5 h-3.5 text-amber-600" />
@@ -1204,18 +1221,21 @@ export default function SalesPage() {
 
                         <button
                           onClick={() => openEditModal(item)}
-                          className="p-1.5 text-slate-500 hover:text-sky-600 hover:bg-sky-50 rounded-lg transition"
+                          className="p-1.5 text-slate-500 hover:text-sky-600 hover:bg-sky-50 rounded-xl border border-slate-200 transition"
+                          title="수정"
                         >
                           <Pencil className="w-3.5 h-3.5" />
                         </button>
                         <button
                           onClick={() => handleDelete(item.id)}
-                          className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                          className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-xl border border-slate-200 transition"
+                          title="삭제"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     </div>
+
                   </div>
 
                   {item.content && (
@@ -1224,10 +1244,11 @@ export default function SalesPage() {
                     </div>
                   )}
 
-                  <div className="flex justify-between items-center text-[10px] text-slate-400 border-t border-slate-100 pt-2 font-medium">
-                    <span>매출 등록일: {item.reg_date || item.receipt_date || '-'}</span>
-                    <span>{item.note}</span>
-                  </div>
+                  {item.note && (
+                    <div className="text-[11px] text-slate-500 bg-slate-50/60 px-3 py-1.5 rounded-lg border border-slate-100">
+                      비고: {item.note}
+                    </div>
+                  )}
                 </div>
               );
             })
@@ -1238,15 +1259,16 @@ export default function SalesPage() {
       {/* ----------------- 탭 2: 🚨 미청구 건 집중 관리 ----------------- */}
       {reportTab === 'unbilled' && (
         <div className="space-y-4">
-          {/* 미청구 현황 통계 요약 카드 */}
-          <div className="bg-gradient-to-r from-rose-500/10 via-amber-500/10 to-sky-500/10 p-5 rounded-2xl border border-rose-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+          
+          {/* 미청구 핵심 통계 카드 */}
+          <div className="bg-white p-5 rounded-2xl border border-rose-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-r from-white to-rose-50/30">
             <div className="space-y-1">
               <div className="flex items-center space-x-2">
-                <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-rose-600 text-white">
-                  미청구 관리 모드
+                <span className="px-2.5 py-0.5 bg-rose-500 text-white rounded-full text-xs font-black">
+                  🚨 긴급 미청구 알림
                 </span>
-                <span className="text-xs text-slate-500 font-semibold">
-                  (납품완료 및 진행중인 청구/수금 대상 건)
+                <span className="text-xs font-semibold text-slate-500">
+                  (납품 완료되었으나 아직 청구서/수금이 완료되지 않은 매출 건)
                 </span>
               </div>
               <h3 className="text-2xl font-black text-slate-900">
@@ -1285,21 +1307,25 @@ export default function SalesPage() {
                   <div key={item.id || idx} className={`bg-white p-4 sm:p-5 rounded-2xl border shadow-sm space-y-3 relative group transition ${
                     isDelivered ? 'border-amber-300 bg-amber-50/10' : 'border-slate-200'
                   }`}>
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <div className="flex items-center space-x-2">
-                          <span className={`text-xs font-bold px-2 py-0.5 rounded ${
+                    <div className="flex flex-col lg:flex-row lg:justify-between lg:items-start gap-3">
+                      
+                      {/* ── 좌측: 작업명, 발주처, 담당자, 접수일/납품일 ── */}
+                      <div className="space-y-1.5 min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className={`text-xs font-bold px-2 py-0.5 rounded flex-shrink-0 ${
                             item.type === '매출' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'
                           }`}>
                             {item.type}
                           </span>
-                          <h3 className="font-bold text-slate-800 text-base">{item.title}</h3>
+                          <h3 className="font-extrabold text-slate-900 text-base break-words">{item.title}</h3>
                           {renderStatusBadge(item.billing_schedule)}
                         </div>
-                        <p className="text-xs font-bold text-sky-700 mt-1">
+
+                        <p className="text-xs font-bold text-sky-700">
                           발주처: {cust ? `${cust.name}${cust.dept ? ` (${cust.dept})` : ''}` : (item.customer_name || '미지정')}
                         </p>
-                        {/* 💡 발주처 밑 담당자 이름, 연락처, 이메일, 영업담당자 표시 */}
+
+                        {/* 발주처 밑 담당자 이름, 연락처, 이메일, 영업담당자 */}
                         {(() => {
                           const contactPerson = cust?.contact_person || item.contact_person || '';
                           const phone = cust?.phone || item.phone || '';
@@ -1307,7 +1333,7 @@ export default function SalesPage() {
                           const manager = item.sales_manager || cust?.sales_manager || '';
                           if (!contactPerson && !phone && !email && !manager) return null;
                           return (
-                            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-slate-600 mt-0.5 font-medium">
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-slate-600 font-medium">
                               {contactPerson && <span>👤 담당: <strong className="text-slate-800">{contactPerson}</strong></span>}
                               {phone && <span>📞 {phone}</span>}
                               {email && <span>✉️ {email}</span>}
@@ -1315,21 +1341,35 @@ export default function SalesPage() {
                             </div>
                           );
                         })()}
+
+                        {/* 💡 📅 접수일자 & 🚚 납품예정일 직관적 뱃지 */}
+                        <div className="flex flex-wrap items-center gap-2 pt-1">
+                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-slate-100 text-slate-700 px-2.5 py-0.5 rounded-lg border border-slate-200">
+                            <Calendar className="w-3 h-3 text-sky-600" />
+                            <span>접수일: <strong>{item.receipt_date || item.reg_date || '-'}</strong></span>
+                          </span>
+                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-emerald-50 text-emerald-800 px-2.5 py-0.5 rounded-lg border border-emerald-200">
+                            <Truck className="w-3 h-3 text-emerald-600" />
+                            <span>납품일: <strong>{item.delivery_date || '-'}</strong> {item.delivery_time ? `(${item.delivery_time})` : ''}</span>
+                          </span>
+                        </div>
                       </div>
 
-
-                      <div className="flex flex-col items-end space-y-1">
-                        <span className="text-lg font-black text-rose-600">₩ {(item.total_price || 0).toLocaleString()} 원</span>
-                        <p className="text-[11px] text-slate-400 font-bold">공급가: ₩ {(item.supply_price || 0).toLocaleString()}원</p>
+                      {/* ── 우측: 금액 & 버튼 (줄바꿈 없이 깔끔한 nowrap 툴바) ── */}
+                      <div className="flex flex-col lg:items-end space-y-2 flex-shrink-0">
+                        <div className="flex lg:flex-col items-baseline lg:items-end justify-between gap-2">
+                          <span className="text-lg font-black text-rose-600">₩ {(item.total_price || 0).toLocaleString()} 원</span>
+                          <p className="text-[11px] text-slate-400 font-bold">공급가: ₩ {(item.supply_price || 0).toLocaleString()}원</p>
+                        </div>
                         
-                        <div className="flex items-center space-x-1 pt-1">
+                        <div className="flex flex-wrap items-center lg:justify-end gap-1.5">
                           {!isDelivered && (
                             <button
                               onClick={() => handleMarkDelivered(item)}
-                              className="flex items-center space-x-1 px-2.5 py-1 bg-slate-100 hover:bg-sky-50 hover:text-sky-700 text-slate-600 border border-slate-200 rounded-lg text-xs font-bold transition mr-1"
+                              className="whitespace-nowrap inline-flex items-center space-x-1 px-2.5 py-1.5 bg-slate-100 hover:bg-sky-50 hover:text-sky-700 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition"
                               title="납품완료 처리"
                             >
-                              <Truck className="w-3.5 h-3.5" />
+                              <Truck className="w-3.5 h-3.5 text-sky-600" />
                               <span>납품 처리</span>
                             </button>
                           )}
