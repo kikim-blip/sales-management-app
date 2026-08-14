@@ -42,20 +42,23 @@ export default function DashboardPage() {
   const displayUnpaid = Math.max(0, totalUnpaidAmount);
   const isOverpaid = totalUnpaidAmount < 0;
 
-  const customerSummary = filteredCustomers.map((cust) => {
-    const custSales = filteredSales
-      .filter((s) => s.customer_id === cust.id)
-      .reduce((acc, curr) => acc + curr.total_price, 0);
-    const custPayments = filteredPayments
-      .filter((p) => p.customer_id === cust.id)
-      .reduce((acc, curr) => acc + curr.amount, 0);
-    return {
-      ...cust,
-      totalSales: custSales,
-      totalPayment: custPayments,
-      unpaid: custSales - custPayments,
-    };
-  });
+  const customerSummary = filteredCustomers
+    .map((cust) => {
+      const custSales = filteredSales
+        .filter((s) => s.customer_id === cust.id || (s.customer_name && s.customer_name === cust.name))
+        .reduce((acc, curr) => acc + (Number(curr.total_price) || 0), 0);
+      const custPayments = filteredPayments
+        .filter((p) => p.customer_id === cust.id)
+        .reduce((acc, curr) => acc + (Number(curr.amount) || 0), 0);
+      return {
+        ...cust,
+        totalSales: custSales,
+        totalPayment: custPayments,
+        unpaid: custSales - custPayments,
+      };
+    })
+    .filter((cust) => cust.totalSales > 0 || cust.totalPayment > 0);
+
 
   // D-Day 계산 헬퍼
   const getDDayInfo = (deliveryDateStr) => {
@@ -336,46 +339,53 @@ export default function DashboardPage() {
       {/* 2. 거래처별 미수 현황 카드 */}
       <div>
         <h3 className="font-bold text-slate-800 text-base mb-3">고객사별 미수 관리 현황</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {customerSummary.map((cust) => (
-            <div
-              key={cust.id}
-              onClick={() => setSelectedCustomer(cust)}
-              className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition cursor-pointer space-y-3 group"
-            >
-              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                <div>
-                  <h3 className="font-bold text-slate-900 group-hover:text-sky-600 transition flex items-center space-x-1.5">
-                    <span>{cust.name}</span>
-                    {cust.dept && (
-                      <span className="text-[11px] font-normal text-slate-500">({cust.dept})</span>
-                    )}
-                  </h3>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    담당자: {cust.contact_person || '미지정'} ({cust.phone || '연락처 없음'})
-                  </p>
+        {customerSummary.length === 0 ? (
+          <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center text-slate-400 text-xs">
+            현재 매출 또는 수금 내역이 등록된 고객사가 없습니다.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {customerSummary.map((cust) => (
+              <div
+                key={cust.id}
+                onClick={() => setSelectedCustomer(cust)}
+                className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition cursor-pointer space-y-3 group"
+              >
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <div>
+                    <h3 className="font-bold text-slate-900 group-hover:text-sky-600 transition flex items-center space-x-1.5">
+                      <span>{cust.name}</span>
+                      {cust.dept && (
+                        <span className="text-[11px] font-normal text-slate-500">({cust.dept})</span>
+                      )}
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      담당자: {cust.contact_person || '미지정'} ({cust.phone || '연락처 없음'})
+                    </p>
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-sky-600 transition" />
                 </div>
-                <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-sky-600 transition" />
-              </div>
 
-              <div className="grid grid-cols-3 gap-2 text-center text-xs">
-                <div className="bg-slate-50 p-2 rounded-xl">
-                  <p className="text-slate-400 text-[10px] mb-0.5 font-medium">총 매출</p>
-                  <p className="font-bold text-slate-700">₩ {cust.totalSales.toLocaleString()}</p>
-                </div>
-                <div className="bg-emerald-50/50 p-2 rounded-xl">
-                  <p className="text-emerald-600 text-[10px] mb-0.5 font-medium">수금 완료</p>
-                  <p className="font-bold text-emerald-700">₩ {cust.totalPayment.toLocaleString()}</p>
-                </div>
-                <div className="bg-rose-50/50 p-2 rounded-xl">
-                  <p className="text-rose-500 text-[10px] mb-0.5 font-medium">미수 잔액</p>
-                  <p className="font-bold text-rose-600">₩ {cust.unpaid.toLocaleString()}</p>
+                <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                  <div className="bg-slate-50 p-2 rounded-xl">
+                    <p className="text-slate-400 text-[10px] mb-0.5 font-medium">총 매출</p>
+                    <p className="font-bold text-slate-700">₩ {cust.totalSales.toLocaleString()}</p>
+                  </div>
+                  <div className="bg-emerald-50/50 p-2 rounded-xl">
+                    <p className="text-emerald-600 text-[10px] mb-0.5 font-medium">수금 완료</p>
+                    <p className="font-bold text-emerald-700">₩ {cust.totalPayment.toLocaleString()}</p>
+                  </div>
+                  <div className="bg-rose-50/50 p-2 rounded-xl">
+                    <p className="text-rose-500 text-[10px] mb-0.5 font-medium">미수 잔액</p>
+                    <p className="font-bold text-rose-600">₩ {cust.unpaid.toLocaleString()}</p>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
+
 
       {/* 고객사 상세보기 모달 */}
       {selectedCustomer && (
