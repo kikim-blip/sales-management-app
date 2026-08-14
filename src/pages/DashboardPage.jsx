@@ -1018,31 +1018,55 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-200/70">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1">담당자 성명</label>
+                  <label className="block text-[11px] font-semibold text-slate-500 mb-1">담당자 성명</label>
                   <input
                     type="text"
                     placeholder="담당자 이름"
                     value={newSaleFormData.contact_person}
                     onFocus={() => setShowCustomerDropdown(false)}
                     onChange={e => setNewSaleFormData({ ...newSaleFormData, contact_person: e.target.value })}
-                    className="w-full p-2.5 border border-slate-200 rounded-xl text-xs"
+                    className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-medium"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1">담당자 연락처</label>
+                  <label className="block text-[11px] font-semibold text-slate-500 mb-1">담당자 연락처</label>
                   <input
                     type="text"
                     placeholder="010-0000-0000"
                     value={newSaleFormData.phone}
                     onFocus={() => setShowCustomerDropdown(false)}
                     onChange={e => setNewSaleFormData({ ...newSaleFormData, phone: e.target.value })}
-                    className="w-full p-2.5 border border-slate-200 rounded-xl text-xs"
+                    className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-medium"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-500 mb-1">담당자 이메일</label>
+                  <input
+                    type="email"
+                    placeholder="contact@example.com"
+                    value={newSaleFormData.email}
+                    onFocus={() => setShowCustomerDropdown(false)}
+                    onChange={e => setNewSaleFormData({ ...newSaleFormData, email: e.target.value })}
+                    className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-500 mb-1">영업담당자</label>
+                  <input
+                    type="text"
+                    placeholder="영업담당자 이름"
+                    value={newSaleFormData.sales_manager}
+                    onFocus={() => setShowCustomerDropdown(false)}
+                    onChange={e => setNewSaleFormData({ ...newSaleFormData, sales_manager: e.target.value })}
+                    className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800"
                   />
                 </div>
               </div>
             </div>
+
 
             {/* 작업 정보 */}
             <div className="space-y-3">
