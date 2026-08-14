@@ -705,94 +705,7 @@ export default function DashboardPage() {
         <p className="text-xs text-slate-500 mt-1">납품 및 미수 상태를 확인합니다.</p>
       </div>
 
-      {/* ── 📊 매출/수금/미수금 2단 현황 지표 (1행: 누적 총괄 / 2행: 당월 실적) ── */}
-      <div className="space-y-2.5 sm:space-y-3">
-        {/* 1행: 누적 총괄 현황 */}
-        <div>
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-[11px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider">전체 누적 총괄 현황</span>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
-            <div className="bg-white p-3 sm:p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
-              <div>
-                <p className="text-[10px] sm:text-[11px] font-semibold text-slate-500 mb-0.5">총 매출 청구액 (누적)</p>
-                <p className="text-base sm:text-lg font-black text-slate-900 font-mono">₩ {totalSalesAmount.toLocaleString()} 원</p>
-              </div>
-              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-extrabold text-sm sm:text-base flex-shrink-0">₩</div>
-            </div>
-
-            <div className="bg-white p-3 sm:p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
-              <div>
-                <p className="text-[10px] sm:text-[11px] font-semibold text-slate-500 mb-0.5">총 입금/수금액 (누적)</p>
-                <p className="text-base sm:text-lg font-black text-emerald-600 font-mono">₩ {totalPaymentAmount.toLocaleString()} 원</p>
-              </div>
-              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-extrabold text-sm sm:text-base flex-shrink-0">₩</div>
-            </div>
-
-            <div className={`bg-white p-3 sm:p-4 rounded-2xl border shadow-sm flex items-center justify-between ${isOverpaid ? 'border-amber-200 bg-amber-50/20' : 'border-rose-100 bg-rose-50/20'}`}>
-              <div>
-                <p className={`text-[10px] sm:text-[11px] font-semibold mb-0.5 ${isOverpaid ? 'text-amber-600' : 'text-rose-600'}`}>총 미수금 잔액 (누적)</p>
-                <p className={`text-base sm:text-lg font-black font-mono ${isOverpaid ? 'text-amber-600' : 'text-rose-600'}`}>
-                  {isOverpaid ? (
-                    <span className="text-xs sm:text-sm font-semibold">₩ 0 원 <span className="text-[10px] sm:text-xs text-amber-500">(초과 {Math.abs(totalUnpaidAmount).toLocaleString()}원)</span></span>
-                  ) : (
-                    <>₩ {displayUnpaid.toLocaleString()} 원</>
-                  )}
-                </p>
-              </div>
-              <div className={`w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${isOverpaid ? 'bg-amber-100 text-amber-600' : 'bg-rose-100 text-rose-600'}`}>
-                <AlertTriangle className="w-4 h-4" />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* 2행: 당월 실적 현황 */}
-        <div>
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-[11px] sm:text-xs font-bold text-sky-700 flex items-center gap-1.5">
-              <Calendar className="w-3.5 h-3.5" />
-              <span>{currentMonthDisplay} 당월 실적 현황 ({currentYearMonth})</span>
-            </span>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
-            <div className="bg-sky-50/60 p-3 sm:p-4 rounded-2xl border border-sky-200/90 shadow-sm flex items-center justify-between">
-              <div>
-                <p className="text-[10px] sm:text-[11px] font-bold text-sky-800 mb-0.5">{currentMonthDisplay} 당월 매출 청구액</p>
-                <p className="text-base sm:text-lg font-black text-sky-950 font-mono">₩ {currentMonthSalesAmount.toLocaleString()} 원</p>
-              </div>
-              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-sky-100 text-sky-700 flex items-center justify-center font-bold text-[11px] sm:text-xs flex-shrink-0">당월</div>
-            </div>
-
-            <div className="bg-emerald-50/60 p-3 sm:p-4 rounded-2xl border border-emerald-200/90 shadow-sm flex items-center justify-between">
-              <div>
-                <p className="text-[10px] sm:text-[11px] font-bold text-emerald-800 mb-0.5">{currentMonthDisplay} 당월 입금/수금액</p>
-                <p className="text-base sm:text-lg font-black text-emerald-700 font-mono">₩ {currentMonthPaymentAmount.toLocaleString()} 원</p>
-              </div>
-              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-[11px] sm:text-xs flex-shrink-0">당월</div>
-            </div>
-
-            <div className={`p-3 sm:p-4 rounded-2xl border shadow-sm flex items-center justify-between ${currentMonthOverpaid ? 'bg-amber-50/60 border-amber-200/90' : 'bg-rose-50/60 border-rose-200/90'}`}>
-              <div>
-                <p className={`text-[10px] sm:text-[11px] font-bold mb-0.5 ${currentMonthOverpaid ? 'text-amber-800' : 'text-rose-800'}`}>{currentMonthDisplay} 당월 미수금 잔액</p>
-                <p className={`text-base sm:text-lg font-black font-mono ${currentMonthOverpaid ? 'text-amber-700' : 'text-rose-700'}`}>
-                  {currentMonthOverpaid ? (
-                    <span className="text-xs sm:text-sm font-semibold">₩ 0 원 <span className="text-[10px] sm:text-xs text-amber-600">(초과 {Math.abs(currentMonthUnpaidAmount).toLocaleString()}원)</span></span>
-                  ) : (
-                    <>₩ {currentMonthDisplayUnpaid.toLocaleString()} 원</>
-                  )}
-                </p>
-              </div>
-              <div className={`w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center font-bold text-[11px] sm:text-xs flex-shrink-0 ${currentMonthOverpaid ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'}`}>
-                잔액
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-
-      {/* 🚨 1. 실시간 납품 일정 급건 순서 리스트 (원하는 건별 캘린더/슈퍼스레드/전표수정/인쇄 버튼 탑재) */}
+      {/* ── 1. 🚚 실시간 납품 일정 급건 순서 리스트 (제일 위) ── */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="px-3.5 py-3 sm:px-5 sm:py-3.5 border-b border-slate-100 flex flex-wrap justify-between items-center bg-slate-900 text-white gap-2">
           <div className="flex items-center space-x-2">
@@ -812,8 +725,6 @@ export default function DashboardPage() {
             <span>신규 <span className="hidden xs:inline">매출/견적 </span>등록</span>
           </button>
         </div>
-
-
 
         <div className="divide-y divide-slate-100 max-h-[520px] overflow-y-auto">
           {urgentDeliveryList.length === 0 ? (
@@ -964,15 +875,99 @@ export default function DashboardPage() {
                     )}
                   </div>
 
-
-
                 </div>
               );
             })
           )}
         </div>
-
       </div>
+
+      {/* ── 2. 📊 매출/수금/미수금 2단 현황 지표 (중간: 1행 누적 총괄 / 2행 당월 실적) ── */}
+      <div className="space-y-2.5 sm:space-y-3">
+        {/* 1행: 누적 총괄 현황 */}
+        <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-[11px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider">전체 누적 총괄 현황</span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
+            <div className="bg-white p-3 sm:p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+              <div>
+                <p className="text-[10px] sm:text-[11px] font-semibold text-slate-500 mb-0.5">총 매출 청구액 (누적)</p>
+                <p className="text-base sm:text-lg font-black text-slate-900 font-mono">₩ {totalSalesAmount.toLocaleString()} 원</p>
+              </div>
+              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-extrabold text-sm sm:text-base flex-shrink-0">₩</div>
+            </div>
+
+            <div className="bg-white p-3 sm:p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+              <div>
+                <p className="text-[10px] sm:text-[11px] font-semibold text-slate-500 mb-0.5">총 입금/수금액 (누적)</p>
+                <p className="text-base sm:text-lg font-black text-emerald-600 font-mono">₩ {totalPaymentAmount.toLocaleString()} 원</p>
+              </div>
+              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-extrabold text-sm sm:text-base flex-shrink-0">₩</div>
+            </div>
+
+            <div className={`bg-white p-3 sm:p-4 rounded-2xl border shadow-sm flex items-center justify-between ${isOverpaid ? 'border-amber-200 bg-amber-50/20' : 'border-rose-100 bg-rose-50/20'}`}>
+              <div>
+                <p className={`text-[10px] sm:text-[11px] font-semibold mb-0.5 ${isOverpaid ? 'text-amber-600' : 'text-rose-600'}`}>총 미수금 잔액 (누적)</p>
+                <p className={`text-base sm:text-lg font-black font-mono ${isOverpaid ? 'text-amber-600' : 'text-rose-600'}`}>
+                  {isOverpaid ? (
+                    <span className="text-xs sm:text-sm font-semibold">₩ 0 원 <span className="text-[10px] sm:text-xs text-amber-500">(초과 {Math.abs(totalUnpaidAmount).toLocaleString()}원)</span></span>
+                  ) : (
+                    <>₩ {displayUnpaid.toLocaleString()} 원</>
+                  )}
+                </p>
+              </div>
+              <div className={`w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${isOverpaid ? 'bg-amber-100 text-amber-600' : 'bg-rose-100 text-rose-600'}`}>
+                <AlertTriangle className="w-4 h-4" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* 2행: 당월 실적 현황 */}
+        <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-[11px] sm:text-xs font-bold text-sky-700 flex items-center gap-1.5">
+              <Calendar className="w-3.5 h-3.5" />
+              <span>{currentMonthDisplay} 당월 실적 현황 ({currentYearMonth})</span>
+            </span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
+            <div className="bg-sky-50/60 p-3 sm:p-4 rounded-2xl border border-sky-200/90 shadow-sm flex items-center justify-between">
+              <div>
+                <p className="text-[10px] sm:text-[11px] font-bold text-sky-800 mb-0.5">{currentMonthDisplay} 당월 매출 청구액</p>
+                <p className="text-base sm:text-lg font-black text-sky-950 font-mono">₩ {currentMonthSalesAmount.toLocaleString()} 원</p>
+              </div>
+              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-sky-100 text-sky-700 flex items-center justify-center font-bold text-[11px] sm:text-xs flex-shrink-0">당월</div>
+            </div>
+
+            <div className="bg-emerald-50/60 p-3 sm:p-4 rounded-2xl border border-emerald-200/90 shadow-sm flex items-center justify-between">
+              <div>
+                <p className="text-[10px] sm:text-[11px] font-bold text-emerald-800 mb-0.5">{currentMonthDisplay} 당월 입금/수금액</p>
+                <p className="text-base sm:text-lg font-black text-emerald-700 font-mono">₩ {currentMonthPaymentAmount.toLocaleString()} 원</p>
+              </div>
+              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-[11px] sm:text-xs flex-shrink-0">당월</div>
+            </div>
+
+            <div className={`p-3 sm:p-4 rounded-2xl border shadow-sm flex items-center justify-between ${currentMonthOverpaid ? 'bg-amber-50/60 border-amber-200/90' : 'bg-rose-50/60 border-rose-200/90'}`}>
+              <div>
+                <p className={`text-[10px] sm:text-[11px] font-bold mb-0.5 ${currentMonthOverpaid ? 'text-amber-800' : 'text-rose-800'}`}>{currentMonthDisplay} 당월 미수금 잔액</p>
+                <p className={`text-base sm:text-lg font-black font-mono ${currentMonthOverpaid ? 'text-amber-700' : 'text-rose-700'}`}>
+                  {currentMonthOverpaid ? (
+                    <span className="text-xs sm:text-sm font-semibold">₩ 0 원 <span className="text-[10px] sm:text-xs text-amber-600">(초과 {Math.abs(currentMonthUnpaidAmount).toLocaleString()}원)</span></span>
+                  ) : (
+                    <>₩ {currentMonthDisplayUnpaid.toLocaleString()} 원</>
+                  )}
+                </p>
+              </div>
+              <div className={`w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center font-bold text-[11px] sm:text-xs flex-shrink-0 ${currentMonthOverpaid ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'}`}>
+                잔액
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
 
       {/* 2. 고객사별 미수 관리 현황 (테이블 표 형태 + 다차원 분류 탭 + 엑셀 내보내기 + 일자별 상세 모달 연동) */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
