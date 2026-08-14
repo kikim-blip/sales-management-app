@@ -103,6 +103,45 @@ export default function SalesPage() {
     return true;
   });
 
+  // 💡 미청구 건 목록 (청구완료 제외: 진행중, 납품완료 건)
+  const unbilledSales = filteredSales.filter(s => s.billing_schedule !== '청구완료');
+  const totalUnbilledAmount = unbilledSales.reduce((acc, curr) => acc + (Number(curr.total_price) || 0), 0);
+
+  // 미청구 건 CSV 다운로드
+  const handleExportUnbilledCSV = () => {
+    if (unbilledSales.length === 0) return alert('다운로드할 미청구 데이터가 없습니다.');
+    const headers = ['등록일', '발주처', '부서', '작업명', '진행상태', '공급가액', '부가세', '총청구금액(VAT포함)', '납품예정일', '상세내용'];
+    const rows = unbilledSales.map(s => {
+      const cust = customers.find(c => c.id === s.customer_id);
+      return [
+        s.reg_date || s.receipt_date || '',
+        cust ? cust.name : (s.customer_name || s.customer_id || ''),
+        cust ? cust.dept : (s.dept || ''),
+        s.title || '',
+        s.billing_schedule || '진행중',
+        s.supply_price || 0,
+        s.tax || 0,
+        s.total_price || 0,
+        s.delivery_date || '',
+        s.content || s.note || '',
+      ];
+    });
+    const todayStr = new Date().toISOString().split('T')[0];
+    const csv = '\uFEFF' + [headers, ...rows]
+      .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+      .join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `경성문화사_미청구목록_${todayStr}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+
   const defaultForm = {
     reg_date: today,
     receipt_date: today,
@@ -818,7 +857,7 @@ export default function SalesPage() {
         </div>
       </div>
 
-      {/* 탭 네비게이션: [매출 및 전표 목록] vs [📊 ERP 매출 분석 및 현황] */}
+      {/* 탭 네비게이션: [전체 목록] vs [🚨 미청구 관리] vs [📊 ERP 분석 및 원장] */}
       <div className="flex border-b border-slate-200">
         <button
           onClick={() => setReportTab('list')}
@@ -826,17 +865,33 @@ export default function SalesPage() {
             reportTab === 'list' ? 'border-sky-600 text-sky-600 bg-white' : 'border-transparent text-slate-500 hover:text-slate-800'
           }`}
         >
-          목록
+          전체 목록 ({filteredSales.length})
         </button>
+
+        <button
+          onClick={() => setReportTab('unbilled')}
+          className={`px-5 py-3 font-extrabold text-xs transition-all border-b-2 flex items-center space-x-1.5 ${
+            reportTab === 'unbilled' ? 'border-rose-600 text-rose-600 bg-white' : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <span>미청구 관리</span>
+          {unbilledSales.length > 0 && (
+            <span className="px-1.5 py-0.5 bg-rose-500 text-white rounded-full text-[10px] font-black animate-pulse">
+              {unbilledSales.length}
+            </span>
+          )}
+        </button>
+
         <button
           onClick={() => setReportTab('erp')}
           className={`px-5 py-3 font-extrabold text-xs transition-all border-b-2 ${
             reportTab === 'erp' ? 'border-sky-600 text-sky-600 bg-white' : 'border-transparent text-slate-500 hover:text-slate-800'
           }`}
         >
-          분석
+          분석 및 원장
         </button>
       </div>
+
 
       {/* ----------------- 탭 1: 매출 기록 목록 ----------------- */}
       {reportTab === 'list' && (
@@ -943,8 +998,149 @@ export default function SalesPage() {
         </div>
       )}
 
-      {/* ----------------- 탭 2: 📊 ERP 매출 및 미수 통계 보고서 ----------------- */}
+      {/* ----------------- 탭 2: 🚨 미청구 건 집중 관리 ----------------- */}
+      {reportTab === 'unbilled' && (
+        <div className="space-y-4">
+          {/* 미청구 현황 통계 요약 카드 */}
+          <div className="bg-gradient-to-r from-rose-500/10 via-amber-500/10 to-sky-500/10 p-5 rounded-2xl border border-rose-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center space-x-2">
+                <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-rose-600 text-white">
+                  미청구 관리 모드
+                </span>
+                <span className="text-xs text-slate-500 font-semibold">
+                  (납품완료 및 진행중인 청구/수금 대상 건)
+                </span>
+              </div>
+              <h3 className="text-2xl font-black text-slate-900">
+                총 <span className="text-rose-600">{unbilledSales.length}</span>건 / ₩ {totalUnbilledAmount.toLocaleString()} 원
+              </h3>
+              <p className="text-xs text-slate-600">
+                납품완료(청구대기): <strong className="text-amber-700">{unbilledSales.filter(s => s.billing_schedule === '납품완료').length}건</strong> | 
+                제작/진행중: <strong className="text-sky-700">{unbilledSales.filter(s => s.billing_schedule === '진행중').length}건</strong>
+              </p>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={handleExportUnbilledCSV}
+                className="flex items-center space-x-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2.5 rounded-xl text-xs font-bold shadow-sm transition"
+              >
+                <Download className="w-4 h-4" />
+                <span>미청구 목록 CSV 다운로드</span>
+              </button>
+            </div>
+          </div>
+
+          {/* 미청구 건 카드 목록 */}
+          <div className="space-y-3">
+            {unbilledSales.length === 0 ? (
+              <div className="bg-white text-center py-16 border border-slate-200 rounded-2xl text-slate-400 text-xs font-bold space-y-2">
+                <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto" />
+                <p className="text-sm font-bold text-slate-700">현재 미청구 상태인 매출 건이 없습니다!</p>
+                <p className="text-slate-400 text-xs">모든 매출 건이 청구 및 수금 완료 처리되었습니다.</p>
+              </div>
+            ) : (
+              unbilledSales.map((item, idx) => {
+                const cust = customers.find(c => c.id === item.customer_id);
+                const isDelivered = item.billing_schedule === '납품완료';
+                return (
+                  <div key={item.id || idx} className={`bg-white p-4 sm:p-5 rounded-2xl border shadow-sm space-y-3 relative group transition ${
+                    isDelivered ? 'border-amber-300 bg-amber-50/10' : 'border-slate-200'
+                  }`}>
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <div className="flex items-center space-x-2">
+                          <span className={`text-xs font-bold px-2 py-0.5 rounded ${
+                            item.type === '매출' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'
+                          }`}>
+                            {item.type}
+                          </span>
+                          <h3 className="font-bold text-slate-800 text-base">{item.title}</h3>
+                          {renderStatusBadge(item.billing_schedule)}
+                        </div>
+                        <p className="text-xs font-semibold text-sky-600 mt-1">
+                          발주처: {cust ? `${cust.name} (${cust.dept || '부서 미지정'})` : item.customer_name}
+                        </p>
+                      </div>
+
+                      <div className="flex flex-col items-end space-y-1">
+                        <span className="text-lg font-black text-rose-600">₩ {(item.total_price || 0).toLocaleString()} 원</span>
+                        <p className="text-[11px] text-slate-400 font-bold">공급가: ₩ {(item.supply_price || 0).toLocaleString()}원</p>
+                        
+                        <div className="flex items-center space-x-1 pt-1">
+                          {!isDelivered && (
+                            <button
+                              onClick={() => handleMarkDelivered(item)}
+                              className="flex items-center space-x-1 px-2.5 py-1 bg-slate-100 hover:bg-sky-50 hover:text-sky-700 text-slate-600 border border-slate-200 rounded-lg text-xs font-bold transition mr-1"
+                              title="납품완료 처리"
+                            >
+                              <Truck className="w-3.5 h-3.5" />
+                              <span>납품 처리</span>
+                            </button>
+                          )}
+                          <button
+                            onClick={() => handleCollectPayment(item)}
+                            className="flex items-center space-x-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-sm transition mr-1"
+                            title="수금 등록 및 청구완료 전환"
+                          >
+                            <span>₩ 수금/청구 완료</span>
+                          </button>
+
+                          <button
+                            onClick={() => setPrintingQuote({ quote: item, customer: cust })}
+                            className="flex items-center space-x-1 px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition mr-1"
+                          >
+                            <FileText className="w-3.5 h-3.5 text-sky-600" />
+                            <span>인쇄</span>
+                          </button>
+
+                          <button
+                            onClick={() => handleCreateJobOrderFromSale(item)}
+                            className="flex items-center space-x-1 px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-lg text-xs font-bold transition mr-1 shadow-sm"
+                            title="이 매출 건의 정보로 신규 작업전표 작성"
+                          >
+                            <ClipboardList className="w-3.5 h-3.5 text-amber-600" />
+                            <span>작업전표 작성</span>
+                          </button>
+
+                          <button
+                            onClick={() => openEditModal(item)}
+                            className="p-1.5 text-slate-500 hover:text-sky-600 hover:bg-sky-50 rounded-lg transition"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(item.id)}
+                            className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {item.content && (
+                      <div className="text-xs text-slate-600 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                        {item.content}
+                      </div>
+                    )}
+
+                    <div className="flex justify-between items-center text-[10px] text-slate-400 border-t border-slate-100 pt-2 font-medium">
+                      <span>매출 등록일: {item.reg_date || item.receipt_date || '-'} | 납품 예정일: {item.delivery_date || '-'}</span>
+                      <span>{item.note}</span>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ----------------- 탭 3: 📊 ERP 매출 및 미수 통계 보고서 ----------------- */}
       {reportTab === 'erp' && (
+
         <div className="space-y-4">
           
           {/* ERP 보고서 필터링 카드 */}
