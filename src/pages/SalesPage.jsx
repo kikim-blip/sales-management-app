@@ -1,14 +1,18 @@
 // src/pages/SalesPage.jsx
 import React, { useState } from 'react';
 import { useData } from '../context/DataContext';
-import { Plus, Calendar, Share2, Pencil, Trash2, ClipboardList, FileText, FileSearch, Printer, CheckCircle2, Truck, BarChart3, Download, Search, Filter, XCircle } from 'lucide-react';
+import { useGoogleAuth } from '../context/GoogleAuthContext';
+import { Plus, Calendar, Share2, Pencil, Trash2, ClipboardList, FileText, FileSearch, Printer, CheckCircle2, Truck, BarChart3, Download, Search, Filter, XCircle, Building, User, Phone, Mail } from 'lucide-react';
 import JobOrderModal from '../components/common/JobOrderModal';
 import SelectJobOrderModal from '../components/common/SelectJobOrderModal';
 import QuotePrintModal from '../components/common/QuotePrintModal';
 import JobOrderPrintModal from '../components/common/JobOrderPrintModal';
 
 export default function SalesPage() {
-  const { sales, customers, jobOrders, payments, addSales, updateSales, deleteSales, addJobOrder, addPayment, selectedTeamGroup } = useData();
+  const { sales, customers, jobOrders, payments, addSales, updateSales, deleteSales, addJobOrder, addPayment, addCustomer, selectedTeamGroup } = useData();
+  const { user } = useGoogleAuth();
+  const loggedInUserName = user?.userName || '김광일';
+
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [submitting, setSubmitting] = useState(false);
@@ -106,6 +110,10 @@ export default function SalesPage() {
     customer_id: '',
     customer_name: '',
     dept: '',
+    contact_person: '',
+    phone: '',
+    email: '',
+    sales_manager: loggedInUserName,
     title: '',
     content: '',
     note: '',
@@ -120,6 +128,36 @@ export default function SalesPage() {
 
   const [formData, setFormData] = useState(defaultForm);
   const [customerNameInput, setCustomerNameInput] = useState('');
+  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
+
+  // 실시간 고객 검색 결과 (고객사명, 부서, 담당자명, 연락처, 영업담당자 통합 검색)
+  const customerSearchResults = customers.filter(c => {
+    if (!customerNameInput.trim()) return false;
+    const q = customerNameInput.trim().toLowerCase();
+    return (
+      (c.name || '').toLowerCase().includes(q) ||
+      (c.dept || '').toLowerCase().includes(q) ||
+      (c.contact_person || '').toLowerCase().includes(q) ||
+      (c.sales_manager || '').toLowerCase().includes(q) ||
+      (c.phone || '').includes(q)
+    );
+  });
+
+  // 고객 검색 목록에서 선택 시 일괄 자동 채우기
+  const handleSelectCustomer = (cust) => {
+    setCustomerNameInput(cust.name || '');
+    setFormData(prev => ({
+      ...prev,
+      customer_id: cust.id,
+      customer_name: cust.name || '',
+      dept: cust.dept || '',
+      contact_person: cust.contact_person || '',
+      phone: cust.phone || '',
+      email: cust.email || '',
+      sales_manager: cust.sales_manager || loggedInUserName,
+    }));
+    setShowCustomerDropdown(false);
+  };
 
   // 신규 작업전표 저장
   const handleSaveJobOrder = async (newOrder) => {
@@ -140,9 +178,13 @@ export default function SalesPage() {
     setCustomerNameInput(cName);
     setFormData(prev => ({
       ...prev,
-      customer_id: order.customer_id || cName,
+      customer_id: order.customer_id || (cust ? cust.id : ''),
       customer_name: cName,
       dept: cDept,
+      contact_person: order.client_contact_person || (cust ? cust.contact_person : ''),
+      phone: order.client_phone || (cust ? cust.phone : ''),
+      email: order.client_email || (cust ? cust.email : ''),
+      sales_manager: order.manager_name || (cust ? cust.sales_manager : loggedInUserName),
       title: order.title,
       content: `[코드: ${order.code_number || order.id}] ${order.cover_job || ''} / ${order.binding || ''}`,
       note: `담당: ${order.manager_name} (코드: ${order.code_number})`,
@@ -156,49 +198,24 @@ export default function SalesPage() {
     alert(`[${order.code_number}] ${order.title} 전표 정보가 매출 폼에 자동 입력되었습니다!`);
   };
 
-  // 거래처 다중 필드 매칭
-  const handleCustomerNameChange = (typedName) => {
-    setCustomerNameInput(typedName);
-    const cleaned = typedName.trim().toLowerCase();
-
-    const matched = customers.find(c => 
-      (c.name || '').toLowerCase() === cleaned ||
-      (c.dept || '').toLowerCase() === cleaned ||
-      (c.contact_person || '').toLowerCase() === cleaned ||
-      (c.sales_manager || '').toLowerCase() === cleaned ||
-      `${c.name} ${c.dept}`.toLowerCase().includes(cleaned)
-    );
-
-    if (matched) {
-      setCustomerNameInput(matched.name);
-      setFormData(prev => ({
-        ...prev,
-        customer_id: matched.id,
-        customer_name: matched.name,
-        dept: matched.dept || prev.dept,
-      }));
-    } else {
-      setFormData(prev => ({
-        ...prev,
-        customer_id: typedName,
-        customer_name: typedName,
-      }));
-    }
-  };
-
   const openNewModal = () => {
     setEditingId(null);
     setCustomerNameInput('');
-    setFormData(defaultForm);
+    setShowCustomerDropdown(false);
+    setFormData({
+      ...defaultForm,
+      sales_manager: loggedInUserName,
+    });
     setShowModal(true);
   };
 
   const openEditModal = (item) => {
     setEditingId(item.id);
     const cust = customers.find(c => c.id === item.customer_id);
-    const cName = cust ? cust.name : (item.customer_id || '');
-    const cDept = cust ? cust.dept : '';
+    const cName = cust ? cust.name : (item.customer_name || item.customer_id || '');
+    const cDept = cust ? cust.dept : (item.dept || '');
     setCustomerNameInput(cName);
+    setShowCustomerDropdown(false);
 
     setFormData({
       reg_date: item.reg_date || today,
@@ -208,6 +225,10 @@ export default function SalesPage() {
       customer_id: item.customer_id || '',
       customer_name: cName,
       dept: cDept,
+      contact_person: cust ? (cust.contact_person || '') : '',
+      phone: cust ? (cust.phone || '') : '',
+      email: cust ? (cust.email || '') : '',
+      sales_manager: cust ? (cust.sales_manager || loggedInUserName) : loggedInUserName,
       title: item.title || '',
       content: item.content || '',
       note: item.note || '',
@@ -285,17 +306,50 @@ export default function SalesPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!customerNameInput.trim()) return alert('고객사명을 입력하거나 선택해 주세요.');
+    const custName = (customerNameInput || formData.customer_name || '').trim();
+    if (!custName) return alert('고객사명을 입력하거나 선택해 주세요.');
     if (!formData.title) return alert('작업명을 입력해 주세요.');
 
     try {
       setSubmitting(true);
+
+      let targetCustomerId = formData.customer_id;
+
+      // 1. 기존 고객 목록에서 동일한 고객사명 + 부서가 존재하는지 확인
+      const matchedCust = customers.find(c => 
+        (targetCustomerId && c.id === targetCustomerId) ||
+        ((c.name || '').trim().toLowerCase() === custName.toLowerCase() && 
+         (c.dept || '').trim().toLowerCase() === (formData.dept || '').trim().toLowerCase())
+      );
+
+      // 2. 미등록 고객이거나 신규 고객인 경우 고객 DB에 자동 등록
+      if (!matchedCust) {
+        const newCustData = {
+          name: custName,
+          dept: formData.dept || '',
+          contact_person: formData.contact_person || '',
+          phone: formData.phone || '',
+          email: formData.email || '',
+          sales_manager: formData.sales_manager || loggedInUserName,
+        };
+        const savedCust = await addCustomer(newCustData);
+        targetCustomerId = savedCust?.id || `CUST-${Date.now()}`;
+      } else {
+        targetCustomerId = matchedCust.id;
+      }
+
+      const salePayload = {
+        ...formData,
+        customer_id: targetCustomerId,
+        customer_name: custName,
+      };
+
       if (editingId) {
-        await updateSales(editingId, formData);
+        await updateSales(editingId, salePayload);
         alert('매출/견적 항목이 수정 완료되었습니다!');
       } else {
-        await addSales(formData);
-        alert('신규 매출이 등록 완료되었습니다!');
+        await addSales(salePayload);
+        alert(!matchedCust ? '신규 고객 정보가 함께 저장되고, 매출이 등록되었습니다!' : '신규 매출이 등록 완료되었습니다!');
       }
       setShowModal(false);
     } catch (err) {
@@ -304,6 +358,7 @@ export default function SalesPage() {
       setSubmitting(false);
     }
   };
+
 
   // --- 📊 ERP 매출 조회 및 미수 보고서 생성 로직 ---
   const getFilteredByTime = () => {
@@ -1113,7 +1168,7 @@ export default function SalesPage() {
       {/* 1. 매출 등록/수정 모달 */}
       {showModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <form onSubmit={handleSubmit} className="bg-white w-full max-w-lg rounded-2xl shadow-xl p-5 space-y-4">
+          <form onSubmit={handleSubmit} className="bg-white w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-2xl shadow-xl p-5 space-y-4">
             <div className="flex justify-between items-center border-b border-slate-100 pb-3">
               <h3 className="font-bold text-slate-800 text-sm">
                 {editingId ? '매출/견적 세부 내역 수정' : '신규 매출/견적 수동 등록'}
@@ -1160,40 +1215,168 @@ export default function SalesPage() {
                 )}
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">고객사명 *</label>
-                  <input
-                    type="text"
-                    list="sales-customer-list"
-                    required
-                    placeholder="고객사명 검색 또는 직접 입력"
-                    value={customerNameInput}
-                    onChange={e => handleCustomerNameChange(e.target.value)}
-                    className="w-full p-2.5 border border-slate-200 rounded-xl text-xs font-semibold focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
-                  />
-                  <datalist id="sales-customer-list">
-                    {customers.map(c => (
-                      <React.Fragment key={c.id}>
-                        <option value={c.name} label={`${c.dept ? `[${c.dept}] ` : ''}${c.contact_person ? `담당: ${c.contact_person}` : ''}`} />
-                        {c.contact_person && <option value={c.contact_person} label={`고객사: ${c.name}`} />}
-                        {c.dept && <option value={c.dept} label={`고객사: ${c.name}`} />}
-                      </React.Fragment>
-                    ))}
-                  </datalist>
+              {/* ── 🏢 고객 정보 (검색 자동완성 및 신규 고객 동시 등록 영역) ── */}
+              <div className="bg-slate-50/80 p-3.5 rounded-2xl border border-slate-200 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                    <Building className="w-3.5 h-3.5 text-sky-600" />
+                    고객(거래처) 정보
+                  </span>
+                  {formData.customer_id ? (
+                    <span className="text-[11px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-semibold">
+                      ✓ 등록 고객 연결됨
+                    </span>
+                  ) : customerNameInput.trim() ? (
+                    <span className="text-[11px] bg-sky-100 text-sky-700 px-2 py-0.5 rounded-full font-semibold">
+                      + 저장 시 신규 고객 자동 등록
+                    </span>
+                  ) : null}
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">과/부서명</label>
-                  <input
-                    type="text"
-                    placeholder="부서명 입력"
-                    value={formData.dept}
-                    onChange={e => setFormData({ ...formData, dept: e.target.value })}
-                    className="w-full p-2.5 border border-slate-200 rounded-xl text-xs"
-                  />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 relative">
+                  {/* 고객사명 (통합 검색 및 직접 입력) */}
+                  <div className="relative">
+                    <label className="block text-xs font-bold text-slate-700 mb-1">고객사명 *</label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        required
+                        placeholder="고객사명 검색 또는 직접 입력"
+                        value={customerNameInput}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setCustomerNameInput(val);
+                          setFormData(prev => ({ ...prev, customer_name: val, customer_id: '' }));
+                          setShowCustomerDropdown(true);
+                        }}
+                        onFocus={() => {
+                          if (customerNameInput.trim()) setShowCustomerDropdown(true);
+                        }}
+                        className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                      />
+                      {customerNameInput && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCustomerNameInput('');
+                            setFormData(prev => ({
+                              ...prev,
+                              customer_id: '',
+                              customer_name: '',
+                              dept: '',
+                              contact_person: '',
+                              phone: '',
+                              email: '',
+                            }));
+                            setShowCustomerDropdown(false);
+                          }}
+                          className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 text-xs font-bold"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+
+                    {/* 실시간 고객 검색 자동완성 팝오버 */}
+                    {showCustomerDropdown && customerSearchResults.length > 0 && (
+                      <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-52 overflow-y-auto divide-y divide-slate-100">
+                        <div className="p-1.5 bg-slate-50 text-[11px] font-semibold text-slate-500 border-b border-slate-100 flex justify-between items-center">
+                          <span>등록 고객 검색 결과 ({customerSearchResults.length}건)</span>
+                          <button
+                            type="button"
+                            onClick={() => setShowCustomerDropdown(false)}
+                            className="text-slate-400 hover:text-slate-600"
+                          >
+                            닫기
+                          </button>
+                        </div>
+                        {customerSearchResults.map(c => (
+                          <button
+                            key={c.id}
+                            type="button"
+                            onClick={() => handleSelectCustomer(c)}
+                            className="w-full text-left p-2.5 hover:bg-sky-50 transition flex flex-col gap-0.5"
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="font-bold text-xs text-slate-800">{c.name}</span>
+                              {c.dept && (
+                                <span className="text-[11px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">
+                                  {c.dept}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 text-[11px] text-slate-500">
+                              {c.contact_person && <span>담당: <strong className="text-slate-700">{c.contact_person}</strong></span>}
+                              {c.phone && <span>연락처: {c.phone}</span>}
+                              {c.sales_manager && <span className="text-rose-500 font-medium">영업: {c.sales_manager}</span>}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 과/부서명 */}
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">과/부서명</label>
+                    <input
+                      type="text"
+                      placeholder="예: 해상풍력발전위원회"
+                      value={formData.dept}
+                      onChange={e => setFormData({ ...formData, dept: e.target.value })}
+                      className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs"
+                    />
+                  </div>
+                </div>
+
+                {/* 고객 상세 정보 (담당자, 연락처, 이메일, 영업담당자) */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-200/70">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-500 mb-1">담당자 성명</label>
+                    <input
+                      type="text"
+                      placeholder="예: 채선경 주무관"
+                      value={formData.contact_person}
+                      onChange={e => setFormData({ ...formData, contact_person: e.target.value })}
+                      className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-500 mb-1">담당자 연락처</label>
+                    <input
+                      type="text"
+                      placeholder="예: 010-1234-5678"
+                      value={formData.phone}
+                      onChange={e => setFormData({ ...formData, phone: e.target.value })}
+                      className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-500 mb-1">담당자 이메일</label>
+                    <input
+                      type="email"
+                      placeholder="예: contact@example.com"
+                      value={formData.email}
+                      onChange={e => setFormData({ ...formData, email: e.target.value })}
+                      className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-500 mb-1">영업담당자</label>
+                    <input
+                      type="text"
+                      placeholder="영업담당자 이름"
+                      value={formData.sales_manager}
+                      onChange={e => setFormData({ ...formData, sales_manager: e.target.value })}
+                      className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800"
+                    />
+                  </div>
                 </div>
               </div>
+
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
