@@ -320,16 +320,49 @@ export default function SalesPage() {
     }
   };
 
+  // 💡 공급가액 입력 시 -> 부가세(10%) 및 총 청구금액 자동 계산
   const handlePriceChange = (val) => {
+    if (val === '') {
+      setFormData(prev => ({
+        ...prev,
+        supply_price: '',
+        tax: 0,
+        total_price: '',
+      }));
+      return;
+    }
     const supply = Number(val) || 0;
     const tax = Math.round(supply * 0.1);
     setFormData(prev => ({
       ...prev,
-      supply_price: val === '' ? '' : supply,
+      supply_price: supply,
       tax: tax,
       total_price: supply + tax,
     }));
   };
+
+  // 💡 총 청구금액(VAT 포함) 입력 시 -> 공급가액 및 부가세(10%) 자동 역산
+  const handleTotalPriceChange = (val) => {
+    if (val === '') {
+      setFormData(prev => ({
+        ...prev,
+        total_price: '',
+        supply_price: '',
+        tax: 0,
+      }));
+      return;
+    }
+    const total = Number(val) || 0;
+    const supply = Math.round(total / 1.1);
+    const tax = total - supply;
+    setFormData(prev => ({
+      ...prev,
+      total_price: total,
+      supply_price: supply,
+      tax: tax,
+    }));
+  };
+
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -1444,27 +1477,39 @@ export default function SalesPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1">공급가액 (원)</label>
-                  <input
-                    type="number"
-                    placeholder="0"
-                    value={formData.supply_price}
-                    onChange={e => handlePriceChange(e.target.value)}
-                    className="w-full p-2.5 border border-slate-200 rounded-xl text-xs"
-                  />
+              <div className="space-y-1.5">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">공급가액 (원)</label>
+                    <input
+                      type="number"
+                      placeholder="0"
+                      value={formData.supply_price}
+                      onChange={e => handlePriceChange(e.target.value)}
+                      className="w-full p-2.5 border border-slate-200 rounded-xl text-xs font-semibold focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">총 청구금액 (VAT포함)</label>
+                    <input
+                      type="number"
+                      placeholder="0"
+                      value={formData.total_price}
+                      onChange={e => handleTotalPriceChange(e.target.value)}
+                      className="w-full p-2.5 bg-sky-50/40 border border-sky-200 rounded-xl font-bold text-sky-800 text-xs focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1">총 청구금액 (VAT포함)</label>
-                  <input
-                    type="number"
-                    disabled
-                    value={formData.total_price}
-                    className="w-full p-2.5 bg-slate-100 border border-slate-200 rounded-xl font-bold text-sky-700 text-xs"
-                  />
+                <div className="flex justify-between items-center text-[11px] text-slate-400 px-1">
+                  <span>💡 공급가액 또는 총 청구금액 중 하나만 입력해도 자동 계산</span>
+                  {Number(formData.tax) > 0 && (
+                    <span className="font-semibold text-sky-700 bg-sky-50 px-2 py-0.5 rounded border border-sky-100">
+                      부가세(VAT 10%): ₩{Number(formData.tax).toLocaleString()}원
+                    </span>
+                  )}
                 </div>
               </div>
+
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
