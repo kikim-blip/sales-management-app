@@ -1,5 +1,5 @@
 // src/pages/SalesPage.jsx
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useData } from '../context/DataContext';
 import { useGoogleAuth } from '../context/GoogleAuthContext';
 import { Plus, Calendar, Share2, Pencil, Trash2, ClipboardList, FileText, FileSearch, Printer, CheckCircle2, Truck, BarChart3, Download, Search, Filter, XCircle, Building, User, Phone, Mail } from 'lucide-react';
@@ -13,7 +13,20 @@ export default function SalesPage() {
   const { user } = useGoogleAuth();
   const loggedInUserName = user?.userName || '김광일';
 
+  const customerDropdownRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (customerDropdownRef.current && !customerDropdownRef.current.contains(e.target)) {
+        setShowCustomerDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   const [showModal, setShowModal] = useState(false);
+
   const [editingId, setEditingId] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -1561,7 +1574,7 @@ export default function SalesPage() {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 relative">
                   {/* 고객사명 (통합 검색 및 직접 입력) */}
-                  <div className="relative">
+                  <div ref={customerDropdownRef} className="relative">
                     <label className="block text-xs font-bold text-slate-700 mb-1">고객사명 *</label>
                     <div className="relative">
                       <input
@@ -1577,6 +1590,9 @@ export default function SalesPage() {
                         }}
                         onFocus={() => {
                           if (customerNameInput.trim()) setShowCustomerDropdown(true);
+                        }}
+                        onKeyDown={e => {
+                          if (e.key === 'Escape' || e.key === 'Enter') setShowCustomerDropdown(false);
                         }}
                         className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
                       />
@@ -1605,15 +1621,15 @@ export default function SalesPage() {
 
                     {/* 실시간 고객 검색 자동완성 팝오버 */}
                     {showCustomerDropdown && customerSearchResults.length > 0 && (
-                      <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-52 overflow-y-auto divide-y divide-slate-100">
-                        <div className="p-1.5 bg-slate-50 text-[11px] font-semibold text-slate-500 border-b border-slate-100 flex justify-between items-center">
+                      <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-2xl z-50 max-h-52 overflow-y-auto divide-y divide-slate-100 text-xs">
+                        <div className="p-2 bg-slate-50 text-[11px] font-semibold text-slate-500 border-b border-slate-100 flex justify-between items-center sticky top-0 bg-white">
                           <span>등록 고객 검색 결과 ({customerSearchResults.length}건)</span>
                           <button
                             type="button"
                             onClick={() => setShowCustomerDropdown(false)}
-                            className="text-slate-400 hover:text-slate-600"
+                            className="text-slate-500 hover:text-slate-800 font-bold px-1.5 py-0.5 rounded hover:bg-slate-100 text-[11px]"
                           >
-                            닫기
+                            ✕ 닫기
                           </button>
                         </div>
                         {customerSearchResults.map(c => (
@@ -1638,6 +1654,12 @@ export default function SalesPage() {
                             </div>
                           </button>
                         ))}
+                        <div 
+                          onClick={() => setShowCustomerDropdown(false)}
+                          className="p-2.5 text-center text-sky-600 font-bold hover:bg-sky-50 cursor-pointer bg-slate-50/70 text-[11px] border-t border-slate-100"
+                        >
+                          + '{customerNameInput}' 신규 직접 입력 (목록 닫기)
+                        </div>
                       </div>
                     )}
                   </div>
@@ -1649,11 +1671,13 @@ export default function SalesPage() {
                       type="text"
                       placeholder="예: 해상풍력발전위원회"
                       value={formData.dept}
+                      onFocus={() => setShowCustomerDropdown(false)}
                       onChange={e => setFormData({ ...formData, dept: e.target.value })}
                       className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs"
                     />
                   </div>
                 </div>
+
 
                 {/* 고객 상세 정보 (담당자, 연락처, 이메일, 영업담당자) */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-200/70">
@@ -1663,6 +1687,7 @@ export default function SalesPage() {
                       type="text"
                       placeholder="예: 채선경 주무관"
                       value={formData.contact_person}
+                      onFocus={() => setShowCustomerDropdown(false)}
                       onChange={e => setFormData({ ...formData, contact_person: e.target.value })}
                       className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs"
                     />
@@ -1674,6 +1699,7 @@ export default function SalesPage() {
                       type="text"
                       placeholder="예: 010-1234-5678"
                       value={formData.phone}
+                      onFocus={() => setShowCustomerDropdown(false)}
                       onChange={e => setFormData({ ...formData, phone: e.target.value })}
                       className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs"
                     />
@@ -1685,6 +1711,7 @@ export default function SalesPage() {
                       type="email"
                       placeholder="예: contact@example.com"
                       value={formData.email}
+                      onFocus={() => setShowCustomerDropdown(false)}
                       onChange={e => setFormData({ ...formData, email: e.target.value })}
                       className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs"
                     />
@@ -1696,6 +1723,7 @@ export default function SalesPage() {
                       type="text"
                       placeholder="영업담당자 이름"
                       value={formData.sales_manager}
+                      onFocus={() => setShowCustomerDropdown(false)}
                       onChange={e => setFormData({ ...formData, sales_manager: e.target.value })}
                       className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800"
                     />
@@ -1712,10 +1740,12 @@ export default function SalesPage() {
                     required
                     placeholder="예: 8월 소프트웨어 납품"
                     value={formData.title}
+                    onFocus={() => setShowCustomerDropdown(false)}
                     onChange={e => setFormData({ ...formData, title: e.target.value })}
                     className="w-full p-2.5 border border-slate-200 rounded-xl text-xs"
                   />
                 </div>
+
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 mb-1">진행 상태</label>

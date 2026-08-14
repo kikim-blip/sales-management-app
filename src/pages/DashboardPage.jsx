@@ -1,5 +1,5 @@
 // src/pages/DashboardPage.jsx
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useData } from '../context/DataContext';
 import { useGoogleAuth } from '../context/GoogleAuthContext';
 import { AlertCircle, FileText, RefreshCw, ChevronRight, Clock, AlertTriangle, Calendar, Printer, CheckCircle2, Users, Share2, Zap, Pencil, Truck, XCircle, Plus, Search } from 'lucide-react';
@@ -10,6 +10,19 @@ import JobOrderModal from '../components/common/JobOrderModal';
 export default function DashboardPage() {
   const { customers, sales, payments, jobOrders, loading, error, selectedTeamGroup, updateJobOrder, updateSales, addSales, addCustomer } = useData();
   const { user } = useGoogleAuth();
+
+  const customerDropdownRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (customerDropdownRef.current && !customerDropdownRef.current.contains(e.target)) {
+        setShowCustomerDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
 
   
   const [selectedCustomer, setSelectedCustomer] = useState(null);
@@ -911,7 +924,7 @@ export default function DashboardPage() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {/* 1. 고객사명 실시간 검색 드롭다운 */}
-                <div className="relative">
+                <div ref={customerDropdownRef} className="relative">
                   <label className="block text-xs font-semibold text-slate-600 mb-1">고객사명 *</label>
                   <div className="relative">
                     <input
@@ -924,6 +937,9 @@ export default function DashboardPage() {
                         setShowCustomerDropdown(true);
                       }}
                       onFocus={() => setShowCustomerDropdown(true)}
+                      onKeyDown={e => {
+                        if (e.key === 'Escape' || e.key === 'Enter') setShowCustomerDropdown(false);
+                      }}
                       className="w-full p-2.5 pr-7 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
                     />
                     {customerNameInput && (
@@ -940,6 +956,7 @@ export default function DashboardPage() {
                             phone: '',
                             email: '',
                           });
+                          setShowCustomerDropdown(false);
                         }}
                         className="absolute right-2 top-2.5 text-slate-400 hover:text-slate-600 text-xs font-bold"
                       >
@@ -949,7 +966,17 @@ export default function DashboardPage() {
                   </div>
 
                   {showCustomerDropdown && customerNameInput.trim() && (
-                    <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto divide-y divide-slate-100 text-xs">
+                    <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-2xl max-h-52 overflow-y-auto divide-y divide-slate-100 text-xs">
+                      <div className="p-2 bg-slate-50 text-[11px] font-semibold text-slate-500 border-b border-slate-100 flex justify-between items-center sticky top-0 bg-white">
+                        <span>등록 고객 검색 결과</span>
+                        <button
+                          type="button"
+                          onClick={() => setShowCustomerDropdown(false)}
+                          className="text-slate-500 hover:text-slate-800 font-bold px-1.5 py-0.5 rounded hover:bg-slate-100 text-[11px]"
+                        >
+                          ✕ 닫기
+                        </button>
+                      </div>
                       {customers
                         .filter(c => 
                           (c.name || '').toLowerCase().includes(customerNameInput.toLowerCase()) ||
@@ -960,7 +987,7 @@ export default function DashboardPage() {
                           <div
                             key={c.id}
                             onClick={() => handleSelectCustomer(c)}
-                            className="p-2.5 hover:bg-sky-50 cursor-pointer flex flex-col"
+                            className="p-2.5 hover:bg-sky-50 cursor-pointer flex flex-col transition"
                           >
                             <span className="font-bold text-slate-800">{c.name} {c.dept ? `(${c.dept})` : ''}</span>
                             <span className="text-[11px] text-slate-400">
@@ -968,6 +995,12 @@ export default function DashboardPage() {
                             </span>
                           </div>
                         ))}
+                      <div 
+                        onClick={() => setShowCustomerDropdown(false)}
+                        className="p-2.5 text-center text-sky-600 font-bold hover:bg-sky-50 cursor-pointer bg-slate-50/70 text-[11px] border-t border-slate-100"
+                      >
+                        + '{customerNameInput}' 신규 직접 입력 (목록 닫기)
+                      </div>
                     </div>
                   )}
                 </div>
@@ -978,6 +1011,7 @@ export default function DashboardPage() {
                     type="text"
                     placeholder="예: 해상풍력발전위원회"
                     value={newSaleFormData.dept}
+                    onFocus={() => setShowCustomerDropdown(false)}
                     onChange={e => setNewSaleFormData({ ...newSaleFormData, dept: e.target.value })}
                     className="w-full p-2.5 border border-slate-200 rounded-xl text-xs"
                   />
@@ -991,6 +1025,7 @@ export default function DashboardPage() {
                     type="text"
                     placeholder="담당자 이름"
                     value={newSaleFormData.contact_person}
+                    onFocus={() => setShowCustomerDropdown(false)}
                     onChange={e => setNewSaleFormData({ ...newSaleFormData, contact_person: e.target.value })}
                     className="w-full p-2.5 border border-slate-200 rounded-xl text-xs"
                   />
@@ -1001,6 +1036,7 @@ export default function DashboardPage() {
                     type="text"
                     placeholder="010-0000-0000"
                     value={newSaleFormData.phone}
+                    onFocus={() => setShowCustomerDropdown(false)}
                     onChange={e => setNewSaleFormData({ ...newSaleFormData, phone: e.target.value })}
                     className="w-full p-2.5 border border-slate-200 rounded-xl text-xs"
                   />
@@ -1017,6 +1053,7 @@ export default function DashboardPage() {
                     type="text"
                     placeholder="작업 제목 입력"
                     value={newSaleFormData.title}
+                    onFocus={() => setShowCustomerDropdown(false)}
                     onChange={e => setNewSaleFormData({ ...newSaleFormData, title: e.target.value })}
                     className="w-full p-2.5 border border-slate-200 rounded-xl text-xs font-bold"
                   />
@@ -1025,6 +1062,7 @@ export default function DashboardPage() {
                   <label className="block text-xs font-semibold text-slate-600 mb-1">진행 상태</label>
                   <select
                     value={newSaleFormData.billing_schedule}
+                    onFocus={() => setShowCustomerDropdown(false)}
                     onChange={e => setNewSaleFormData({ ...newSaleFormData, billing_schedule: e.target.value })}
                     className="w-full p-2.5 border border-slate-200 rounded-xl text-xs font-bold text-slate-800"
                   >
@@ -1036,6 +1074,7 @@ export default function DashboardPage() {
               </div>
 
               {/* 금액 양방향 자동 계산 */}
+
               <div className="space-y-1.5">
                 <div className="grid grid-cols-2 gap-3">
                   <div>
