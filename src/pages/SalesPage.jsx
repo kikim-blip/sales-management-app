@@ -1,13 +1,15 @@
 // src/pages/SalesPage.jsx
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useData } from '../context/DataContext';
 import { useGoogleAuth } from '../context/GoogleAuthContext';
-import { Plus, Calendar, Share2, Pencil, Trash2, ClipboardList, FileText, FileSearch, Printer, CheckCircle2, Truck, BarChart3, Download, Search, Filter, XCircle, Building, User, Phone, Mail, Calculator } from 'lucide-react';
+import { Plus, Calendar, Share2, Pencil, Trash2, ClipboardList, FileText, FileSearch, Printer, CheckCircle2, Truck, BarChart3, Download, Search, Filter, XCircle, Building, Building2, User, Phone, Mail, Calculator } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import JobOrderModal from '../components/common/JobOrderModal';
 import SelectJobOrderModal from '../components/common/SelectJobOrderModal';
 import QuotePrintModal from '../components/common/QuotePrintModal';
 import JobOrderPrintModal from '../components/common/JobOrderPrintModal';
 import EstimateModal from '../components/common/EstimateModal';
+
 
 export default function SalesPage() {
   const { sales, customers, jobOrders, payments, addSales, updateSales, deleteSales, addJobOrder, addPayment, addCustomer, selectedTeamGroup } = useData();
@@ -464,8 +466,6 @@ export default function SalesPage() {
         targetCustomerId = matchedCust.id;
       }
 
-
-
       const salePayload = {
         ...formData,
         customer_id: targetCustomerId,
@@ -487,15 +487,17 @@ export default function SalesPage() {
     }
   };
 
-
   // --- 📊 ERP 매출 조회 및 미수 보고서 생성 로직 ---
   const getFilteredByTime = () => {
+
     return filteredSales.filter(item => {
       // 1. 특정 거래처 지정 필터링
       if (selectedCustomerFilter !== 'ALL') {
         const cust = customers.find(c => c.id === item.customer_id);
-        const cName = cust ? cust.name : (item.customer_name || item.customer_id);
-        if (item.customer_id !== selectedCustomerFilter && cName !== selectedCustomerFilter) {
+        const matchById = item.customer_id === selectedCustomerFilter;
+        const matchByName = (cust && cust.name === selectedCustomerFilter) || (item.customer_name === selectedCustomerFilter);
+        const matchByFull = cust && `${cust.name} (${cust.dept})` === selectedCustomerFilter;
+        if (!matchById && !matchByName && !matchByFull) {
           return false;
         }
       }
@@ -535,7 +537,7 @@ export default function SalesPage() {
     currentReportSales.forEach(s => {
       const price = Number(s.total_price) || 0;
       summary.totalSales += price;
-      if (s.billing_schedule === '청구완료') {
+      if (s.billing_schedule === '청구완료' || s.billing_schedule === '수금완료') {
         summary.totalCollected += price;
       } else {
         summary.totalOutstanding += price;
@@ -546,17 +548,17 @@ export default function SalesPage() {
       const map = {};
       currentReportSales.forEach(s => {
         const cust = customers.find(c => c.id === s.customer_id);
-        const name = cust ? cust.name : (s.customer_name || s.customer_id || '미지정 거래처');
-        if (!map[name]) {
-          map[name] = { name, count: 0, sales: 0, collected: 0, outstanding: 0 };
+        const key = cust ? `${cust.name}${cust.dept ? ` (${cust.dept})` : ''}` : (s.customer_name || s.customer_id || '미지정 거래처');
+        if (!map[key]) {
+          map[key] = { name: key, count: 0, sales: 0, collected: 0, outstanding: 0 };
         }
         const price = Number(s.total_price) || 0;
-        map[name].count += 1;
-        map[name].sales += price;
-        if (s.billing_schedule === '청구완료') {
-          map[name].collected += price;
+        map[key].count += 1;
+        map[key].sales += price;
+        if (s.billing_schedule === '청구완료' || s.billing_schedule === '수금완료') {
+          map[key].collected += price;
         } else {
-          map[name].outstanding += price;
+          map[key].outstanding += price;
         }
       });
       return { summary, list: Object.values(map) };
@@ -566,14 +568,14 @@ export default function SalesPage() {
       const map = {};
       currentReportSales.forEach(s => {
         const cust = customers.find(c => c.id === s.customer_id);
-        const manager = cust ? (cust.sales_manager || '담당자 미지정') : '담당자 미지정';
+        const manager = (cust && cust.sales_manager) || s.manager_name || '담당자 미지정';
         if (!map[manager]) {
           map[manager] = { name: manager, count: 0, sales: 0, collected: 0, outstanding: 0 };
         }
         const price = Number(s.total_price) || 0;
         map[manager].count += 1;
         map[manager].sales += price;
-        if (s.billing_schedule === '청구완료') {
+        if (s.billing_schedule === '청구완료' || s.billing_schedule === '수금완료') {
           map[manager].collected += price;
         } else {
           map[manager].outstanding += price;
@@ -587,69 +589,17 @@ export default function SalesPage() {
 
   const { summary: reportSummary, list: reportList } = getReportSummaryAndData();
 
-  // ERP 엑셀 추출 (CSV)
-  const handleExportCSV = () => {
-    let title = `경성문화사_ERP_매출보고서_${timeResolution}별_${reportType}별`;
-    if (selectedCustomerFilter !== 'ALL') {
-      title += `_${selectedCustomerFilter}`;
-    }
-
-    let headers = [];
-    let rows = [];
-
-    if (reportType === 'all') {
-      headers = ['등록일', '거래처명', '작업명', '진행상태', '공급가액', '합계금액(VAT포함)', '수금액', '미수금'];
-      reportList.forEach(s => {
-        const cust = customers.find(c => c.id === s.customer_id);
-        const cName = cust ? cust.name : (s.customer_name || s.customer_id);
-        const isCollected = s.billing_schedule === '청구완료';
-        rows.push([
-          s.reg_date || s.receipt_date || '',
-          cName,
-          s.title || '',
-          s.billing_schedule || '',
-          s.supply_price || 0,
-          s.total_price || 0,
-          isCollected ? s.total_price : 0,
-          isCollected ? 0 : s.total_price
-        ]);
-      });
-    } else {
-      const typeLabel = reportType === 'customer' ? '거래처명' : '영업담당자';
-      headers = [typeLabel, '매출 건수', '총 매출액', '총 수금액', '총 미수금 잔액'];
-      reportList.forEach(item => {
-        rows.push([
-          item.name,
-          item.count,
-          item.sales,
-          item.collected,
-          item.outstanding
-        ]);
-      });
-    }
-
-    let csvContent = "\uFEFF" + headers.join(',') + '\n';
-    rows.forEach(r => {
-      csvContent += r.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',') + '\n';
-    });
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", `${title}_${today}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
+  // 💡 거래원장 데이터 산출 (거래처별 독립 잔액 누적 계산)
   const buildLedgerEntries = () => {
     const filteredLedgerSales = sales.filter((sale) => {
       const cust = customers.find((c) => c.id === sale.customer_id);
-      const customerName = cust ? cust.name : (sale.customer_name || sale.customer_id || '');
+      const cName = cust ? cust.name : (sale.customer_name || sale.customer_id || '');
+      const cFull = cust ? `${cust.name} (${cust.dept})` : cName;
 
-      if (selectedCustomerFilter !== 'ALL' && customerName !== selectedCustomerFilter && sale.customer_id !== selectedCustomerFilter) {
-        return false;
+      if (selectedCustomerFilter !== 'ALL') {
+        if (sale.customer_id !== selectedCustomerFilter && cName !== selectedCustomerFilter && cFull !== selectedCustomerFilter) {
+          return false;
+        }
       }
 
       const dateValue = normalizeDateStr(sale.reg_date || sale.receipt_date || sale.delivery_date);
@@ -661,10 +611,13 @@ export default function SalesPage() {
 
     const filteredLedgerPayments = payments.filter((payment) => {
       const cust = customers.find((c) => c.id === payment.customer_id);
-      const customerName = cust ? cust.name : (payment.customer_name || payment.customer_id || '');
+      const cName = cust ? cust.name : (payment.customer_name || payment.customer_id || '');
+      const cFull = cust ? `${cust.name} (${cust.dept})` : cName;
 
-      if (selectedCustomerFilter !== 'ALL' && customerName !== selectedCustomerFilter && payment.customer_id !== selectedCustomerFilter) {
-        return false;
+      if (selectedCustomerFilter !== 'ALL') {
+        if (payment.customer_id !== selectedCustomerFilter && cName !== selectedCustomerFilter && cFull !== selectedCustomerFilter) {
+          return false;
+        }
       }
 
       const dateValue = normalizeDateStr(payment.payment_date);
@@ -674,84 +627,155 @@ export default function SalesPage() {
       return true;
     });
 
-    const entries = [];
+    const rawEntries = [];
 
     filteredLedgerSales.forEach((sale) => {
       const cust = customers.find((c) => c.id === sale.customer_id);
-      const customerName = cust ? cust.name : (sale.customer_name || sale.customer_id || '미지정 거래처');
-      entries.push({
+      const orgName = cust ? cust.name : (sale.customer_name || '미지정 기관');
+      const deptName = cust?.dept || sale.dept || '';
+      const contactPerson = cust?.contact_person || sale.client_contact_person || '';
+      const key = `${orgName}___${deptName}`;
+
+      rawEntries.push({
         date: normalizeDateStr(sale.reg_date || sale.receipt_date || sale.delivery_date),
-        customer: customerName,
+        customerKey: key,
+        orgName,
+        deptName,
+        contactPerson,
+        customerDisplay: `${orgName}${deptName ? ` (${deptName})` : ''}`,
         kind: '매출',
         description: sale.title || '매출 건',
         sales: Number(sale.total_price || 0),
         payment: 0,
-        balance: 0,
       });
     });
 
     filteredLedgerPayments.forEach((payment) => {
       const cust = customers.find((c) => c.id === payment.customer_id);
-      const customerName = cust ? cust.name : (payment.customer_name || payment.customer_id || '미지정 거래처');
-      entries.push({
+      const orgName = cust ? cust.name : (payment.customer_name || '미지정 기관');
+      const deptName = cust?.dept || payment.dept || '';
+      const contactPerson = cust?.contact_person || '';
+      const key = `${orgName}___${deptName}`;
+
+      rawEntries.push({
         date: normalizeDateStr(payment.payment_date),
-        customer: customerName,
+        customerKey: key,
+        orgName,
+        deptName,
+        contactPerson,
+        customerDisplay: `${orgName}${deptName ? ` (${deptName})` : ''}`,
         kind: '수금',
-        description: '수금 처리',
+        description: `수금 입금 (${payment.method || '계좌이체'})`,
         sales: 0,
         payment: Number(payment.amount || 0),
-        balance: 0,
       });
     });
 
-    entries.sort((a, b) => (a.date || '9999-12-31').localeCompare(b.date || '9999-12-31'));
+    rawEntries.sort((a, b) => (a.date || '9999-12-31').localeCompare(b.date || '9999-12-31'));
 
-    let runningBalance = 0;
-    const finalEntries = entries.map((entry) => {
-      runningBalance += entry.kind === '매출' ? entry.sales : -entry.payment;
+    // 거래처별 독립 잔액 누적 계산
+    const customerBalanceMap = {};
+    const finalEntries = rawEntries.map((entry) => {
+      if (customerBalanceMap[entry.customerKey] === undefined) {
+        customerBalanceMap[entry.customerKey] = 0;
+      }
+      customerBalanceMap[entry.customerKey] += (entry.sales - entry.payment);
       return {
         ...entry,
-        balance: runningBalance,
+        customerBalance: customerBalanceMap[entry.customerKey],
       };
     });
 
     return finalEntries;
   };
 
-  const handleExportLedgerCSV = () => {
-    const ledgerEntries = buildLedgerEntries();
-    const selectedLabel = selectedCustomerFilter === 'ALL' ? '전체거래처' : selectedCustomerFilter;
-    const fileName = `경성문화사_거래원장_${selectedLabel}_${startDate || 'ALL'}_~_${endDate || 'ALL'}.csv`;
-
-    const headers = ['거래일', '거래처', '구분', '적요', '매출금액', '수금금액', '잔액'];
-    const rows = ledgerEntries.map((entry) => [
-      entry.date,
-      entry.customer,
-      entry.kind,
-      entry.description,
-      entry.sales,
-      entry.payment,
-      entry.balance,
-    ]);
-
-    const csv = [headers, ...rows]
-      .map((row) => row.map((cell) => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(','))
-      .join('\n');
-
-    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = fileName;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  };
-
   const ledgerEntries = buildLedgerEntries();
 
+  // 💡 엑셀 거래원장 다운로드 (.xlsx)
+  const handleExportLedgerExcel = () => {
+    const today = new Date().toISOString().split('T')[0];
+    const selectedLabel = selectedCustomerFilter === 'ALL' ? '전체거래처' : selectedCustomerFilter;
+
+    const excelData = [
+      ['경성문화사 거래원장 리포트', `[대상: ${selectedLabel}]`, `추출일자: ${today}`],
+      [],
+      ['거래일자', '기관명(고객사)', '부서 / 과', '담당자', '구분', '적요 / 작업내용', '매출금액', '수금금액', '거래처 누적잔액'],
+      ...ledgerEntries.map((entry) => [
+        entry.date || '-',
+        entry.orgName,
+        entry.deptName || '-',
+        entry.contactPerson || '-',
+        entry.kind,
+        entry.description,
+        entry.sales,
+        entry.payment,
+        entry.customerBalance,
+      ]),
+      [],
+      [
+        '합계', '', '', '', '', '',
+        ledgerEntries.reduce((a, c) => a + c.sales, 0),
+        ledgerEntries.reduce((a, c) => a + c.payment, 0),
+        ledgerEntries.reduce((a, c) => a + c.sales, 0) - ledgerEntries.reduce((a, c) => a + c.payment, 0),
+      ]
+    ];
+
+    const ws = XLSX.utils.aoa_to_sheet(excelData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '거래원장');
+    XLSX.writeFile(wb, `거래원장_${selectedLabel}_${today}.xlsx`);
+  };
+
+  // 💡 엑셀 분석보고서 다운로드 (.xlsx)
+  const handleExportAnalysisExcel = () => {
+    const today = new Date().toISOString().split('T')[0];
+    const typeLabel = reportType === 'customer' ? '거래처별' : reportType === 'manager' ? '영업담당자별' : '전체';
+
+    let excelData = [];
+    if (reportType === 'all') {
+      excelData = [
+        ['경성문화사 ERP 매출현황 분석보고서', `[기준: 전체]`, `추출일자: ${today}`],
+        [],
+        ['등록일', '기관명(고객사)', '부서/과', '작업명', '진행상태', '공급가액', '합계금액(VAT포함)', '수금완료액', '미수금 잔액'],
+        ...reportList.map(s => {
+          const cust = customers.find(c => c.id === s.customer_id);
+          const isCollected = s.billing_schedule === '청구완료' || s.billing_schedule === '수금완료';
+          return [
+            s.reg_date || s.receipt_date || '-',
+            cust ? cust.name : (s.customer_name || '-'),
+            cust ? (cust.dept || '-') : '-',
+            s.title || '-',
+            s.billing_schedule || '진행중',
+            s.supply_price || 0,
+            s.total_price || 0,
+            isCollected ? s.total_price : 0,
+            isCollected ? 0 : s.total_price,
+          ];
+        }),
+      ];
+    } else {
+      excelData = [
+        ['경성문화사 ERP 매출현황 분석보고서', `[기준: ${typeLabel}]`, `추출일자: ${today}`],
+        [],
+        [typeLabel, '매출 건수', '총 매출액(VAT포함)', '총 수금완료액', '총 미수금 잔액'],
+        ...reportList.map(item => [
+          item.name,
+          item.count,
+          item.sales,
+          item.collected,
+          item.outstanding,
+        ]),
+      ];
+    }
+
+    const ws = XLSX.utils.aoa_to_sheet(excelData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '매출분석보고서');
+  };
+
   const renderStatusBadge = (status) => {
+
+
     if (status === '청구완료') {
       return <span className="bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs px-2.5 py-1 rounded-lg font-extrabold flex items-center space-x-1"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /><span>청구완료 (수금완료)</span></span>;
     }
@@ -1344,8 +1368,8 @@ export default function SalesPage() {
                 >
                   <option value="ALL">🏢 전체 거래처 보기</option>
                   {customers.map(c => (
-                    <option key={c.id} value={c.name}>
-                      🏢 {c.name} {c.dept ? `(${c.dept})` : ''}
+                    <option key={c.id} value={c.id}>
+                      🏢 {c.name} {c.dept ? `(${c.dept})` : ''} {c.contact_person ? `- ${c.contact_person}` : ''}
                     </option>
                   ))}
                 </select>
@@ -1353,26 +1377,26 @@ export default function SalesPage() {
             </div>
 
             {/* 조회 다운로드 조작 구역 */}
-            <div className="flex justify-between items-center pt-2 border-t border-slate-100">
+            <div className="flex flex-wrap justify-between items-center gap-2 pt-2 border-t border-slate-100">
               <span className="text-xs text-slate-500 font-semibold">
-                필터 결과: 총 <strong className="text-sky-600 font-bold">{currentReportSales.length}</strong> 건의 데이터가 검색되었습니다.
+                필터 결과: 총 <strong className="text-sky-600 font-bold">{currentReportSales.length}</strong> 건의 매출 데이터가 검색되었습니다.
               </span>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={handleExportLedgerCSV}
-                  className="flex items-center space-x-1.5 bg-violet-600 hover:bg-violet-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-md transition"
+                  onClick={handleExportLedgerExcel}
+                  className="flex items-center space-x-1.5 bg-violet-600 hover:bg-violet-700 text-white px-3.5 py-1.5 rounded-xl text-xs font-bold shadow-md transition"
                 >
                   <Download className="w-4 h-4" />
-                  <span>📒 거래원장 추출 (CSV)</span>
+                  <span>📒 거래원장 엑셀 (.xlsx)</span>
                 </button>
                 <button
                   type="button"
-                  onClick={handleExportCSV}
-                  className="flex items-center space-x-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-md transition"
+                  onClick={handleExportAnalysisExcel}
+                  className="flex items-center space-x-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-1.5 rounded-xl text-xs font-bold shadow-md transition"
                 >
                   <Download className="w-4 h-4" />
-                  <span>📥 엑셀 보고서 다운로드 (CSV)</span>
+                  <span>📥 매출보고서 엑셀 (.xlsx)</span>
                 </button>
               </div>
             </div>
@@ -1381,46 +1405,86 @@ export default function SalesPage() {
           {/* 거래원장 상세 테이블 */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="px-4 py-3 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
-              <h4 className="font-extrabold text-sm text-slate-700">거래원장</h4>
-              <span className="text-[10px] text-slate-500">{selectedCustomerFilter === 'ALL' ? '전체 거래처' : selectedCustomerFilter} / {startDate || '시작일'} ~ {endDate || '종료일'}</span>
+              <div className="flex items-center space-x-2">
+                <Building2 className="w-4 h-4 text-violet-600" />
+                <h4 className="font-extrabold text-sm text-slate-800">거래원장 (거래처별 잔액 추이)</h4>
+              </div>
+              <span className="text-[11px] text-slate-500 font-mono">
+                {selectedCustomerFilter === 'ALL' ? '전체 거래처' : (customers.find(c => c.id === selectedCustomerFilter)?.name || selectedCustomerFilter)} / {startDate || '전체기간'} ~ {endDate || ''}
+              </span>
             </div>
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
               <table className="w-full text-xs border-collapse">
-                <thead className="bg-slate-50 text-slate-700 uppercase font-extrabold border-b border-slate-200">
+                <thead className="bg-slate-100/90 text-slate-700 uppercase font-extrabold border-b border-slate-200 sticky top-0 z-10">
                   <tr>
-                    <th className="p-3 text-left">거래일</th>
-                    <th className="p-3 text-left">거래처</th>
-                    <th className="p-3 text-left">구분</th>
-                    <th className="p-3 text-left">적요</th>
+                    <th className="p-3 pl-4 text-left">거래일자</th>
+                    <th className="p-3 text-left">기관명 (고객사)</th>
+                    <th className="p-3 text-left">부서 / 과</th>
+                    <th className="p-3 text-left">담당자</th>
+                    <th className="p-3 text-center">구분</th>
+                    <th className="p-3 text-left">작업명 / 적요</th>
                     <th className="p-3 text-right">매출금액</th>
                     <th className="p-3 text-right">수금금액</th>
-                    <th className="p-3 text-right">잔액</th>
+                    <th className="p-3 pr-4 text-right">해당 거래처 잔액</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-800">
                   {ledgerEntries.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="p-10 text-center text-slate-400 font-bold">선택한 조건에 해당하는 거래원장 내역이 없습니다.</td>
+                      <td colSpan={9} className="p-10 text-center text-slate-400 font-bold">선택한 조건에 해당하는 거래원장 내역이 없습니다.</td>
                     </tr>
                   ) : (
                     ledgerEntries.map((entry, idx) => (
-                      <tr key={`${entry.date}-${entry.customer}-${entry.kind}-${idx}`} className="hover:bg-slate-50 transition">
-                        <td className="p-3 font-mono text-slate-500">{entry.date || '-'}</td>
-                        <td className="p-3 font-bold">{entry.customer}</td>
-                        <td className={`p-3 font-bold ${entry.kind === '매출' ? 'text-blue-700' : 'text-emerald-700'}`}>{entry.kind}</td>
-                        <td className="p-3">{entry.description}</td>
-                        <td className="p-3 text-right font-mono">{entry.sales ? `₩ ${entry.sales.toLocaleString()}` : '-'}</td>
-                        <td className="p-3 text-right font-mono text-emerald-700">{entry.payment ? `₩ ${entry.payment.toLocaleString()}` : '-'}</td>
-                        <td className={`p-3 text-right font-mono font-bold ${entry.balance >= 0 ? 'text-slate-800' : 'text-rose-600'}`}>
-                          ₩ {Math.abs(entry.balance).toLocaleString()}
+                      <tr key={`${entry.date}-${entry.customerKey}-${entry.kind}-${idx}`} className="hover:bg-slate-50 transition">
+                        <td className="p-3 pl-4 font-mono text-slate-500">{entry.date || '-'}</td>
+                        <td className="p-3 font-bold text-slate-900">{entry.orgName}</td>
+                        <td className="p-3 text-slate-600">{entry.deptName || '-'}</td>
+                        <td className="p-3 text-slate-600 font-medium">{entry.contactPerson || '-'}</td>
+                        <td className="p-3 text-center">
+                          <span className={`px-2 py-0.5 rounded-md font-bold text-[11px] ${
+                            entry.kind === '매출'
+                              ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                              : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                          }`}>
+                            {entry.kind}
+                          </span>
+                        </td>
+                        <td className="p-3 text-slate-700">{entry.description}</td>
+                        <td className="p-3 text-right font-mono font-bold text-slate-800">
+                          {entry.sales > 0 ? `₩ ${entry.sales.toLocaleString()} 원` : '-'}
+                        </td>
+                        <td className="p-3 text-right font-mono font-bold text-emerald-600">
+                          {entry.payment > 0 ? `₩ ${entry.payment.toLocaleString()} 원` : '-'}
+                        </td>
+                        <td className="p-3 pr-4 text-right font-mono font-black">
+                          <span className={entry.customerBalance > 0 ? 'text-rose-600' : 'text-slate-700'}>
+                            ₩ {entry.customerBalance.toLocaleString()} 원
+                          </span>
                         </td>
                       </tr>
                     ))
                   )}
                 </tbody>
+                <tfoot className="bg-slate-100 font-bold text-slate-900 border-t-2 border-slate-200 sticky bottom-0 z-10">
+                  <tr>
+                    <td className="p-3 pl-4" colSpan={6}>
+                      합계 ({ledgerEntries.length}건)
+                    </td>
+                    <td className="p-3 text-right font-mono text-slate-900">
+                      ₩ {ledgerEntries.reduce((a, c) => a + c.sales, 0).toLocaleString()} 원
+                    </td>
+                    <td className="p-3 text-right font-mono text-emerald-700">
+                      ₩ {ledgerEntries.reduce((a, c) => a + c.payment, 0).toLocaleString()} 원
+                    </td>
+                    <td className="p-3 pr-4 text-right font-mono text-rose-700 font-black">
+                      ₩ {(ledgerEntries.reduce((a, c) => a + c.sales, 0) - ledgerEntries.reduce((a, c) => a + c.payment, 0)).toLocaleString()} 원
+                    </td>
+                  </tr>
+                </tfoot>
               </table>
             </div>
           </div>
+
 
           {/* ERP 요약 통계 카드 */}
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-3.5">
