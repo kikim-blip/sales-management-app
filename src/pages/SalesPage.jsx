@@ -159,8 +159,9 @@ export default function SalesPage() {
     reg_date: today,
     receipt_date: today,
     delivery_date: today,
-    delivery_time: '14:00',
+    delivery_time: '',
     customer_id: '',
+
     customer_name: '',
     dept: '',
     contact_person: '',
@@ -233,7 +234,7 @@ export default function SalesPage() {
       title: item.title || '',
       estimated_price: item.supply_price || item.total_price || '',
       delivery_date: item.delivery_date || today,
-      delivery_time: item.delivery_time || '14:00',
+      delivery_time: item.delivery_time || '',
       receipt_date: item.receipt_date || item.reg_date || today,
       request_note: item.content || item.note || '',
       client_contact_person: cust ? (cust.contact_person || '') : (item.contact_person || ''),
@@ -268,7 +269,7 @@ export default function SalesPage() {
       content: `[코드: ${order.code_number || order.id}] ${order.cover_job || ''} / ${order.binding || ''}`,
       note: `담당: ${order.manager_name} (코드: ${order.code_number})`,
       delivery_date: order.delivery_date || today,
-      delivery_time: order.delivery_time || '14:00',
+      delivery_time: order.delivery_time || '',
       supply_price: supply,
       tax: tax,
       total_price: supply + tax,
@@ -300,7 +301,8 @@ export default function SalesPage() {
       reg_date: item.reg_date || today,
       receipt_date: item.receipt_date || today,
       delivery_date: item.delivery_date || today,
-      delivery_time: item.delivery_time || '14:00',
+      delivery_time: item.delivery_time || '',
+
       customer_id: item.customer_id || '',
       customer_name: cName,
       dept: cDept,
@@ -1806,15 +1808,29 @@ export default function SalesPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1">납품 시간</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-semibold text-slate-600">납품 시간</label>
+                    {formData.delivery_time ? (
+                      <button
+                        type="button"
+                        onClick={() => setFormData({ ...formData, delivery_time: '' })}
+                        className="text-[11px] text-slate-400 hover:text-rose-600 font-semibold"
+                      >
+                        ✕ 시간 미지정 (종일)
+                      </button>
+                    ) : (
+                      <span className="text-[11px] text-sky-600 font-bold">종일 (시간 미지정)</span>
+                    )}
+                  </div>
                   <input
                     type="time"
-                    value={formData.delivery_time}
+                    value={formData.delivery_time || ''}
                     onChange={e => setFormData({ ...formData, delivery_time: e.target.value })}
                     className="w-full p-2.5 border border-slate-200 rounded-xl text-xs"
                   />
                 </div>
               </div>
+
 
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1">작업 상세 내용</label>

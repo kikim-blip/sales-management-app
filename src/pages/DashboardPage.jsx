@@ -164,9 +164,27 @@ export default function DashboardPage() {
     const calTitle = `${orgDeptHeader} ${jobTitle}`.trim();
     const title = encodeURIComponent(calTitle);
     
-    const rawDate = (order.delivery_date || todayStr).replace(/-/g, '');
-    const rawTime = (order.delivery_time || '14:00').replace(':', '') + '00';
-    const dates = `${rawDate}T${rawTime}/${rawDate}T${rawTime}`;
+    let dates;
+    const targetDateStr = order.delivery_date || todayStr;
+
+    if (order.delivery_time && order.delivery_time.trim()) {
+      const rawDate = targetDateStr.replace(/-/g, '');
+      const rawTime = order.delivery_time.replace(':', '') + '00';
+      dates = `${rawDate}T${rawTime}/${rawDate}T${rawTime}`;
+    } else {
+      // 납품 시간 미지정 시: 구글 캘린더 종일(전일) 일정 등록 (YYYYMMDD/YYYYMMDD+1)
+      const startDate = new Date(targetDateStr);
+      const nextDate = new Date(startDate);
+      nextDate.setDate(nextDate.getDate() + 1);
+      
+      const formatYMD = (d) => {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}${m}${day}`;
+      };
+      dates = `${formatYMD(startDate)}/${formatYMD(nextDate)}`;
+    }
 
     // 담당자 및 연락처
     const contactPerson = cust?.contact_person || order.client_contact_person || order.contact_person || '';
@@ -175,7 +193,9 @@ export default function DashboardPage() {
 
     // 상세 작업내용
     const contentText = order.content || order.request_note || order.detailsText || '-';
-    const deliveryTimeStr = `${order.delivery_date || todayStr} ${order.delivery_time || '14:00'}`;
+    const deliveryTimeStr = order.delivery_time && order.delivery_time.trim()
+      ? `${targetDateStr} ${order.delivery_time}`
+      : `${targetDateStr} (종일)`;
     const managerStr = order.manager_name || order.sales_manager || cust?.sales_manager || '-';
     
     // 2. 본문 내용 포맷
@@ -194,6 +214,7 @@ export default function DashboardPage() {
     const googleCalendarUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${dates}&details=${details}`;
     window.open(googleCalendarUrl, '_blank');
   };
+
 
 
   // 💡 슈퍼스레드 업무 채널 건별 선택 발송 연동 헬퍼
@@ -293,8 +314,9 @@ export default function DashboardPage() {
     content: '',
     note: '',
     delivery_date: todayStr,
-    delivery_time: '14:00',
+    delivery_time: '',
     supply_price: '',
+
     tax: 0,
     total_price: '',
     billing_schedule: '진행중',
@@ -795,15 +817,29 @@ export default function DashboardPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1">납품 시간</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-semibold text-slate-600">납품 시간</label>
+                    {editingSale.delivery_time ? (
+                      <button
+                        type="button"
+                        onClick={() => setEditingSale({ ...editingSale, delivery_time: '' })}
+                        className="text-[11px] text-slate-400 hover:text-rose-600 font-semibold"
+                      >
+                        ✕ 시간 미지정 (종일)
+                      </button>
+                    ) : (
+                      <span className="text-[11px] text-sky-600 font-bold">종일 (시간 미지정)</span>
+                    )}
+                  </div>
                   <input
                     type="time"
-                    value={editingSale.delivery_time || '14:00'}
+                    value={editingSale.delivery_time || ''}
                     onChange={e => setEditingSale({ ...editingSale, delivery_time: e.target.value })}
                     className="w-full p-2.5 border border-slate-200 rounded-xl text-xs font-semibold focus:border-sky-500"
                   />
                 </div>
               </div>
+
 
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1">작업 상세 내용 / 비고</label>
@@ -1139,19 +1175,33 @@ export default function DashboardPage() {
                     type="date"
                     value={newSaleFormData.delivery_date}
                     onChange={e => setNewSaleFormData({ ...newSaleFormData, delivery_date: e.target.value })}
-                    className="w-full p-2.5 border border-slate-200 rounded-xl text-xs"
+                    className="w-full p-2.5 border border-slate-200 rounded-xl text-xs font-medium"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1">납품 시간</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-semibold text-slate-600">납품 시간</label>
+                    {newSaleFormData.delivery_time ? (
+                      <button
+                        type="button"
+                        onClick={() => setNewSaleFormData({ ...newSaleFormData, delivery_time: '' })}
+                        className="text-[11px] text-slate-400 hover:text-rose-600 font-semibold"
+                      >
+                        ✕ 시간 미지정 (종일)
+                      </button>
+                    ) : (
+                      <span className="text-[11px] text-sky-600 font-bold">종일 (시간 미지정)</span>
+                    )}
+                  </div>
                   <input
                     type="time"
-                    value={newSaleFormData.delivery_time}
+                    value={newSaleFormData.delivery_time || ''}
                     onChange={e => setNewSaleFormData({ ...newSaleFormData, delivery_time: e.target.value })}
                     className="w-full p-2.5 border border-slate-200 rounded-xl text-xs"
                   />
                 </div>
               </div>
+
 
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1">작업 상세 내용</label>

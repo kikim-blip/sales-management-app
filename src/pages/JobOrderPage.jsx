@@ -77,9 +77,27 @@ export default function JobOrderPage() {
     const calTitle = `${orgDeptHeader} ${jobTitle}`.trim();
     const title = encodeURIComponent(calTitle);
     
-    const rawDate = (order.delivery_date || todayStr).replace(/-/g, '');
-    const rawTime = (order.delivery_time || '14:00').replace(':', '') + '00';
-    const dates = `${rawDate}T${rawTime}/${rawDate}T${rawTime}`;
+    let dates;
+    const targetDateStr = order.delivery_date || todayStr;
+
+    if (order.delivery_time && order.delivery_time.trim()) {
+      const rawDate = targetDateStr.replace(/-/g, '');
+      const rawTime = order.delivery_time.replace(':', '') + '00';
+      dates = `${rawDate}T${rawTime}/${rawDate}T${rawTime}`;
+    } else {
+      // 납품 시간 미지정 시: 구글 캘린더 종일(전일) 일정 등록 (YYYYMMDD/YYYYMMDD+1)
+      const startDate = new Date(targetDateStr);
+      const nextDate = new Date(startDate);
+      nextDate.setDate(nextDate.getDate() + 1);
+      
+      const formatYMD = (d) => {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}${m}${day}`;
+      };
+      dates = `${formatYMD(startDate)}/${formatYMD(nextDate)}`;
+    }
 
     // 담당자 및 연락처
     const contactPerson = cust?.contact_person || order.client_contact_person || '';
@@ -89,7 +107,9 @@ export default function JobOrderPage() {
     // 상세 작업내용
     const specText = `사양: ${order.spec || '-'} | 수량: ${order.quantity ? `${order.quantity}부` : '-'} | 제본: ${order.binding || '-'}`;
     const contentText = `${specText}${order.request_note ? `\n요청사항: ${order.request_note}` : ''}`;
-    const deliveryTimeStr = `${order.delivery_date || todayStr} ${order.delivery_time || '14:00'}`;
+    const deliveryTimeStr = order.delivery_time && order.delivery_time.trim()
+      ? `${targetDateStr} ${order.delivery_time}`
+      : `${targetDateStr} (종일)`;
     const managerStr = order.manager_name || (cust ? cust.sales_manager : '-');
     
     // 2. 본문 내용 포맷
@@ -108,6 +128,7 @@ export default function JobOrderPage() {
     const googleCalendarUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${dates}&details=${details}`;
     window.open(googleCalendarUrl, '_blank');
   };
+
 
 
   // 💡 건별 슈퍼스레드 연동 헬퍼

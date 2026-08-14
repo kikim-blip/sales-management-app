@@ -65,8 +65,9 @@ export default function JobOrderModal({ customers = [], initialData = null, onSa
     manager_name: initialData?.manager_name || userName,
     receipt_date: initialData?.receipt_date || today,
     delivery_date: initialData?.delivery_date || today,
-    delivery_time: initialData?.delivery_time || '14:00',
+    delivery_time: initialData?.delivery_time || '',
     customer_id: initialData?.customer_id || '',
+
     dept: initialData?.dept || '',
     title: initialData?.title || '',
     spec: initialData?.spec || '',
@@ -327,12 +328,25 @@ export default function JobOrderModal({ customers = [], initialData = null, onSa
                 <span className="text-black font-bold">시간:</span>
                 <input
                   type="time"
-                  value={formData.delivery_time}
+                  value={formData.delivery_time || ''}
                   onChange={e => setFormData({ ...formData, delivery_time: e.target.value })}
                   className="p-1 border border-slate-300 rounded font-bold text-xs text-rose-600"
                 />
+                {formData.delivery_time ? (
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, delivery_time: '' })}
+                    className="text-[10px] text-slate-400 hover:text-rose-600 px-1 py-0.5 border border-slate-200 rounded"
+                    title="시간 삭제 (종일 일정으로 변경)"
+                  >
+                    종일
+                  </button>
+                ) : (
+                  <span className="text-[10px] text-sky-600 font-semibold">(종일)</span>
+                )}
               </div>
             </div>
+
 
             {/* 3. HWP 양식과 100% 동일한 1:1 실물 표 입력 테이블 */}
             <div className="border-2 border-black divide-y-2 divide-black bg-white">
