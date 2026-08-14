@@ -523,41 +523,41 @@ export default function DashboardPage() {
       </div>
 
       {/* ── 📊 매출/수금/미수금 2단 현황 지표 (1행: 누적 총괄 / 2행: 당월 실적) ── */}
-      <div className="space-y-3">
+      <div className="space-y-2.5 sm:space-y-3">
         {/* 1행: 누적 총괄 현황 */}
         <div>
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">전체 누적 총괄 현황</span>
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-[11px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider">전체 누적 총괄 현황</span>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
+            <div className="bg-white p-3 sm:p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
               <div>
-                <p className="text-[11px] font-semibold text-slate-500 mb-0.5">총 매출 청구액 (누적)</p>
-                <p className="text-lg font-black text-slate-900 font-mono">₩ {totalSalesAmount.toLocaleString()} 원</p>
+                <p className="text-[10px] sm:text-[11px] font-semibold text-slate-500 mb-0.5">총 매출 청구액 (누적)</p>
+                <p className="text-base sm:text-lg font-black text-slate-900 font-mono">₩ {totalSalesAmount.toLocaleString()} 원</p>
               </div>
-              <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-extrabold text-base">₩</div>
+              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-extrabold text-sm sm:text-base flex-shrink-0">₩</div>
             </div>
 
-            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+            <div className="bg-white p-3 sm:p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
               <div>
-                <p className="text-[11px] font-semibold text-slate-500 mb-0.5">총 입금/수금액 (누적)</p>
-                <p className="text-lg font-black text-emerald-600 font-mono">₩ {totalPaymentAmount.toLocaleString()} 원</p>
+                <p className="text-[10px] sm:text-[11px] font-semibold text-slate-500 mb-0.5">총 입금/수금액 (누적)</p>
+                <p className="text-base sm:text-lg font-black text-emerald-600 font-mono">₩ {totalPaymentAmount.toLocaleString()} 원</p>
               </div>
-              <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-extrabold text-base">₩</div>
+              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-extrabold text-sm sm:text-base flex-shrink-0">₩</div>
             </div>
 
-            <div className={`bg-white p-4 rounded-2xl border shadow-sm flex items-center justify-between ${isOverpaid ? 'border-amber-200 bg-amber-50/20' : 'border-rose-100 bg-rose-50/20'}`}>
+            <div className={`bg-white p-3 sm:p-4 rounded-2xl border shadow-sm flex items-center justify-between ${isOverpaid ? 'border-amber-200 bg-amber-50/20' : 'border-rose-100 bg-rose-50/20'}`}>
               <div>
-                <p className={`text-[11px] font-semibold mb-0.5 ${isOverpaid ? 'text-amber-600' : 'text-rose-600'}`}>총 미수금 잔액 (누적)</p>
-                <p className={`text-lg font-black font-mono ${isOverpaid ? 'text-amber-600' : 'text-rose-600'}`}>
+                <p className={`text-[10px] sm:text-[11px] font-semibold mb-0.5 ${isOverpaid ? 'text-amber-600' : 'text-rose-600'}`}>총 미수금 잔액 (누적)</p>
+                <p className={`text-base sm:text-lg font-black font-mono ${isOverpaid ? 'text-amber-600' : 'text-rose-600'}`}>
                   {isOverpaid ? (
-                    <span className="text-sm font-semibold">₩ 0 원 <span className="text-xs text-amber-500">(초과 수금 {Math.abs(totalUnpaidAmount).toLocaleString()}원)</span></span>
+                    <span className="text-xs sm:text-sm font-semibold">₩ 0 원 <span className="text-[10px] sm:text-xs text-amber-500">(초과 {Math.abs(totalUnpaidAmount).toLocaleString()}원)</span></span>
                   ) : (
                     <>₩ {displayUnpaid.toLocaleString()} 원</>
                   )}
                 </p>
               </div>
-              <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${isOverpaid ? 'bg-amber-100 text-amber-600' : 'bg-rose-100 text-rose-600'}`}>
+              <div className={`w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${isOverpaid ? 'bg-amber-100 text-amber-600' : 'bg-rose-100 text-rose-600'}`}>
                 <AlertTriangle className="w-4 h-4" />
               </div>
             </div>
@@ -566,41 +566,41 @@ export default function DashboardPage() {
 
         {/* 2행: 당월 실적 현황 */}
         <div>
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-bold text-sky-700 flex items-center gap-1.5">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-[11px] sm:text-xs font-bold text-sky-700 flex items-center gap-1.5">
               <Calendar className="w-3.5 h-3.5" />
               <span>{currentMonthDisplay} 당월 실적 현황 ({currentYearMonth})</span>
             </span>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div className="bg-sky-50/60 p-4 rounded-2xl border border-sky-200/90 shadow-sm flex items-center justify-between">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
+            <div className="bg-sky-50/60 p-3 sm:p-4 rounded-2xl border border-sky-200/90 shadow-sm flex items-center justify-between">
               <div>
-                <p className="text-[11px] font-bold text-sky-800 mb-0.5">{currentMonthDisplay} 당월 매출 청구액</p>
-                <p className="text-lg font-black text-sky-950 font-mono">₩ {currentMonthSalesAmount.toLocaleString()} 원</p>
+                <p className="text-[10px] sm:text-[11px] font-bold text-sky-800 mb-0.5">{currentMonthDisplay} 당월 매출 청구액</p>
+                <p className="text-base sm:text-lg font-black text-sky-950 font-mono">₩ {currentMonthSalesAmount.toLocaleString()} 원</p>
               </div>
-              <div className="w-9 h-9 rounded-xl bg-sky-100 text-sky-700 flex items-center justify-center font-bold text-xs">당월</div>
+              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-sky-100 text-sky-700 flex items-center justify-center font-bold text-[11px] sm:text-xs flex-shrink-0">당월</div>
             </div>
 
-            <div className="bg-emerald-50/60 p-4 rounded-2xl border border-emerald-200/90 shadow-sm flex items-center justify-between">
+            <div className="bg-emerald-50/60 p-3 sm:p-4 rounded-2xl border border-emerald-200/90 shadow-sm flex items-center justify-between">
               <div>
-                <p className="text-[11px] font-bold text-emerald-800 mb-0.5">{currentMonthDisplay} 당월 입금/수금액</p>
-                <p className="text-lg font-black text-emerald-700 font-mono">₩ {currentMonthPaymentAmount.toLocaleString()} 원</p>
+                <p className="text-[10px] sm:text-[11px] font-bold text-emerald-800 mb-0.5">{currentMonthDisplay} 당월 입금/수금액</p>
+                <p className="text-base sm:text-lg font-black text-emerald-700 font-mono">₩ {currentMonthPaymentAmount.toLocaleString()} 원</p>
               </div>
-              <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-xs">당월</div>
+              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-[11px] sm:text-xs flex-shrink-0">당월</div>
             </div>
 
-            <div className={`p-4 rounded-2xl border shadow-sm flex items-center justify-between ${currentMonthOverpaid ? 'bg-amber-50/60 border-amber-200/90' : 'bg-rose-50/60 border-rose-200/90'}`}>
+            <div className={`p-3 sm:p-4 rounded-2xl border shadow-sm flex items-center justify-between ${currentMonthOverpaid ? 'bg-amber-50/60 border-amber-200/90' : 'bg-rose-50/60 border-rose-200/90'}`}>
               <div>
-                <p className={`text-[11px] font-bold mb-0.5 ${currentMonthOverpaid ? 'text-amber-800' : 'text-rose-800'}`}>{currentMonthDisplay} 당월 미수금 잔액</p>
-                <p className={`text-lg font-black font-mono ${currentMonthOverpaid ? 'text-amber-700' : 'text-rose-700'}`}>
+                <p className={`text-[10px] sm:text-[11px] font-bold mb-0.5 ${currentMonthOverpaid ? 'text-amber-800' : 'text-rose-800'}`}>{currentMonthDisplay} 당월 미수금 잔액</p>
+                <p className={`text-base sm:text-lg font-black font-mono ${currentMonthOverpaid ? 'text-amber-700' : 'text-rose-700'}`}>
                   {currentMonthOverpaid ? (
-                    <span className="text-sm font-semibold">₩ 0 원 <span className="text-xs text-amber-600">(초과 수금 {Math.abs(currentMonthUnpaidAmount).toLocaleString()}원)</span></span>
+                    <span className="text-xs sm:text-sm font-semibold">₩ 0 원 <span className="text-[10px] sm:text-xs text-amber-600">(초과 {Math.abs(currentMonthUnpaidAmount).toLocaleString()}원)</span></span>
                   ) : (
                     <>₩ {currentMonthDisplayUnpaid.toLocaleString()} 원</>
                   )}
                 </p>
               </div>
-              <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs ${currentMonthOverpaid ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'}`}>
+              <div className={`w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center font-bold text-[11px] sm:text-xs flex-shrink-0 ${currentMonthOverpaid ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'}`}>
                 잔액
               </div>
             </div>
@@ -611,24 +611,25 @@ export default function DashboardPage() {
 
       {/* 🚨 1. 실시간 납품 일정 급건 순서 리스트 (원하는 건별 캘린더/슈퍼스레드/전표수정/인쇄 버튼 탑재) */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="px-5 py-3.5 border-b border-slate-100 flex justify-between items-center bg-slate-900 text-white">
-          <div className="flex items-center space-x-2.5">
-            <Clock className="w-5 h-5 text-amber-400 animate-pulse" />
-            <h3 className="font-bold text-sm text-white">납품 일정</h3>
-            <span className="text-[11px] font-bold text-slate-300 bg-slate-800 px-2 py-0.5 rounded-full border border-slate-700">
+        <div className="px-3.5 py-3 sm:px-5 sm:py-3.5 border-b border-slate-100 flex flex-wrap justify-between items-center bg-slate-900 text-white gap-2">
+          <div className="flex items-center space-x-2">
+            <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-amber-400 animate-pulse flex-shrink-0" />
+            <h3 className="font-bold text-xs sm:text-sm text-white">납품 일정</h3>
+            <span className="text-[10px] sm:text-[11px] font-bold text-slate-300 bg-slate-800 px-2 py-0.5 rounded-full border border-slate-700">
               {urgentDeliveryList.length}건
             </span>
           </div>
 
           <button
             onClick={openNewSaleModal}
-            className="flex items-center space-x-1.5 bg-sky-600 hover:bg-sky-500 text-white px-3 py-1.5 rounded-xl text-xs font-bold shadow-sm transition active:scale-95 border border-sky-400/30"
+            className="flex items-center space-x-1 sm:space-x-1.5 bg-sky-600 hover:bg-sky-500 text-white px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-xl text-[11px] sm:text-xs font-bold shadow-sm transition active:scale-95 border border-sky-400/30 whitespace-nowrap"
             title="신규 매출/견적 수동 등록 팝업 열기"
           >
-            <Plus className="w-4 h-4" />
-            <span>신규 매출/견적 등록</span>
+            <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <span>신규 <span className="hidden xs:inline">매출/견적 </span>등록</span>
           </button>
         </div>
+
 
 
         <div className="divide-y divide-slate-100 max-h-[420px] overflow-y-auto">
@@ -660,56 +661,19 @@ export default function DashboardPage() {
                       </h4>
                     </div>
 
-                    <div className="flex flex-col gap-1 text-xs text-slate-600">
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                        <span>
-                          발주처: <strong className="text-slate-800">{item.customerNameDisplay}</strong>
-                        </span>
-                        {(() => {
-                          const cust = customers.find(c => c.id === item.customer_id);
-                          const contactPerson = cust?.contact_person || item.client_contact_person || item.contact_person || '';
-                          const phone = cust?.phone || item.client_phone || item.phone || '';
-                          const email = cust?.email || item.client_email || item.email || '';
-                          const manager = item.manager_name || item.sales_manager || cust?.sales_manager || '';
-                          if (!contactPerson && !phone && !email && !manager) return null;
-                          return (
-                            <span className="flex flex-wrap items-center gap-x-2 text-[11px] text-slate-500 font-medium">
-                              {contactPerson && <span>👤 담당: <strong className="text-slate-700">{contactPerson}</strong></span>}
-                              {phone && <span>📞 {phone}</span>}
-                              {email && <span>✉️ {email}</span>}
-                              {manager && <span className="text-rose-600 font-semibold">💼 영업: {manager}</span>}
-                            </span>
-                          );
-                        })()}
-                      </div>
-                      <div className="text-xs text-slate-500">
-                        {item.detailsText}
-                      </div>
-                    </div>
-                  </div>
-
-
-                  <div className="flex flex-wrap items-center space-x-1.5 justify-end flex-shrink-0 pt-2 lg:pt-0 border-t lg:border-t-0 border-slate-100">
-                    <div className="text-right mr-2 hidden sm:block">
-                      <p className="text-[10px] text-slate-400 font-medium">납품 예정일시</p>
-                      <p className="text-xs font-bold text-rose-600 font-mono">
-                        {item.delivery_date} {item.delivery_time ? `(${item.delivery_time})` : ''}
-                      </p>
-                    </div>
-
-                    {/* 💡 1. 납품 완료 상태 및 빠른 완료 처리 버튼 */}
+                                 {/* 💡 1. 납품 완료 상태 및 빠른 완료 처리 버튼 */}
                     {item.billing_schedule === '납품완료' || item.billing_schedule === '청구완료' || item.status === '납품완료' ? (
-                      <span className="flex items-center space-x-1 px-2.5 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-300 rounded-xl text-xs font-bold">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                      <span className="flex items-center space-x-1 px-2 py-1 sm:px-2.5 sm:py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-300 rounded-xl text-[11px] sm:text-xs font-bold">
+                        <CheckCircle2 className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-emerald-600" />
                         <span>납품완료</span>
                       </span>
                     ) : (
                       <button
                         onClick={() => handleMarkDelivered(item)}
-                        className="flex items-center space-x-1 bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1.5 rounded-xl text-xs font-bold shadow-sm transition"
+                        className="flex items-center space-x-1 bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-xl text-[11px] sm:text-xs font-bold shadow-sm transition"
                         title="이 건을 납품완료 상태로 즉시 변경"
                       >
-                        <Truck className="w-3.5 h-3.5" />
+                        <Truck className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                         <span>납품 완료</span>
                       </button>
                     )}
@@ -725,10 +689,29 @@ export default function DashboardPage() {
                           setShowSaleScheduleModal(true);
                         }
                       }}
-                      className="flex items-center space-x-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 px-2.5 py-1.5 rounded-xl text-xs font-bold transition"
+                      className="flex items-center space-x-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-xl text-[11px] sm:text-xs font-bold transition"
                       title={isJobOrder ? "작업전표 상세 수정" : "납품 일정 및 진행 상태 변경"}
                     >
-                      <Pencil className="w-3.5 h-3.5 text-amber-600" />
+                      <Pencil className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-600" />
+                      <span>일정 변경</span>
+                    </button>
+
+                    {/* 💡 2-1. 견적서 작성 단추 (견적 금액을 매출액/전표금액으로 즉시 연동) */}
+                    {/* 💡 2. 납품 일정 / 전표 변경 버튼 */}
+                    <button
+                      onClick={() => {
+                        if (isJobOrder) {
+                          setEditingOrder(item);
+                          setShowJobEditModal(true);
+                        } else {
+                          setEditingSale({ ...item });
+                          setShowSaleScheduleModal(true);
+                        }
+                      }}
+                      className="flex items-center space-x-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-xl text-[11px] sm:text-xs font-bold transition"
+                      title={isJobOrder ? "작업전표 상세 수정" : "납품 일정 및 진행 상태 변경"}
+                    >
+                      <Pencil className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-600" />
                       <span>일정 변경</span>
                     </button>
 
@@ -738,45 +721,47 @@ export default function DashboardPage() {
                         const cust = customers.find(c => c.id === item.customer_id);
                         setEstimatingSale({ sale: item, customer: cust });
                       }}
-                      className="flex items-center space-x-1 bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-300 px-2.5 py-1.5 rounded-xl text-xs font-bold transition"
+                      className="flex items-center space-x-1 bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-300 px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-xl text-[11px] sm:text-xs font-bold transition"
                       title="상세 품목 단가 산출 및 매출액 자동 반영"
                     >
-                      <Calculator className="w-3.5 h-3.5 text-sky-600" />
+                      <Calculator className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-sky-600" />
                       <span>견적서 작성</span>
                     </button>
 
                     {/* 💡 3. 캘린더 등록 버튼 */}
                     <button
                       onClick={() => handleAddToGoogleCalendar(item)}
-                      className="flex items-center space-x-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 px-2.5 py-1.5 rounded-xl text-xs font-bold transition"
+                      className="flex items-center space-x-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-xl text-[11px] sm:text-xs font-bold transition"
                       title="이 건만 구글 캘린더에 일정 등록"
                     >
-                      <Calendar className="w-3.5 h-3.5 text-slate-600" />
-                      <span>캘린더 등록</span>
+                      <Calendar className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-600" />
+                      <span className="hidden xs:inline">캘린더</span>
+                      <span className="xs:hidden">캘린더</span>
                     </button>
-
 
                     {/* 💡 4. 슈퍼스레드 알림 버튼 */}
                     <button
                       onClick={() => handleSendToSuperthread(item)}
-                      className="flex items-center space-x-1 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-300 px-2.5 py-1.5 rounded-xl text-xs font-bold transition"
+                      className="flex items-center space-x-1 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-300 px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-xl text-[11px] sm:text-xs font-bold transition"
                       title="이 건만 슈퍼스레드 업무 채널로 전달"
                     >
-                      <Zap className="w-3.5 h-3.5 text-purple-600" />
-                      <span>슈퍼스레드 알림</span>
+                      <Zap className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-purple-600" />
+                      <span className="hidden xs:inline">슈퍼스레드</span>
+                      <span className="xs:hidden">알림</span>
                     </button>
 
                     {/* 💡 5. 전표 1:1 인쇄 버튼 (작업전표인 경우에만) */}
                     {isJobOrder && (
                       <button
                         onClick={() => setPrintingOrder(item)}
-                        className="flex items-center space-x-1 bg-slate-800 hover:bg-slate-900 text-white px-2.5 py-1.5 rounded-xl text-xs font-bold shadow-sm transition"
+                        className="flex items-center space-x-1 bg-slate-800 hover:bg-slate-900 text-white px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-xl text-[11px] sm:text-xs font-bold shadow-sm transition"
                       >
-                        <Printer className="w-3.5 h-3.5" />
+                        <Printer className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                         <span>전표 인쇄</span>
                       </button>
                     )}
                   </div>
+
 
                 </div>
               );
