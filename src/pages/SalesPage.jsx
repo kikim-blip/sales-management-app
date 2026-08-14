@@ -863,92 +863,7 @@ export default function SalesPage() {
         </div>
       </div>
 
-      {/* 상세 조회 필터: 거래처 / 기간 / 상태 / 검색어 */}
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 space-y-3">
-        <div className="flex items-center gap-2 text-slate-700 font-bold text-sm">
-          <Filter className="w-4 h-4 text-sky-600" />
-          <span>조회 조건</span>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
-          <div className="md:col-span-2 relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <input
-              value={listSearchText}
-              onChange={(e) => setListSearchText(e.target.value)}
-              placeholder="거래처명, 작업명, 내용, 비고 검색"
-              className="w-full pl-9 pr-3 py-2.5 border border-slate-200 rounded-xl text-xs font-medium focus:border-sky-500 focus:outline-none"
-            />
-          </div>
-
-          <select
-            value={listCustomerFilter}
-            onChange={(e) => setListCustomerFilter(e.target.value)}
-            className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-xs font-medium focus:border-sky-500 focus:outline-none"
-          >
-            <option value="ALL">전체 거래처</option>
-            {customers.map((cust) => (
-              <option key={cust.id} value={cust.name}>{cust.name}</option>
-            ))}
-          </select>
-
-          <select
-            value={listStatusFilter}
-            onChange={(e) => setListStatusFilter(e.target.value)}
-            className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-xs font-medium focus:border-sky-500 focus:outline-none"
-          >
-            <option value="ALL">전체 상태</option>
-            <option value="진행중">진행중</option>
-            <option value="납품완료">납품완료</option>
-            <option value="청구완료">청구완료</option>
-          </select>
-
-          <button
-            type="button"
-            onClick={() => {
-              setListSearchText('');
-              setListCustomerFilter('ALL');
-              setListStatusFilter('ALL');
-              setListStartDate(() => {
-                const d = new Date();
-                d.setMonth(d.getMonth() - 1);
-                return d.toISOString().split('T')[0];
-              });
-              setListEndDate(today);
-            }}
-            className="flex items-center justify-center gap-1 px-3 py-2.5 text-xs font-bold text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-50"
-          >
-            <XCircle className="w-3.5 h-3.5" />
-            초기화
-          </button>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <label className="flex items-center gap-2 text-xs font-medium text-slate-600">
-            <Calendar className="w-4 h-4 text-sky-600" />
-            <span>시작일</span>
-            <input
-              type="date"
-              value={listStartDate}
-              onChange={(e) => setListStartDate(e.target.value)}
-              className="flex-1 px-2.5 py-2 border border-slate-200 rounded-xl text-xs font-medium"
-            />
-          </label>
-
-          <label className="flex items-center gap-2 text-xs font-medium text-slate-600">
-            <Calendar className="w-4 h-4 text-sky-600" />
-            <span>종료일</span>
-            <input
-              type="date"
-              value={listEndDate}
-              onChange={(e) => setListEndDate(e.target.value)}
-              className="flex-1 px-2.5 py-2 border border-slate-200 rounded-xl text-xs font-medium"
-            />
-          </label>
-        </div>
-      </div>
-
-      {/* 탭 네비게이션: [전체 목록] vs [🚨 미청구 관리] vs [📊 ERP 분석 및 원장] */}
+      {/* 탭 네비게이션: [전체 목록] vs [🚨 미청구 관리] vs [📊 분석 및 원장] */}
       <div className="flex border-b border-slate-200">
         <button
           onClick={() => setReportTab('list')}
@@ -983,8 +898,95 @@ export default function SalesPage() {
         </button>
       </div>
 
+      {/* 목록/미청구 관리 탭 전용 상세 조회 필터: 거래처 / 기간 / 상태 / 검색어 */}
+      {reportTab !== 'erp' && (
+        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 space-y-3">
+          <div className="flex items-center gap-2 text-slate-700 font-bold text-sm">
+            <Filter className="w-4 h-4 text-sky-600" />
+            <span>목록 조회 조건</span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+            <div className="md:col-span-2 relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input
+                value={listSearchText}
+                onChange={(e) => setListSearchText(e.target.value)}
+                placeholder="거래처명, 작업명, 내용, 비고 검색"
+                className="w-full pl-9 pr-3 py-2.5 border border-slate-200 rounded-xl text-xs font-medium focus:border-sky-500 focus:outline-none"
+              />
+            </div>
+
+            <select
+              value={listCustomerFilter}
+              onChange={(e) => setListCustomerFilter(e.target.value)}
+              className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-xs font-medium focus:border-sky-500 focus:outline-none"
+            >
+              <option value="ALL">전체 거래처</option>
+              {customers.map((cust) => (
+                <option key={cust.id} value={cust.name}>{cust.name}</option>
+              ))}
+            </select>
+
+            <select
+              value={listStatusFilter}
+              onChange={(e) => setListStatusFilter(e.target.value)}
+              className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-xs font-medium focus:border-sky-500 focus:outline-none"
+            >
+              <option value="ALL">전체 상태</option>
+              <option value="진행중">진행중</option>
+              <option value="납품완료">납품완료</option>
+              <option value="청구완료">청구완료</option>
+            </select>
+
+            <button
+              type="button"
+              onClick={() => {
+                setListSearchText('');
+                setListCustomerFilter('ALL');
+                setListStatusFilter('ALL');
+                setListStartDate(() => {
+                  const d = new Date();
+                  d.setMonth(d.getMonth() - 1);
+                  return d.toISOString().split('T')[0];
+                });
+                setListEndDate(today);
+              }}
+              className="flex items-center justify-center gap-1 px-3 py-2.5 text-xs font-bold text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-50"
+            >
+              <XCircle className="w-3.5 h-3.5" />
+              초기화
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <label className="flex items-center gap-2 text-xs font-medium text-slate-600">
+              <Calendar className="w-4 h-4 text-sky-600" />
+              <span>시작일</span>
+              <input
+                type="date"
+                value={listStartDate}
+                onChange={(e) => setListStartDate(e.target.value)}
+                className="flex-1 px-2.5 py-2 border border-slate-200 rounded-xl text-xs font-medium"
+              />
+            </label>
+
+            <label className="flex items-center gap-2 text-xs font-medium text-slate-600">
+              <Calendar className="w-4 h-4 text-sky-600" />
+              <span>종료일</span>
+              <input
+                type="date"
+                value={listEndDate}
+                onChange={(e) => setListEndDate(e.target.value)}
+                className="flex-1 px-2.5 py-2 border border-slate-200 rounded-xl text-xs font-medium"
+              />
+            </label>
+          </div>
+        </div>
+      )}
 
       {/* ----------------- 탭 1: 매출 기록 목록 ----------------- */}
+
       {reportTab === 'list' && (
         <div className="space-y-3">
           {filteredSales.length === 0 ? (
