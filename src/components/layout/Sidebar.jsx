@@ -1,16 +1,18 @@
 // src/components/layout/Sidebar.jsx
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Users, ClipboardList, FileSpreadsheet, Shield } from 'lucide-react';
+import { LayoutDashboard, Users, ClipboardList, FileSpreadsheet, CreditCard, Shield } from 'lucide-react';
 import { useGoogleAuth } from '../../context/GoogleAuthContext';
 
 const navItems = [
   { name: '현황', path: '/', icon: LayoutDashboard },
   { name: '작업전표', path: '/job-orders', icon: ClipboardList },
   { name: '매출관리', path: '/sales', icon: FileSpreadsheet },
+  { name: '수금관리', path: '/payments', icon: CreditCard },
   { name: '고객관리', path: '/customers', icon: Users },
   { name: '사용자', path: '/staffs', icon: Shield },
 ];
+
 
 
 export default function Sidebar() {
