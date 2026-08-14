@@ -20,7 +20,27 @@ export default function QuotePrintModal({ quote, customer, onClose }) {
   const managerName = user?.userName || '홍길동';
   const userCode = user?.userCode || '84';
 
-  // 비교견적서 모드 인가?
+  // 품목 목록 파싱
+  const parsedItems = (() => {
+    if (Array.isArray(quote.estimate_items) && quote.estimate_items.length > 0) return quote.estimate_items;
+    if (typeof quote.estimate_items === 'string' && quote.estimate_items.startsWith('[')) {
+      try {
+        const parsed = JSON.parse(quote.estimate_items);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch (e) {}
+    }
+    return [
+      {
+        name: quote.title || '작업명',
+        spec: quote.spec || quote.content || '-',
+        quantity: 1,
+        unit: '식',
+        unit_price: quote.supply_price || 0,
+        amount: quote.supply_price || 0,
+        note: '',
+      }
+    ];
+  })();
 
   // 비교견적 타사 (비교B사) 자동 계산 마진율 12% 높게 설정
   const compPriceB = Math.round((quote.supply_price || 0) * 1.12);
@@ -39,15 +59,30 @@ export default function QuotePrintModal({ quote, customer, onClose }) {
       excelRows = [
         ['견 적 서 (QUOTATION)'],
         [],
-        ['견적 번호', quote.id, '발행 일자', today],
+        ['견적 번호', quote.id || quote.code_number, '발행 일자', today],
         ['수신 (공급받는자)', `${custName} ${custDept}`, '담당자', `${custContact} (${custPhone})`],
-        ['발행 (공급자)', '주식회사 영업관리 PWA', '담당 사원', `${managerName} (${userCode})`],
+        ['발행 (공급자)', '주식회사 경성문화사', '담당 사원', `${managerName} (${userCode})`],
         [],
-        ['품명 / 작업명', '상세 사양', '공급가액', '세액(10%)', '합계금액(VAT포함)'],
-        [quote.title, quote.content || '-', quote.supply_price, quote.tax, quote.total_price],
-        [],
-        ['합 계 금 액', '', '', '', `${quote.total_price.toLocaleString()} 원`],
+        ['No', '품명 / 작업명', '규격 / 사양', '수량', '단위', '단가', '공급가액', '비고'],
       ];
+
+      parsedItems.forEach((it, idx) => {
+        excelRows.push([
+          idx + 1,
+          it.name || quote.title,
+          it.spec || '-',
+          it.quantity || 1,
+          it.unit || '부',
+          it.unit_price || 0,
+          it.amount || 0,
+          it.note || '',
+        ]);
+      });
+
+      excelRows.push([]);
+      excelRows.push(['공급가액 합계', '', '', '', '', '', `${(quote.supply_price || 0).toLocaleString()} 원`]);
+      excelRows.push(['부가가치세 (10%)', '', '', '', '', '', `${(quote.tax || 0).toLocaleString()} 원`]);
+      excelRows.push(['총 견적합계액 (VAT포함)', '', '', '', '', '', `${(quote.total_price || 0).toLocaleString()} 원`]);
     } else {
       excelRows = [
         ['비 교 견 적 서 (COMPARATIVE QUOTATION)'],
@@ -56,10 +91,11 @@ export default function QuotePrintModal({ quote, customer, onClose }) {
         ['작업명', quote.title],
         [],
         ['구분', '공급자 상호', '공급가액', '부가세(VAT)', '총견적금액', '비고'],
-        ['당사 (제출안)', `주식회사 영업관리 (${managerName})`, quote.supply_price, quote.tax, quote.total_price, '최적단가 적용'],
+        ['당사 (제출안)', `주식회사 경성문화사 (${managerName})`, quote.supply_price, quote.tax, quote.total_price, '최적단가 적용'],
         ['비교 (B 사)', '(주)비교디자인', compPriceB, compTaxB, compTotalB, '시장 표준단가'],
       ];
     }
+
 
     const worksheet = XLSX.utils.aoa_to_sheet(excelRows);
     const workbook = XLSX.utils.book_new();
@@ -169,33 +205,46 @@ export default function QuotePrintModal({ quote, customer, onClose }) {
           {!isComparative ? (
             <div className="border border-slate-300 rounded-xl overflow-hidden">
               <table className="w-full text-left text-xs">
-                <thead className="bg-slate-100 font-bold border-b border-slate-300 text-slate-700">
+                <thead className="bg-slate-100 font-bold border-b border-slate-300 text-slate-700 text-[11px]">
                   <tr>
-                    <th className="p-3">품명 / 작업명</th>
-                    <th className="p-3">상세 사양 및 규격</th>
-                    <th className="p-3 text-right">공급가액</th>
-                    <th className="p-3 text-right">세액 (10%)</th>
-                    <th className="p-3 text-right">총 금액</th>
+                    <th className="p-2.5 text-center w-10">No</th>
+                    <th className="p-2.5">품명 / 작업명</th>
+                    <th className="p-2.5">상세 사양 및 규격</th>
+                    <th className="p-2.5 text-center w-16">수량</th>
+                    <th className="p-2.5 text-center w-14">단위</th>
+                    <th className="p-2.5 text-right w-24">단가</th>
+                    <th className="p-2.5 text-right w-28">공급가액</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200">
-                  <tr>
-                    <td className="p-3 font-bold text-slate-800">{quote.title}</td>
-                    <td className="p-3 text-slate-600">{quote.content || '-'}</td>
-                    <td className="p-3 text-right font-medium">{quote.supply_price.toLocaleString()} 원</td>
-                    <td className="p-3 text-right font-medium text-slate-500">{quote.tax.toLocaleString()} 원</td>
-                    <td className="p-3 text-right font-extrabold text-slate-900">{quote.total_price.toLocaleString()} 원</td>
+                  {parsedItems.map((it, idx) => (
+                    <tr key={idx} className="hover:bg-slate-50/50">
+                      <td className="p-2.5 text-center text-slate-400 font-mono">{idx + 1}</td>
+                      <td className="p-2.5 font-bold text-slate-800">{it.name || quote.title}</td>
+                      <td className="p-2.5 text-slate-600">{it.spec || it.note || '-'}</td>
+                      <td className="p-2.5 text-center font-semibold">{it.quantity || 1}</td>
+                      <td className="p-2.5 text-center text-slate-500">{it.unit || '부'}</td>
+                      <td className="p-2.5 text-right font-mono text-slate-700">{(Number(it.unit_price) || 0).toLocaleString()}</td>
+                      <td className="p-2.5 text-right font-bold text-slate-900 font-mono">{(Number(it.amount) || 0).toLocaleString()} 원</td>
+                    </tr>
+                  ))}
+                  <tr className="bg-slate-50 font-bold border-t-2 border-slate-300">
+                    <td colSpan={5} className="p-2.5 text-center text-slate-700">공급가액 소계</td>
+                    <td colSpan={2} className="p-2.5 text-right font-mono text-slate-900">{(quote.supply_price || 0).toLocaleString()} 원</td>
                   </tr>
                   <tr className="bg-slate-50 font-bold">
-                    <td colSpan={2} className="p-3 text-center text-slate-700">합 계</td>
-                    <td className="p-3 text-right">{quote.supply_price.toLocaleString()} 원</td>
-                    <td className="p-3 text-right">{quote.tax.toLocaleString()} 원</td>
-                    <td className="p-3 text-right text-sky-700">{quote.total_price.toLocaleString()} 원</td>
+                    <td colSpan={5} className="p-2.5 text-center text-slate-500">부가가치세 (10%)</td>
+                    <td colSpan={2} className="p-2.5 text-right font-mono text-slate-600">{(quote.tax || 0).toLocaleString()} 원</td>
+                  </tr>
+                  <tr className="bg-sky-50/80 font-black border-t border-sky-200 text-sky-950">
+                    <td colSpan={5} className="p-3 text-center text-sky-900">총 견적합계액 (VAT 포함)</td>
+                    <td colSpan={2} className="p-3 text-right font-mono text-base text-sky-700">{(quote.total_price || 0).toLocaleString()} 원</td>
                   </tr>
                 </tbody>
               </table>
             </div>
           ) : (
+
             /* 비교 견적서 테이블 */
             <div className="space-y-3">
               <p className="text-xs font-bold text-slate-700 flex items-center space-x-1">

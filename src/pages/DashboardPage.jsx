@@ -2,10 +2,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useData } from '../context/DataContext';
 import { useGoogleAuth } from '../context/GoogleAuthContext';
-import { AlertCircle, FileText, RefreshCw, ChevronRight, Clock, AlertTriangle, Calendar, Printer, CheckCircle2, Users, Share2, Zap, Pencil, Truck, XCircle, Plus, Search } from 'lucide-react';
+import { AlertCircle, FileText, RefreshCw, ChevronRight, Clock, AlertTriangle, Calendar, Printer, CheckCircle2, Users, Share2, Zap, Pencil, Truck, XCircle, Plus, Search, Calculator, DollarSign } from 'lucide-react';
 import CustomerDetailModal from '../components/common/CustomerDetailModal';
 import JobOrderPrintModal from '../components/common/JobOrderPrintModal';
 import JobOrderModal from '../components/common/JobOrderModal';
+import EstimateModal from '../components/common/EstimateModal';
+import QuotePrintModal from '../components/common/QuotePrintModal';
 
 export default function DashboardPage() {
   const { customers, sales, payments, jobOrders, loading, error, selectedTeamGroup, updateJobOrder, updateSales, addSales, addCustomer } = useData();
@@ -23,7 +25,6 @@ export default function DashboardPage() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-
   
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [printingOrder, setPrintingOrder] = useState(null);
@@ -33,8 +34,12 @@ export default function DashboardPage() {
   const [editingSale, setEditingSale] = useState(null);
   const [showSaleScheduleModal, setShowSaleScheduleModal] = useState(false);
 
+  // 💡 견적서 작성/산출 모달 및 견적서 인쇄 모달 상태
+  const [estimatingSale, setEstimatingSale] = useState(null);
+  const [printingEstimateQuote, setPrintingEstimateQuote] = useState(null);
 
   const todayStr = new Date().toISOString().split('T')[0];
+
 
   // 💡 팀/부서 필터링 매칭 헬퍼
   const isTeamMatch = (itemDept, custId) => {
@@ -59,6 +64,22 @@ export default function DashboardPage() {
   const totalUnpaidAmount = totalSalesAmount - totalPaymentAmount;
   const displayUnpaid = Math.max(0, totalUnpaidAmount);
   const isOverpaid = totalUnpaidAmount < 0;
+
+  // 💡 당월 (현재 연월) 실적 통계 계산
+  const currentYearMonth = todayStr.substring(0, 7); // 예: '2026-08'
+  const currentMonthNum = Number(todayStr.split('-')[1]);
+  const currentMonthDisplay = `${currentMonthNum}월`;
+
+  const currentMonthSales = filteredSales.filter(s => (s.reg_date || s.receipt_date || '').startsWith(currentYearMonth));
+  const currentMonthSalesAmount = currentMonthSales.reduce((acc, curr) => acc + (Number(curr.total_price) || 0), 0);
+
+  const currentMonthPayments = filteredPayments.filter(p => (p.payment_date || '').startsWith(currentYearMonth));
+  const currentMonthPaymentAmount = currentMonthPayments.reduce((acc, curr) => acc + (Number(curr.amount) || 0), 0);
+
+  const currentMonthUnpaidAmount = currentMonthSalesAmount - currentMonthPaymentAmount;
+  const currentMonthDisplayUnpaid = Math.max(0, currentMonthUnpaidAmount);
+  const currentMonthOverpaid = currentMonthUnpaidAmount < 0;
+
 
   const customerSummary = filteredCustomers
     .map((cust) => {
@@ -484,44 +505,92 @@ export default function DashboardPage() {
         <p className="text-xs text-slate-500 mt-1">납품 및 미수 상태를 확인합니다.</p>
       </div>
 
-      {/* 요약 현황 카운터 3종 */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
-          <div>
-            <p className="text-xs font-semibold text-slate-500 mb-1">총 매출 청구액</p>
-            <p className="text-xl font-bold text-slate-900">₩ {totalSalesAmount.toLocaleString()} 원</p>
+      {/* ── 📊 매출/수금/미수금 2단 현황 지표 (1행: 누적 총괄 / 2행: 당월 실적) ── */}
+      <div className="space-y-3">
+        {/* 1행: 누적 총괄 현황 */}
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">전체 누적 총괄 현황</span>
           </div>
-          <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-extrabold text-lg">
-            ₩
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+              <div>
+                <p className="text-[11px] font-semibold text-slate-500 mb-0.5">총 매출 청구액 (누적)</p>
+                <p className="text-lg font-black text-slate-900 font-mono">₩ {totalSalesAmount.toLocaleString()} 원</p>
+              </div>
+              <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-extrabold text-base">₩</div>
+            </div>
+
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+              <div>
+                <p className="text-[11px] font-semibold text-slate-500 mb-0.5">총 입금/수금액 (누적)</p>
+                <p className="text-lg font-black text-emerald-600 font-mono">₩ {totalPaymentAmount.toLocaleString()} 원</p>
+              </div>
+              <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-extrabold text-base">₩</div>
+            </div>
+
+            <div className={`bg-white p-4 rounded-2xl border shadow-sm flex items-center justify-between ${isOverpaid ? 'border-amber-200 bg-amber-50/20' : 'border-rose-100 bg-rose-50/20'}`}>
+              <div>
+                <p className={`text-[11px] font-semibold mb-0.5 ${isOverpaid ? 'text-amber-600' : 'text-rose-600'}`}>총 미수금 잔액 (누적)</p>
+                <p className={`text-lg font-black font-mono ${isOverpaid ? 'text-amber-600' : 'text-rose-600'}`}>
+                  {isOverpaid ? (
+                    <span className="text-sm font-semibold">₩ 0 원 <span className="text-xs text-amber-500">(초과 수금 {Math.abs(totalUnpaidAmount).toLocaleString()}원)</span></span>
+                  ) : (
+                    <>₩ {displayUnpaid.toLocaleString()} 원</>
+                  )}
+                </p>
+              </div>
+              <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${isOverpaid ? 'bg-amber-100 text-amber-600' : 'bg-rose-100 text-rose-600'}`}>
+                <AlertTriangle className="w-4 h-4" />
+              </div>
+            </div>
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
-          <div>
-            <p className="text-xs font-semibold text-slate-500 mb-1">총 입금/수금액</p>
-            <p className="text-xl font-bold text-emerald-600">₩ {totalPaymentAmount.toLocaleString()} 원</p>
+        {/* 2행: 당월 실적 현황 */}
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-bold text-sky-700 flex items-center gap-1.5">
+              <Calendar className="w-3.5 h-3.5" />
+              <span>{currentMonthDisplay} 당월 실적 현황 ({currentYearMonth})</span>
+            </span>
           </div>
-          <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-extrabold text-lg">
-            ₩
-          </div>
-        </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="bg-sky-50/60 p-4 rounded-2xl border border-sky-200/90 shadow-sm flex items-center justify-between">
+              <div>
+                <p className="text-[11px] font-bold text-sky-800 mb-0.5">{currentMonthDisplay} 당월 매출 청구액</p>
+                <p className="text-lg font-black text-sky-950 font-mono">₩ {currentMonthSalesAmount.toLocaleString()} 원</p>
+              </div>
+              <div className="w-9 h-9 rounded-xl bg-sky-100 text-sky-700 flex items-center justify-center font-bold text-xs">당월</div>
+            </div>
 
-        <div className={`bg-white p-5 rounded-2xl border shadow-sm flex items-center justify-between ${isOverpaid ? 'border-amber-200 bg-amber-50/30' : 'border-rose-100 bg-rose-50/30'}`}>
-          <div>
-            <p className={`text-xs font-semibold mb-1 ${isOverpaid ? 'text-amber-500' : 'text-rose-500'}`}>총 미수금 (잔액)</p>
-            <p className={`text-xl font-bold ${isOverpaid ? 'text-amber-600' : 'text-rose-600'}`}>
-              {isOverpaid ? (
-                <span className="text-sm font-semibold">₩ 0 원 <span className="text-xs text-amber-500">(초과 수금 {Math.abs(totalUnpaidAmount).toLocaleString()}원)</span></span>
-              ) : (
-                <>₩ {displayUnpaid.toLocaleString()} 원</>
-              )}
-            </p>
-          </div>
-          <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isOverpaid ? 'bg-amber-100 text-amber-600' : 'bg-rose-100 text-rose-600'}`}>
-            <AlertCircle className="w-5 h-5" />
+            <div className="bg-emerald-50/60 p-4 rounded-2xl border border-emerald-200/90 shadow-sm flex items-center justify-between">
+              <div>
+                <p className="text-[11px] font-bold text-emerald-800 mb-0.5">{currentMonthDisplay} 당월 입금/수금액</p>
+                <p className="text-lg font-black text-emerald-700 font-mono">₩ {currentMonthPaymentAmount.toLocaleString()} 원</p>
+              </div>
+              <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-xs">당월</div>
+            </div>
+
+            <div className={`p-4 rounded-2xl border shadow-sm flex items-center justify-between ${currentMonthOverpaid ? 'bg-amber-50/60 border-amber-200/90' : 'bg-rose-50/60 border-rose-200/90'}`}>
+              <div>
+                <p className={`text-[11px] font-bold mb-0.5 ${currentMonthOverpaid ? 'text-amber-800' : 'text-rose-800'}`}>{currentMonthDisplay} 당월 미수금 잔액</p>
+                <p className={`text-lg font-black font-mono ${currentMonthOverpaid ? 'text-amber-700' : 'text-rose-700'}`}>
+                  {currentMonthOverpaid ? (
+                    <span className="text-sm font-semibold">₩ 0 원 <span className="text-xs text-amber-600">(초과 수금 {Math.abs(currentMonthUnpaidAmount).toLocaleString()}원)</span></span>
+                  ) : (
+                    <>₩ {currentMonthDisplayUnpaid.toLocaleString()} 원</>
+                  )}
+                </p>
+              </div>
+              <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs ${currentMonthOverpaid ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'}`}>
+                잔액
+              </div>
+            </div>
           </div>
         </div>
       </div>
+
 
       {/* 🚨 1. 실시간 납품 일정 급건 순서 리스트 (원하는 건별 캘린더/슈퍼스레드/전표수정/인쇄 버튼 탑재) */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
@@ -646,15 +715,29 @@ export default function DashboardPage() {
                       <span>일정 변경</span>
                     </button>
 
+                    {/* 💡 2-1. 견적서 작성 단추 (견적 금액을 매출액/전표금액으로 즉시 연동) */}
+                    <button
+                      onClick={() => {
+                        const cust = customers.find(c => c.id === item.customer_id);
+                        setEstimatingSale({ sale: item, customer: cust });
+                      }}
+                      className="flex items-center space-x-1 bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-300 px-2.5 py-1.5 rounded-xl text-xs font-bold transition"
+                      title="상세 품목 단가 산출 및 매출액 자동 반영"
+                    >
+                      <Calculator className="w-3.5 h-3.5 text-sky-600" />
+                      <span>견적서 작성</span>
+                    </button>
+
                     {/* 💡 3. 캘린더 등록 버튼 */}
                     <button
                       onClick={() => handleAddToGoogleCalendar(item)}
-                      className="flex items-center space-x-1 bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-300 px-2.5 py-1.5 rounded-xl text-xs font-bold transition"
+                      className="flex items-center space-x-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 px-2.5 py-1.5 rounded-xl text-xs font-bold transition"
                       title="이 건만 구글 캘린더에 일정 등록"
                     >
-                      <Calendar className="w-3.5 h-3.5 text-sky-600" />
+                      <Calendar className="w-3.5 h-3.5 text-slate-600" />
                       <span>캘린더 등록</span>
                     </button>
+
 
                     {/* 💡 4. 슈퍼스레드 알림 버튼 */}
                     <button
@@ -1233,6 +1316,49 @@ export default function DashboardPage() {
             </div>
           </form>
         </div>
+      )}
+
+      {/* ── 📑 견적서 작성 및 매출액 자동 연동 모달 ── */}
+      {estimatingSale && (
+        <EstimateModal
+          sale={estimatingSale.sale}
+          customer={estimatingSale.customer}
+          onClose={() => setEstimatingSale(null)}
+          onSave={async (updatedItem) => {
+            if (updatedItem.itemType === 'jobOrder' || updatedItem.code_number) {
+              await updateJobOrder(updatedItem.id || updatedItem.code_number, {
+                estimated_price: updatedItem.supply_price,
+                supply_price: updatedItem.supply_price,
+                tax: updatedItem.tax,
+                total_price: updatedItem.total_price,
+                estimate_items: updatedItem.estimate_items,
+                estimate_note: updatedItem.estimate_note,
+              });
+              alert(`[${updatedItem.displayCode || updatedItem.code_number}] 전표의 견적 금액이 ₩${Number(updatedItem.total_price).toLocaleString()}원으로 갱신되었습니다!`);
+            } else {
+              await updateSales(updatedItem.id, {
+                supply_price: updatedItem.supply_price,
+                tax: updatedItem.tax,
+                total_price: updatedItem.total_price,
+                estimate_items: updatedItem.estimate_items,
+                estimate_note: updatedItem.estimate_note,
+              });
+              alert(`[${updatedItem.title}] 매출 건의 견적 금액이 ₩${Number(updatedItem.total_price).toLocaleString()}원으로 자동 반영되었습니다!`);
+            }
+          }}
+          onPrint={(quoteData, custData) => {
+            setPrintingEstimateQuote({ quote: quoteData, customer: custData });
+          }}
+        />
+      )}
+
+      {/* ── 🖨️ 견적서 인쇄 / 엑셀 출력 모달 ── */}
+      {printingEstimateQuote && (
+        <QuotePrintModal
+          quote={printingEstimateQuote.quote}
+          customer={printingEstimateQuote.customer}
+          onClose={() => setPrintingEstimateQuote(null)}
+        />
       )}
 
     </div>

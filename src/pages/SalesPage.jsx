@@ -2,11 +2,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useData } from '../context/DataContext';
 import { useGoogleAuth } from '../context/GoogleAuthContext';
-import { Plus, Calendar, Share2, Pencil, Trash2, ClipboardList, FileText, FileSearch, Printer, CheckCircle2, Truck, BarChart3, Download, Search, Filter, XCircle, Building, User, Phone, Mail } from 'lucide-react';
+import { Plus, Calendar, Share2, Pencil, Trash2, ClipboardList, FileText, FileSearch, Printer, CheckCircle2, Truck, BarChart3, Download, Search, Filter, XCircle, Building, User, Phone, Mail, Calculator } from 'lucide-react';
 import JobOrderModal from '../components/common/JobOrderModal';
 import SelectJobOrderModal from '../components/common/SelectJobOrderModal';
 import QuotePrintModal from '../components/common/QuotePrintModal';
 import JobOrderPrintModal from '../components/common/JobOrderPrintModal';
+import EstimateModal from '../components/common/EstimateModal';
 
 export default function SalesPage() {
   const { sales, customers, jobOrders, payments, addSales, updateSales, deleteSales, addJobOrder, addPayment, addCustomer, selectedTeamGroup } = useData();
@@ -36,6 +37,10 @@ export default function SalesPage() {
 
   const [printingQuote, setPrintingQuote] = useState(null);
   const [printingJobOrder, setPrintingJobOrder] = useState(null);
+
+  // 💡 견적서 작성/산출 모달 상태
+  const [estimatingSale, setEstimatingSale] = useState(null);
+
 
   const today = new Date().toISOString().split('T')[0];
 
@@ -988,12 +993,22 @@ export default function SalesPage() {
                         )}
 
                         <button
+                          onClick={() => setEstimatingSale({ sale: item, customer: cust })}
+                          className="flex items-center space-x-1 px-2.5 py-1 bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-300 rounded-lg text-xs font-bold transition mr-1"
+                          title="견적서 작성 및 세부 단가 산출 (매출액 자동 반영)"
+                        >
+                          <Calculator className="w-3.5 h-3.5 text-sky-600" />
+                          <span>견적서 작성</span>
+                        </button>
+
+                        <button
                           onClick={() => setPrintingQuote({ quote: item, customer: cust })}
                           className="flex items-center space-x-1 px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition mr-1"
                         >
                           <FileText className="w-3.5 h-3.5 text-sky-600" />
                           <span>인쇄</span>
                         </button>
+
 
                         <button
                           onClick={() => handleCreateJobOrderFromSale(item)}
@@ -1144,12 +1159,22 @@ export default function SalesPage() {
                           </button>
 
                           <button
+                            onClick={() => setEstimatingSale({ sale: item, customer: cust })}
+                            className="flex items-center space-x-1 px-2.5 py-1 bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-300 rounded-lg text-xs font-bold transition mr-1"
+                            title="견적서 작성 및 세부 단가 산출 (매출액 자동 반영)"
+                          >
+                            <Calculator className="w-3.5 h-3.5 text-sky-600" />
+                            <span>견적서 작성</span>
+                          </button>
+
+                          <button
                             onClick={() => setPrintingQuote({ quote: item, customer: cust })}
                             className="flex items-center space-x-1 px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition mr-1"
                           >
                             <FileText className="w-3.5 h-3.5 text-sky-600" />
                             <span>인쇄</span>
                           </button>
+
 
                           <button
                             onClick={() => handleCreateJobOrderFromSale(item)}
@@ -1921,7 +1946,30 @@ export default function SalesPage() {
         />
       )}
 
+      {/* 4-1. 견적서 작성/산출 및 매출액 자동 연동 모달 */}
+      {estimatingSale && (
+        <EstimateModal
+          sale={estimatingSale.sale}
+          customer={estimatingSale.customer}
+          onClose={() => setEstimatingSale(null)}
+          onSave={async (updatedItem) => {
+            await updateSales(updatedItem.id, {
+              supply_price: updatedItem.supply_price,
+              tax: updatedItem.tax,
+              total_price: updatedItem.total_price,
+              estimate_items: updatedItem.estimate_items,
+              estimate_note: updatedItem.estimate_note,
+            });
+            alert(`[${updatedItem.title}] 매출 건의 견적 금액(₩${Number(updatedItem.total_price).toLocaleString()}원)이 매출액으로 자동 반영되었습니다!`);
+          }}
+          onPrint={(quoteData, custData) => {
+            setPrintingQuote({ quote: quoteData, customer: custData });
+          }}
+        />
+      )}
+
       {/* 5. 경성문화사 실물 작업전표 1:1 출력 모달 */}
+
       {printingJobOrder && (
         <JobOrderPrintModal
           order={printingJobOrder}

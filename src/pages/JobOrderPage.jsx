@@ -1,9 +1,11 @@
 // src/pages/JobOrderPage.jsx
 import React, { useState } from 'react';
 import { useData } from '../context/DataContext';
-import { Plus, Search, FileText, ArrowRight, Printer, Pencil, Trash2, UserCheck, Calendar, Zap } from 'lucide-react';
+import { Plus, Search, FileText, ArrowRight, Printer, Pencil, Trash2, UserCheck, Calendar, Zap, Calculator } from 'lucide-react';
 import JobOrderModal from '../components/common/JobOrderModal';
 import JobOrderPrintModal from '../components/common/JobOrderPrintModal';
+import EstimateModal from '../components/common/EstimateModal';
+import QuotePrintModal from '../components/common/QuotePrintModal';
 
 export default function JobOrderPage() {
   const { jobOrders, customers, addJobOrder, updateJobOrder, deleteJobOrder, selectedTeamGroup } = useData();
@@ -11,6 +13,11 @@ export default function JobOrderPage() {
   const [showModal, setShowModal] = useState(false);
   const [editingOrder, setEditingOrder] = useState(null);
   const [printingOrder, setPrintingOrder] = useState(null);
+
+  // 💡 견적서 작성 및 출력 모달 상태
+  const [estimatingOrder, setEstimatingOrder] = useState(null);
+  const [printingQuote, setPrintingQuote] = useState(null);
+
 
   const todayStr = new Date().toISOString().split('T')[0];
 
@@ -267,13 +274,26 @@ export default function JobOrderPage() {
                       <span>전표 1:1 인쇄</span>
                     </button>
 
+                    {/* 💡 견적서 작성 및 단가 산출 버튼 */}
+                    <button
+                      onClick={() => {
+                        const cust = customers.find(c => c.id === order.customer_id);
+                        setEstimatingOrder({ sale: order, customer: cust });
+                      }}
+                      className="flex items-center space-x-1 bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-300 px-3 py-1.5 rounded-xl text-xs font-bold transition"
+                      title="견적서 품목별 단가 산출 및 전표 금액 자동 반영"
+                    >
+                      <Calculator className="w-3.5 h-3.5 text-sky-600" />
+                      <span>견적서 작성</span>
+                    </button>
+
                     {/* 💡 건별 구글 캘린더 등록 버튼 */}
                     <button
                       onClick={() => handleAddToGoogleCalendar(order)}
-                      className="flex items-center space-x-1 bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-300 px-3 py-1.5 rounded-xl text-xs font-bold transition"
+                      className="flex items-center space-x-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 px-3 py-1.5 rounded-xl text-xs font-bold transition"
                       title="이 전표 일정만 구글 캘린더에 연동"
                     >
-                      <Calendar className="w-3.5 h-3.5 text-sky-600" />
+                      <Calendar className="w-3.5 h-3.5 text-slate-600" />
                       <span>캘린더 등록</span>
                     </button>
 
@@ -336,7 +356,7 @@ export default function JobOrderPage() {
         />
       )}
 
-      {/* 1:1 실물 작업전표 인쇄 모달 */}
+      {/* 실물 작업전표 1:1 인쇄 모달 */}
       {printingOrder && (
         <JobOrderPrintModal
           order={printingOrder}
@@ -344,6 +364,39 @@ export default function JobOrderPage() {
           onClose={() => setPrintingOrder(null)}
         />
       )}
+
+      {/* 💡 견적서 작성 및 전표 금액 자동 갱신 모달 */}
+      {estimatingOrder && (
+        <EstimateModal
+          sale={estimatingOrder.sale}
+          customer={estimatingOrder.customer}
+          onClose={() => setEstimatingOrder(null)}
+          onSave={async (updatedItem) => {
+            await updateJobOrder(updatedItem.id || updatedItem.code_number, {
+              estimated_price: updatedItem.supply_price,
+              supply_price: updatedItem.supply_price,
+              tax: updatedItem.tax,
+              total_price: updatedItem.total_price,
+              estimate_items: updatedItem.estimate_items,
+              estimate_note: updatedItem.estimate_note,
+            });
+            alert(`[${updatedItem.displayCode || updatedItem.code_number}] 전표의 예상 견적 금액이 ₩${Number(updatedItem.total_price).toLocaleString()}원으로 자동 갱신되었습니다!`);
+          }}
+          onPrint={(quoteData, custData) => {
+            setPrintingQuote({ quote: quoteData, customer: custData });
+          }}
+        />
+      )}
+
+      {/* 💡 견적서 출력 / 엑셀 다운로드 모달 */}
+      {printingQuote && (
+        <QuotePrintModal
+          quote={printingQuote.quote}
+          customer={printingQuote.customer}
+          onClose={() => setPrintingQuote(null)}
+        />
+      )}
     </div>
   );
 }
+
