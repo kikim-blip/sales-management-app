@@ -66,6 +66,8 @@ export default function SalesPage() {
   const [listSearchText, setListSearchText] = useState('');
   const [listCustomerFilter, setListCustomerFilter] = useState('ALL');
   const [listStatusFilter, setListStatusFilter] = useState('ALL');
+  const [listPeriodMode, setListPeriodMode] = useState('all'); // 'all' | 'month' | 'range'
+  const [listSelectedMonth, setListSelectedMonth] = useState(today.slice(0, 7));
   const [listStartDate, setListStartDate] = useState(() => {
     const d = new Date();
     d.setMonth(d.getMonth() - 1);
@@ -91,7 +93,7 @@ export default function SalesPage() {
     return s;
   }
 
-  // 팀 그룹 필터링 적용
+  // 💡 전체 목록 및 미청구 관리용 정밀 필터링 (발주처, 과, 담당자, 작업명, 기간 전체 지원)
   const filteredSales = sales.filter(s => {
     if (!selectedTeamGroup || selectedTeamGroup === 'ALL') return true;
     if (s.dept && s.dept === selectedTeamGroup) return true;
@@ -100,32 +102,51 @@ export default function SalesPage() {
     return false;
   }).filter(item => {
     const cust = customers.find(c => c.id === item.customer_id);
-    const customerLabel = cust ? cust.name : (item.customer_name || item.customer_id || '');
-    const text = `${item.title || ''} ${customerLabel} ${item.content || ''} ${item.note || ''}`.toLowerCase();
+    const orgName = cust?.name || item.customer_name || '';
+    const deptName = cust?.dept || item.dept || '';
+    const contactPerson = cust?.contact_person || item.client_contact_person || '';
+    const salesManager = cust?.sales_manager || item.manager_name || '';
+    const title = item.title || '';
+    const content = item.content || '';
+    const note = item.note || '';
 
-    if (listSearchText.trim() && !text.includes(listSearchText.trim().toLowerCase())) {
-      return false;
+    // 1. 발주처, 과, 담당자, 작업명 통합 텍스트 검색
+    if (listSearchText.trim()) {
+      const q = listSearchText.trim().toLowerCase();
+      const searchableText = `${orgName} ${deptName} ${contactPerson} ${salesManager} ${title} ${content} ${note}`.toLowerCase();
+      if (!searchableText.includes(q)) {
+        return false;
+      }
     }
 
+    // 2. 발주처 / 거래처 지정 드롭다운 필터
     if (listCustomerFilter !== 'ALL') {
-      const matchesCustomer = customerLabel === listCustomerFilter || item.customer_id === listCustomerFilter;
-      if (!matchesCustomer) return false;
+      const matchById = item.customer_id === listCustomerFilter;
+      const matchByName = (cust && cust.name === listCustomerFilter) || (item.customer_name === listCustomerFilter);
+      if (!matchById && !matchByName) return false;
     }
 
+    // 3. 진행 상태 필터 (진행중 / 납품완료 / 청구완료)
     if (listStatusFilter !== 'ALL' && (item.billing_schedule || '진행중') !== listStatusFilter) {
       return false;
     }
 
-    const regDate = normalizeDateStr(item.reg_date || item.receipt_date || item.delivery_date);
-    if (regDate && listStartDate && regDate < listStartDate) {
-      return false;
-    }
-    if (regDate && listEndDate && regDate > listEndDate) {
-      return false;
+    // 4. 기간 필터 (전체 / 월별 / 직접지정)
+    if (listPeriodMode !== 'all') {
+      const regDate = normalizeDateStr(item.reg_date || item.receipt_date || item.delivery_date);
+      if (regDate) {
+        if (listPeriodMode === 'month') {
+          if (!regDate.startsWith(listSelectedMonth)) return false;
+        } else if (listPeriodMode === 'range') {
+          if (listStartDate && regDate < listStartDate) return false;
+          if (listEndDate && regDate > listEndDate) return false;
+        }
+      }
     }
 
     return true;
   });
+
 
   // 💡 미청구 건 목록 (청구완료 제외: 진행중, 납품완료 건)
   const unbilledSales = filteredSales.filter(s => s.billing_schedule !== '청구완료');
@@ -898,92 +919,160 @@ export default function SalesPage() {
         </button>
       </div>
 
-      {/* 목록/미청구 관리 탭 전용 상세 조회 필터: 거래처 / 기간 / 상태 / 검색어 */}
+      {/* 목록/미청구 관리 탭 전용 상세 조회 필터: 발주처 / 과 / 담당자 / 작업명 / 기간(전체/월별/직접지정) / 상태 */}
       {reportTab !== 'erp' && (
-        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 space-y-3">
-          <div className="flex items-center gap-2 text-slate-700 font-bold text-sm">
-            <Filter className="w-4 h-4 text-sky-600" />
-            <span>목록 조회 조건</span>
+        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 space-y-3.5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-100">
+            <div className="flex items-center gap-2 text-slate-800 font-bold text-sm">
+              <Filter className="w-4 h-4 text-sky-600" />
+              <span>조회 필터</span>
+              <span className="text-xs font-normal text-slate-500">
+                (검색 결과: <strong className="text-sky-600 font-bold">{filteredSales.length}</strong>건)
+              </span>
+            </div>
+
+            {/* 기간 모드 프리셋: [전체] / [당월] / [직접지정] */}
+            <div className="flex items-center space-x-1.5">
+              <span className="text-xs font-bold text-slate-500 mr-1">기간:</span>
+              <div className="inline-flex p-0.5 bg-slate-100 rounded-xl text-xs font-bold">
+                <button
+                  type="button"
+                  onClick={() => setListPeriodMode('all')}
+                  className={`px-2.5 py-1 rounded-lg transition ${
+                    listPeriodMode === 'all' ? 'bg-white text-sky-700 font-black shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  전체 기간
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setListPeriodMode('month');
+                    setListSelectedMonth(today.slice(0, 7));
+                  }}
+                  className={`px-2.5 py-1 rounded-lg transition ${
+                    listPeriodMode === 'month' ? 'bg-white text-sky-700 font-black shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  당월
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setListPeriodMode('range')}
+                  className={`px-2.5 py-1 rounded-lg transition ${
+                    listPeriodMode === 'range' ? 'bg-white text-sky-700 font-black shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  직접지정
+                </button>
+              </div>
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
-            <div className="md:col-span-2 relative">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-2.5">
+            {/* 1. 발주처/과/담당자/작업명 통합 검색 (5열) */}
+            <div className="lg:col-span-4 relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input
                 value={listSearchText}
                 onChange={(e) => setListSearchText(e.target.value)}
-                placeholder="거래처명, 작업명, 내용, 비고 검색"
-                className="w-full pl-9 pr-3 py-2.5 border border-slate-200 rounded-xl text-xs font-medium focus:border-sky-500 focus:outline-none"
+                placeholder="발주처, 과, 담당자, 작업명 검색..."
+                className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-xl text-xs font-medium focus:border-sky-500 focus:outline-none bg-slate-50/50 focus:bg-white"
               />
             </div>
 
-            <select
-              value={listCustomerFilter}
-              onChange={(e) => setListCustomerFilter(e.target.value)}
-              className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-xs font-medium focus:border-sky-500 focus:outline-none"
-            >
-              <option value="ALL">전체 거래처</option>
-              {customers.map((cust) => (
-                <option key={cust.id} value={cust.name}>{cust.name}</option>
-              ))}
-            </select>
+            {/* 2. 발주처(고객사) 지정 드롭다운 (3열) */}
+            <div className="lg:col-span-3">
+              <select
+                value={listCustomerFilter}
+                onChange={(e) => setListCustomerFilter(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-medium focus:border-sky-500 focus:outline-none bg-white"
+              >
+                <option value="ALL">🏢 전체 발주처(고객사)</option>
+                {customers.map((cust) => (
+                  <option key={cust.id} value={cust.id}>
+                    🏢 {cust.name} {cust.dept ? `(${cust.dept})` : ''} {cust.contact_person ? `- ${cust.contact_person}` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-            <select
-              value={listStatusFilter}
-              onChange={(e) => setListStatusFilter(e.target.value)}
-              className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-xs font-medium focus:border-sky-500 focus:outline-none"
-            >
-              <option value="ALL">전체 상태</option>
-              <option value="진행중">진행중</option>
-              <option value="납품완료">납품완료</option>
-              <option value="청구완료">청구완료</option>
-            </select>
+            {/* 3. 진행 상태 (2열) */}
+            <div className="lg:col-span-2">
+              <select
+                value={listStatusFilter}
+                onChange={(e) => setListStatusFilter(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-medium focus:border-sky-500 focus:outline-none bg-white"
+              >
+                <option value="ALL">전체 상태</option>
+                <option value="진행중">진행중</option>
+                <option value="납품완료">납품완료</option>
+                <option value="청구완료">청구완료</option>
+              </select>
+            </div>
 
-            <button
-              type="button"
-              onClick={() => {
-                setListSearchText('');
-                setListCustomerFilter('ALL');
-                setListStatusFilter('ALL');
-                setListStartDate(() => {
-                  const d = new Date();
-                  d.setMonth(d.getMonth() - 1);
-                  return d.toISOString().split('T')[0];
-                });
-                setListEndDate(today);
-              }}
-              className="flex items-center justify-center gap-1 px-3 py-2.5 text-xs font-bold text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-50"
-            >
-              <XCircle className="w-3.5 h-3.5" />
-              초기화
-            </button>
-          </div>
+            {/* 4. 기간 입력창 (2열 또는 3열) */}
+            <div className="lg:col-span-2">
+              {listPeriodMode === 'month' && (
+                <input
+                  type="month"
+                  value={listSelectedMonth}
+                  onChange={(e) => setListSelectedMonth(e.target.value)}
+                  className="w-full px-2 py-2 border border-slate-200 rounded-xl text-xs font-bold text-sky-700 text-center bg-white"
+                />
+              )}
+              {listPeriodMode === 'range' && (
+                <div className="flex items-center space-x-1">
+                  <input
+                    type="date"
+                    value={listStartDate}
+                    onChange={(e) => setListStartDate(e.target.value)}
+                    className="w-full p-1.5 border border-slate-200 rounded-xl text-[11px] text-center bg-white"
+                  />
+                  <span className="text-slate-400 text-xs">~</span>
+                  <input
+                    type="date"
+                    value={listEndDate}
+                    onChange={(e) => setListEndDate(e.target.value)}
+                    className="w-full p-1.5 border border-slate-200 rounded-xl text-[11px] text-center bg-white"
+                  />
+                </div>
+              )}
+              {listPeriodMode === 'all' && (
+                <div className="w-full py-2 bg-slate-50 border border-slate-200 rounded-xl text-center text-xs font-semibold text-slate-500">
+                  전체 누적 기간
+                </div>
+              )}
+            </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <label className="flex items-center gap-2 text-xs font-medium text-slate-600">
-              <Calendar className="w-4 h-4 text-sky-600" />
-              <span>시작일</span>
-              <input
-                type="date"
-                value={listStartDate}
-                onChange={(e) => setListStartDate(e.target.value)}
-                className="flex-1 px-2.5 py-2 border border-slate-200 rounded-xl text-xs font-medium"
-              />
-            </label>
+            {/* 5. 초기화 버튼 (1열) */}
+            <div className="lg:col-span-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setListSearchText('');
+                  setListCustomerFilter('ALL');
+                  setListStatusFilter('ALL');
+                  setListPeriodMode('all');
+                  setListStartDate(() => {
+                    const d = new Date();
+                    d.setMonth(d.getMonth() - 1);
+                    return d.toISOString().split('T')[0];
+                  });
+                  setListEndDate(today);
+                }}
+                className="w-full flex items-center justify-center gap-1 py-2 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition"
+                title="모든 검색 조건을 초기화합니다."
+              >
+                <XCircle className="w-3.5 h-3.5" />
+                <span>초기화</span>
+              </button>
+            </div>
 
-            <label className="flex items-center gap-2 text-xs font-medium text-slate-600">
-              <Calendar className="w-4 h-4 text-sky-600" />
-              <span>종료일</span>
-              <input
-                type="date"
-                value={listEndDate}
-                onChange={(e) => setListEndDate(e.target.value)}
-                className="flex-1 px-2.5 py-2 border border-slate-200 rounded-xl text-xs font-medium"
-              />
-            </label>
           </div>
         </div>
       )}
+
 
       {/* ----------------- 탭 1: 매출 기록 목록 ----------------- */}
 
