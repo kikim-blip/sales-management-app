@@ -1540,6 +1540,77 @@ export default function DashboardPage() {
               </div>
             </div>
 
+            {/* ── 📅 일정 정보 (접수일자 / 납품예정일 / 납품시간 3열 배치) ── */}
+            <div className="bg-slate-50/80 p-3.5 rounded-2xl border border-slate-200 space-y-3">
+              <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                <Calendar className="w-3.5 h-3.5 text-sky-600" />
+                접수 및 납품 일정
+              </span>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {/* 1. 접수일자 */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1">
+                    <span>접수일자 *</span>
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={newSaleFormData.receipt_date || newSaleFormData.reg_date || todayStr}
+                    onChange={(e) => {
+                      setNewSaleFormData({
+                        ...newSaleFormData,
+                        receipt_date: e.target.value,
+                        reg_date: e.target.value,
+                      });
+                    }}
+                    className="w-full p-2.5 border border-slate-300 rounded-xl text-xs font-bold text-slate-800 bg-white focus:ring-2 focus:ring-sky-500"
+                  />
+                </div>
+
+                {/* 2. 납품 예정일 */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1">
+                    <Truck className="w-3 h-3 text-emerald-600" />
+                    <span>납품 예정일 *</span>
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={newSaleFormData.delivery_date || todayStr}
+                    onChange={(e) => setNewSaleFormData({ ...newSaleFormData, delivery_date: e.target.value })}
+                    className="w-full p-2.5 border border-slate-300 rounded-xl text-xs font-bold text-emerald-900 bg-white focus:ring-2 focus:ring-sky-500"
+                  />
+                </div>
+
+                {/* 3. 납품 시간 */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-bold text-slate-700 flex items-center gap-1">
+                      <Clock className="w-3 h-3 text-amber-600" />
+                      <span>납품 시간</span>
+                    </label>
+                    {newSaleFormData.delivery_time ? (
+                      <button
+                        type="button"
+                        onClick={() => setNewSaleFormData({ ...newSaleFormData, delivery_time: '' })}
+                        className="text-[10px] text-slate-400 hover:text-rose-600 font-bold underline"
+                      >
+                        시간 해제
+                      </button>
+                    ) : (
+                      <span className="text-[10px] text-slate-400 font-medium">종일</span>
+                    )}
+                  </div>
+                  <input
+                    type="time"
+                    value={newSaleFormData.delivery_time || ''}
+                    onChange={(e) => setNewSaleFormData({ ...newSaleFormData, delivery_time: e.target.value })}
+                    className="w-full p-2.5 border border-slate-300 rounded-xl text-xs font-bold text-slate-800 bg-white focus:ring-2 focus:ring-sky-500"
+                  />
+                </div>
+              </div>
+            </div>
 
             {/* 작업 정보 */}
             <div className="space-y-3">
@@ -1548,6 +1619,7 @@ export default function DashboardPage() {
                   <label className="block text-xs font-semibold text-slate-600 mb-1">작업명 (제목) *</label>
                   <input
                     type="text"
+                    required
                     placeholder="작업 제목 입력"
                     value={newSaleFormData.title}
                     onFocus={() => setShowCustomerDropdown(false)}
@@ -1605,39 +1677,6 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1">납품 예정일</label>
-                  <input
-                    type="date"
-                    value={newSaleFormData.delivery_date}
-                    onChange={e => setNewSaleFormData({ ...newSaleFormData, delivery_date: e.target.value })}
-                    className="w-full p-2.5 border border-slate-200 rounded-xl text-xs font-medium"
-                  />
-                </div>
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="block text-xs font-semibold text-slate-600">납품 시간</label>
-                    {newSaleFormData.delivery_time ? (
-                      <button
-                        type="button"
-                        onClick={() => setNewSaleFormData({ ...newSaleFormData, delivery_time: '' })}
-                        className="text-[11px] text-slate-400 hover:text-rose-600 font-semibold"
-                      >
-                        ✕ 시간 미지정 (종일)
-                      </button>
-                    ) : (
-                      <span className="text-[11px] text-sky-600 font-bold">종일 (시간 미지정)</span>
-                    )}
-                  </div>
-                  <input
-                    type="time"
-                    value={newSaleFormData.delivery_time || ''}
-                    onChange={e => setNewSaleFormData({ ...newSaleFormData, delivery_time: e.target.value })}
-                    className="w-full p-2.5 border border-slate-200 rounded-xl text-xs"
-                  />
-                </div>
-              </div>
 
 
               <div>
