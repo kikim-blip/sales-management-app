@@ -142,11 +142,15 @@ export function DataProvider({ children }) {
   };
 
   const updateJobOrder = async (codeNo, updatedOrder) => {
+    let fullMergedOrder = { code_number: codeNo, ...updatedOrder, _localUpdated: Date.now() };
+
     // 1. 로컬 즉시 반영 (optimistic update)
     setJobOrders(prev => {
+      const existing = prev.find(o => o.code_number === codeNo || o.id === codeNo);
+      fullMergedOrder = { ...existing, ...updatedOrder, _localUpdated: Date.now() };
       const next = prev.map(o =>
         (o.code_number === codeNo || o.id === codeNo)
-          ? { ...o, ...updatedOrder, _localUpdated: Date.now() }
+          ? fullMergedOrder
           : o
       );
       saveCache('jobOrders', next);
@@ -156,12 +160,13 @@ export function DataProvider({ children }) {
 
     // 2. D1에 저장
     try {
-      await updateJobOrderApi(codeNo, updatedOrder);
+      await updateJobOrderApi(codeNo, fullMergedOrder);
     } catch (err) {
       console.error('작업전표 D1 수정 에러:', err);
       throw err;
     }
   };
+
 
   const deleteJobOrder = async (codeNo) => {
     setJobOrders(prev => {
@@ -257,13 +262,17 @@ export function DataProvider({ children }) {
   };
 
   const updateCustomer = async (id, updatedCust) => {
+    let fullMergedCust = { id, ...updatedCust, _localUpdated: Date.now() };
+
     setCustomers(prev => {
-      const next = prev.map(c => c.id === id ? { id, ...updatedCust, _localUpdated: Date.now() } : c);
+      const existing = prev.find(c => c.id === id);
+      fullMergedCust = { ...existing, ...updatedCust, id, _localUpdated: Date.now() };
+      const next = prev.map(c => c.id === id ? fullMergedCust : c);
       saveCache('customers', next);
       return next;
     });
     lastFetchRef.current = Date.now();
-    await updateCustomerApi(id, updatedCust);
+    await updateCustomerApi(id, fullMergedCust);
   };
 
   const deleteCustomer = async (id) => {
@@ -305,15 +314,25 @@ export function DataProvider({ children }) {
   };
 
   const updateSales = async (id, updatedSale) => {
+    let fullMergedSale = { id, ...updatedSale, _localUpdated: Date.now() };
+
     setSales(prev => {
-      const next = prev.map(s => s.id === id ? { id, ...updatedSale, _localUpdated: Date.now() } : s);
+      const existing = prev.find(s => s.id === id);
+      fullMergedSale = { ...existing, ...updatedSale, id, _localUpdated: Date.now() };
+      const next = prev.map(s => s.id === id ? fullMergedSale : s);
       saveCache('sales', next);
       return next;
     });
+
     lastFetchRef.current = Date.now();
-    await updateSaleApi(id, updatedSale);
-    const custObj = customers.find(c => c.id === updatedSale.customer_id);
-    sendWebhookEvent({ ...updatedSale, id, customer_name: custObj ? `${custObj.name} (${custObj.dept})` : '미지정' });
+    try {
+      await updateSaleApi(id, fullMergedSale);
+      const custObj = customers.find(c => c.id === fullMergedSale.customer_id);
+      sendWebhookEvent({ ...fullMergedSale, id, customer_name: custObj ? `${custObj.name} (${custObj.dept})` : '미지정' });
+    } catch (err) {
+      console.error('매출 D1 수정 에러:', err);
+      throw err;
+    }
   };
 
   const deleteSales = async (id) => {
@@ -353,13 +372,18 @@ export function DataProvider({ children }) {
   };
 
   const updatePayment = async (id, updatedPay) => {
+    let fullMergedPay = { id, ...updatedPay, _localUpdated: Date.now() };
+
     setPayments(prev => {
-      const next = prev.map(p => p.id === id ? { id, ...updatedPay, _localUpdated: Date.now() } : p);
+      const existing = prev.find(p => p.id === id);
+      fullMergedPay = { ...existing, ...updatedPay, id, _localUpdated: Date.now() };
+      const next = prev.map(p => p.id === id ? fullMergedPay : p);
+
       saveCache('payments', next);
       return next;
     });
     lastFetchRef.current = Date.now();
-    await updatePaymentApi(id, updatedPay);
+    await updatePaymentApi(id, fullMergedPay);
   };
 
   const deletePayment = async (id) => {
@@ -370,6 +394,7 @@ export function DataProvider({ children }) {
     });
     await deletePaymentApi(id);
   };
+
 
   const [selectedTeamGroup, setSelectedTeamGroup] = useState('ALL');
 

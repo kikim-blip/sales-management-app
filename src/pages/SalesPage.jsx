@@ -1955,15 +1955,10 @@ export default function SalesPage() {
           customer={estimatingSale.customer}
           onClose={() => setEstimatingSale(null)}
           onSave={async (updatedItem) => {
-            await updateSales(updatedItem.id, {
-              supply_price: updatedItem.supply_price,
-              tax: updatedItem.tax,
-              total_price: updatedItem.total_price,
-              estimate_items: updatedItem.estimate_items,
-              estimate_note: updatedItem.estimate_note,
-            });
+            await updateSales(updatedItem.id, updatedItem);
             alert(`[${updatedItem.title}] 매출 건의 견적 금액(₩${Number(updatedItem.total_price).toLocaleString()}원)이 매출액으로 자동 반영되었습니다!`);
           }}
+
           onPrint={(quoteData, custData) => {
             setPrintingQuote({ quote: quoteData, customer: custData });
           }}

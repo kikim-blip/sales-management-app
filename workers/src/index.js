@@ -250,18 +250,22 @@ async function createSale(db, request) {
 
 async function updateSale(db, id, request) {
   const body = await request.json();
+  const existing = await db.prepare('SELECT * FROM sales WHERE id = ?').bind(id).first() || {};
+  const merged = { ...existing, ...body };
+
   await db.prepare(
     `UPDATE sales SET reg_date=?, receipt_date=?, delivery_date=?, delivery_time=?, customer_id=?,
      title=?, content=?, note=?, billing_schedule=?, type=?, supply_price=?, tax=?, total_price=?,
      calendar_synced=?, superthread_synced=?, dept=?, updated_at=datetime('now','localtime') WHERE id=?`
-  ).bind(body.reg_date||'', body.receipt_date||'', body.delivery_date||'', body.delivery_time||'',
-         body.customer_id||'', body.title||'', body.content||'', body.note||'',
-         body.billing_schedule||'청구완료', body.type||'매출', body.supply_price||0,
-         body.tax||0, body.total_price||0, body.calendar_synced?1:0,
-         body.superthread_synced?1:0, body.dept||'', id).run();
+  ).bind(merged.reg_date||'', merged.receipt_date||'', merged.delivery_date||'', merged.delivery_time||'',
+         merged.customer_id||'', merged.title||'', merged.content||'', merged.note||'',
+         merged.billing_schedule||'청구완료', merged.type||'매출', merged.supply_price||0,
+         merged.tax||0, merged.total_price||0, merged.calendar_synced?1:0,
+         merged.superthread_synced?1:0, merged.dept||'', id).run();
   const row = await db.prepare('SELECT * FROM sales WHERE id = ?').bind(id).first();
   return json(row);
 }
+
 
 async function deleteSale(db, id) {
   await db.prepare('DELETE FROM sales WHERE id = ?').bind(id).run();
@@ -354,6 +358,9 @@ async function createJobOrder(db, request) {
 
 async function updateJobOrder(db, id, request) {
   const body = await request.json();
+  const existing = await db.prepare('SELECT * FROM job_orders WHERE id = ? OR code_number = ?').bind(id, id).first() || {};
+  const merged = { ...existing, ...body };
+
   await db.prepare(
     `UPDATE job_orders SET
      manager_name=?, receipt_date=?, delivery_date=?, delivery_time=?, customer_id=?, dept=?,
@@ -365,20 +372,21 @@ async function updateJobOrder(db, id, request) {
      illustration=?, copyright_web=?, production_progress=?, delivery_destination=?,
      cover_related=?, inner_related=?, request_note=?, editor_name=?, designer_name=?,
      status=?, updated_at=datetime('now','localtime') WHERE id=? OR code_number=?`
-  ).bind(body.manager_name||'', body.receipt_date||'', body.delivery_date||'',
-         body.delivery_time||'', body.customer_id||'', body.dept||'', body.title||'',
-         body.spec||'', body.pages||'', body.duplex||'', body.quantity||0, body.estimated_price||0,
-         body.client_contact_person||'', body.client_phone||'', body.client_email||'',
-         body.email_receipt_time||'', body.cover_job||'', body.cover_paper||'',
-         body.cover_print||'', body.coating||'', body.inner_job||'', body.inner_paper||'',
-         body.inner_print||'', body.interleaf_paper||'', body.binding||'',
-         body.draft_email||'', body.draft_group||'', body.mail_sender||'',
-         body.cover_proof_date||'', body.inner_proof_date||'', body.proof_method||'',
-         body.planning||'', body.photography||'', body.illustration||'',
-         body.copyright_web||'', body.production_progress||'', body.delivery_destination||'',
-         body.cover_related||'', body.inner_related||'', body.request_note||'',
-         body.editor_name||'', body.designer_name||'', body.status||'의뢰접수', id, id).run();
-  const row = await db.prepare('SELECT * FROM job_orders WHERE id = ?').bind(id).first();
+  ).bind(merged.manager_name||'', merged.receipt_date||'', merged.delivery_date||'',
+         merged.delivery_time||'', merged.customer_id||'', merged.dept||'', merged.title||'',
+         merged.spec||'', merged.pages||'', merged.duplex||'', merged.quantity||0, merged.estimated_price||0,
+         merged.client_contact_person||'', merged.client_phone||'', merged.client_email||'',
+         merged.email_receipt_time||'', merged.cover_job||'', merged.cover_paper||'',
+         merged.cover_print||'', merged.coating||'', merged.inner_job||'', merged.inner_paper||'',
+         merged.inner_print||'', merged.interleaf_paper||'', merged.binding||'',
+         merged.draft_email||'', merged.draft_group||'', merged.mail_sender||'',
+         merged.cover_proof_date||'', merged.inner_proof_date||'', merged.proof_method||'',
+         merged.planning||'', merged.photography||'', merged.illustration||'',
+         merged.copyright_web||'', merged.production_progress||'', merged.delivery_destination||'',
+         merged.cover_related||'', merged.inner_related||'', merged.request_note||'',
+         merged.editor_name||'', merged.designer_name||'',
+         merged.status||'의뢰접수', id, id).run();
+  const row = await db.prepare('SELECT * FROM job_orders WHERE id = ? OR code_number = ?').bind(id, id).first();
   return json(row);
 }
 

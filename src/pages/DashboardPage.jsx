@@ -1329,26 +1329,14 @@ export default function DashboardPage() {
           onClose={() => setEstimatingSale(null)}
           onSave={async (updatedItem) => {
             if (updatedItem.itemType === 'jobOrder' || updatedItem.code_number) {
-              await updateJobOrder(updatedItem.id || updatedItem.code_number, {
-                estimated_price: updatedItem.supply_price,
-                supply_price: updatedItem.supply_price,
-                tax: updatedItem.tax,
-                total_price: updatedItem.total_price,
-                estimate_items: updatedItem.estimate_items,
-                estimate_note: updatedItem.estimate_note,
-              });
+              await updateJobOrder(updatedItem.id || updatedItem.code_number, updatedItem);
               alert(`[${updatedItem.displayCode || updatedItem.code_number}] 전표의 견적 금액이 ₩${Number(updatedItem.total_price).toLocaleString()}원으로 갱신되었습니다!`);
             } else {
-              await updateSales(updatedItem.id, {
-                supply_price: updatedItem.supply_price,
-                tax: updatedItem.tax,
-                total_price: updatedItem.total_price,
-                estimate_items: updatedItem.estimate_items,
-                estimate_note: updatedItem.estimate_note,
-              });
+              await updateSales(updatedItem.id, updatedItem);
               alert(`[${updatedItem.title}] 매출 건의 견적 금액이 ₩${Number(updatedItem.total_price).toLocaleString()}원으로 자동 반영되었습니다!`);
             }
           }}
+
           onPrint={(quoteData, custData) => {
             setPrintingEstimateQuote({ quote: quoteData, customer: custData });
           }}

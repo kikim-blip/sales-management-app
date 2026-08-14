@@ -372,16 +372,10 @@ export default function JobOrderPage() {
           customer={estimatingOrder.customer}
           onClose={() => setEstimatingOrder(null)}
           onSave={async (updatedItem) => {
-            await updateJobOrder(updatedItem.id || updatedItem.code_number, {
-              estimated_price: updatedItem.supply_price,
-              supply_price: updatedItem.supply_price,
-              tax: updatedItem.tax,
-              total_price: updatedItem.total_price,
-              estimate_items: updatedItem.estimate_items,
-              estimate_note: updatedItem.estimate_note,
-            });
+            await updateJobOrder(updatedItem.id || updatedItem.code_number, updatedItem);
             alert(`[${updatedItem.displayCode || updatedItem.code_number}] 전표의 예상 견적 금액이 ₩${Number(updatedItem.total_price).toLocaleString()}원으로 자동 갱신되었습니다!`);
           }}
+
           onPrint={(quoteData, custData) => {
             setPrintingQuote({ quote: quoteData, customer: custData });
           }}
