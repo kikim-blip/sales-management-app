@@ -2084,9 +2084,76 @@ export default function SalesPage() {
               </div>
 
 
+              {/* ── 📅 일정 정보 (접수일 / 납품 예정일 / 납품 시간) : 작업명 위쪽에 배치 ── */}
+              <div className="bg-slate-50/60 p-3 rounded-2xl border border-slate-200 space-y-2">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  {/* 1. 접수일자 */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1">
+                      <Calendar className="w-3.5 h-3.5 text-sky-600" />
+                      <span>접수일자 *</span>
+                    </label>
+                    <input
+                      type="date"
+                      required
+                      value={formData.receipt_date || formData.reg_date || today}
+                      onChange={e => setFormData({ 
+                        ...formData, 
+                        receipt_date: e.target.value,
+                        reg_date: e.target.value 
+                      })}
+                      className="w-full p-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                    />
+                  </div>
+
+                  {/* 2. 납품 예정일 */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1">
+                      <Calendar className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>납품 예정일 *</span>
+                    </label>
+                    <input
+                      type="date"
+                      required
+                      value={formData.delivery_date || today}
+                      onChange={e => setFormData({ ...formData, delivery_date: e.target.value })}
+                      className="w-full p-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                    />
+                  </div>
+
+                  {/* 3. 납품 시간 */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-bold text-slate-700 flex items-center gap-1">
+                        <Clock className="w-3.5 h-3.5 text-amber-600" />
+                        <span>납품 시간</span>
+                      </label>
+                      {formData.delivery_time ? (
+                        <button
+                          type="button"
+                          onClick={() => setFormData({ ...formData, delivery_time: '' })}
+                          className="text-[10px] text-slate-400 hover:text-rose-600 font-semibold"
+                        >
+                          ✕ 시간미지정
+                        </button>
+                      ) : (
+                        <span className="text-[10px] text-sky-600 font-bold">종일</span>
+                      )}
+                    </div>
+                    <input
+                      type="time"
+                      value={formData.delivery_time || ''}
+                      onChange={e => setFormData({ ...formData, delivery_time: e.target.value })}
+                      className="w-full p-2 bg-white border border-slate-200 rounded-xl text-xs text-slate-800"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* ── 작업명 및 진행 상태 ── */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1">작업명 (제목) *</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">작업명 (제목) *</label>
                   <input
                     type="text"
                     required
@@ -2094,17 +2161,16 @@ export default function SalesPage() {
                     value={formData.title}
                     onFocus={() => setShowCustomerDropdown(false)}
                     onChange={e => setFormData({ ...formData, title: e.target.value })}
-                    className="w-full p-2.5 border border-slate-200 rounded-xl text-xs"
+                    className="w-full p-2.5 border border-slate-200 rounded-xl text-xs font-semibold focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
                   />
                 </div>
 
-
                 <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1">진행 상태</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">진행 상태</label>
                   <select
                     value={formData.billing_schedule}
                     onChange={e => setFormData({ ...formData, billing_schedule: e.target.value })}
-                    className="w-full p-2.5 border border-slate-200 rounded-xl text-xs font-bold text-slate-800"
+                    className="w-full p-2.5 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
                   >
                     <option value="진행중">⏳ 진행중</option>
                     <option value="납품완료">🚚 납품완료</option>
@@ -2113,6 +2179,7 @@ export default function SalesPage() {
                 </div>
               </div>
 
+              {/* ── 금액 정보 ── */}
               <div className="space-y-1.5">
                 <div className="grid grid-cols-2 gap-3">
                   <div>
@@ -2146,40 +2213,6 @@ export default function SalesPage() {
                 </div>
               </div>
 
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1">납품 예정일</label>
-                  <input
-                    type="date"
-                    value={formData.delivery_date}
-                    onChange={e => setFormData({ ...formData, delivery_date: e.target.value })}
-                    className="w-full p-2.5 border border-slate-200 rounded-xl text-xs"
-                  />
-                </div>
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="block text-xs font-semibold text-slate-600">납품 시간</label>
-                    {formData.delivery_time ? (
-                      <button
-                        type="button"
-                        onClick={() => setFormData({ ...formData, delivery_time: '' })}
-                        className="text-[11px] text-slate-400 hover:text-rose-600 font-semibold"
-                      >
-                        ✕ 시간 미지정 (종일)
-                      </button>
-                    ) : (
-                      <span className="text-[11px] text-sky-600 font-bold">종일 (시간 미지정)</span>
-                    )}
-                  </div>
-                  <input
-                    type="time"
-                    value={formData.delivery_time || ''}
-                    onChange={e => setFormData({ ...formData, delivery_time: e.target.value })}
-                    className="w-full p-2.5 border border-slate-200 rounded-xl text-xs"
-                  />
-                </div>
-              </div>
 
 
               <div>
