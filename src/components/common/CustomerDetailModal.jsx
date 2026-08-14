@@ -11,6 +11,9 @@ export default function CustomerDetailModal({ customer, sales = [], payments = [
   const targetOrgName = customer.orgName || customer.name || customer.customer_name || '';
   const targetDeptName = customer.deptName || customer.dept || '';
   const targetContact = customer.contactPerson || customer.contact_person || '';
+  
+  // 조회 단위 레벨: 'company' | 'dept' | 'contact'
+  const viewLevel = customer.viewLevel || (targetContact ? 'contact' : (targetDeptName ? 'dept' : 'company'));
 
   // 1. 해당 고객(또는 그룹)의 매출 내역 추출
   let rawSales = [];
@@ -46,15 +49,15 @@ export default function CustomerDetailModal({ customer, sales = [], payments = [
     });
   }
 
-  // 3. 거래원장 일자별 목록 산출 (정확한 금액 및 거래처 세부정보 매핑)
+  // 3. 거래원장 일자별 목록 산출
   const ledgerItems = [];
 
   rawSales.forEach((s) => {
     const amount = Number(s.sales || s.total_price || s.salesAmount || 0);
     const dateVal = s.date || s.reg_date || s.receipt_date || s.delivery_date || '';
     const org = s.orgName || s.customer_name || targetOrgName;
-    const dept = s.deptName || s.dept || targetDeptName;
-    const contact = s.contactPerson || s.contact_person || s.client_contact_person || targetContact;
+    const dept = s.deptName || s.dept || (viewLevel !== 'company' ? targetDeptName : '-');
+    const contact = s.contactPerson || s.contact_person || s.client_contact_person || (viewLevel === 'contact' ? targetContact : '-');
     const titleVal = s.title || s.description || '매출 건';
     const noteVal = s.note || s.content || s.billing_schedule || '';
 
@@ -75,8 +78,8 @@ export default function CustomerDetailModal({ customer, sales = [], payments = [
     const amount = Number(p.payment || p.amount || p.paymentAmount || 0);
     const dateVal = p.date || p.payment_date || '';
     const org = p.orgName || p.customer_name || targetOrgName;
-    const dept = p.deptName || p.dept || targetDeptName;
-    const contact = p.contactPerson || p.contact_person || targetContact;
+    const dept = p.deptName || p.dept || (viewLevel !== 'company' ? targetDeptName : '-');
+    const contact = p.contactPerson || p.contact_person || (viewLevel === 'contact' ? targetContact : '-');
     const titleVal = p.title || p.description || `수금 입금 (${p.method || '계좌이체'})`;
     const noteVal = p.note || p.content || (p.method ? `결제수단: ${p.method}` : '수금 정산');
 
@@ -96,7 +99,7 @@ export default function CustomerDetailModal({ customer, sales = [], payments = [
   // 일자순 정렬
   ledgerItems.sort((a, b) => (a.date || '9999-12-31').localeCompare(b.date || '9999-12-31'));
 
-  // 누적 미수 잔액 계산
+  // 💡 누적 미수 잔액 총괄 계산
   let runningBalance = 0;
   let totalSales = 0;
   let totalPayment = 0;
@@ -113,18 +116,30 @@ export default function CustomerDetailModal({ customer, sales = [], payments = [
 
   const unpaidBalance = totalSales - totalPayment;
 
-  // 1. 요청하신 컬럼 순서로 엑셀 다운로드 (.xlsx)
-  // 순서: 일자 | 기관명 | 과 | 담당자 | 작업명 | 매출금액 | 수금금액 | 비고
+  // 1. 요청하신 순서의 엑셀 추출: 일자 | 기관명 | 과 | 담당자 | 작업명 | 매출금액 | 수금금액 | 누적 미수잔액 | 비고
   const handleExportExcel = () => {
     const today = new Date().toISOString().split('T')[0];
 
+    // 상단 타이틀 및 조건 표기
+    const excelHeaderTitle = viewLevel === 'company'
+      ? `${targetOrgName} - 일자별 거래 및 미수금 상세 장부`
+      : viewLevel === 'dept'
+      ? `${targetOrgName} (${targetDeptName}) - 일자별 거래 및 미수금 상세 장부`
+      : `${targetOrgName} (${targetDeptName}) - ${targetContact} - 일자별 거래 및 미수금 상세 장부`;
+
+    const excelInfoRow = viewLevel === 'company'
+      ? ['기관명(고객사)', targetOrgName, '', '', '', '', '기준일자', today]
+      : viewLevel === 'dept'
+      ? ['기관명(고객사)', targetOrgName, '부서/과', targetDeptName, '', '', '기준일자', today]
+      : ['기관명(고객사)', targetOrgName, '부서/과', targetDeptName, '담당자', targetContact, '기준일자', today];
+
     const excelData = [
-      [`${targetOrgName} - 일자별 거래 및 미수금 상세 장부`, '', '', '', '', '', '', `추출일자: ${today}`],
+      [excelHeaderTitle, '', '', '', '', '', '', '', `추출일자: ${today}`],
       [],
-      ['기관명(고객사)', targetOrgName, '부서/과', targetDeptName || '전체', '담당자', targetContact || '미지정', '기준일자', today],
-      ['총 매출액', totalSales, '총 수금액', totalPayment, '미수금 잔액', unpaidBalance, '', ''],
+      excelInfoRow,
+      ['총 매출액', totalSales, '총 수금액', totalPayment, '총 미수 잔액', unpaidBalance, '', '', ''],
       [],
-      ['일자', '기관명', '과', '담당자', '작업명', '매출금액', '수금금액', '비고'],
+      ['일자', '기관명', '과', '담당자', '작업명', '매출금액', '수금금액', '누적 미수잔액', '비고'],
       ...ledgerWithBalance.map((item) => [
         item.date || '-',
         item.orgName || '-',
@@ -133,6 +148,7 @@ export default function CustomerDetailModal({ customer, sales = [], payments = [
         item.title || '-',
         item.salesAmount || 0,
         item.paymentAmount || 0,
+        item.runningBalance || 0,
         item.note || '-',
       ]),
       [],
@@ -140,15 +156,22 @@ export default function CustomerDetailModal({ customer, sales = [], payments = [
         '합계', '', '', '', `${ledgerWithBalance.length} 건`,
         totalSales,
         totalPayment,
-        `미수 잔액: ₩ ${unpaidBalance.toLocaleString()} 원`,
+        unpaidBalance,
+        `최종 미수잔액: ₩ ${unpaidBalance.toLocaleString()} 원`,
       ]
     ];
 
     const worksheet = XLSX.utils.aoa_to_sheet(excelData);
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, '거래상세장부');
+    XLSX.utils.book_append_sheet(workbook, worksheet, '일자별거래장부');
 
-    const fileName = `${targetOrgName}${targetDeptName ? `_${targetDeptName}` : ''}_거래장부_${today}.xlsx`;
+    const filePrefix = viewLevel === 'company'
+      ? targetOrgName
+      : viewLevel === 'dept'
+      ? `${targetOrgName}_${targetDeptName}`
+      : `${targetOrgName}_${targetDeptName}_${targetContact}`;
+
+    const fileName = `${filePrefix}_일자별거래장부_${today}.xlsx`;
     XLSX.writeFile(workbook, fileName);
   };
 
@@ -161,12 +184,14 @@ export default function CustomerDetailModal({ customer, sales = [], payments = [
     <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
       <div className="bg-white w-full max-w-5xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
         
-        {/* 상단 헤더 (인쇄 시 숨김) */}
+        {/* 상단 헤더: 선택 레벨에 맞춘 기관명 / 과 / 담당자 표기 */}
         <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50 print:hidden">
           <div className="flex items-center space-x-2">
             <Building2 className="w-5 h-5 text-sky-600" />
             <h3 className="font-bold text-slate-800 text-base sm:text-lg">
-              {targetOrgName} {targetDeptName ? `(${targetDeptName})` : ''} - 일자별 거래 및 미수금 상세 장부
+              {viewLevel === 'company' && `🏢 ${targetOrgName} - 일자별 거래 및 미수금 상세 장부`}
+              {viewLevel === 'dept' && `🏛️ ${targetOrgName} (${targetDeptName || '부서'}) - 일자별 거래 및 미수금 상세 장부`}
+              {viewLevel === 'contact' && `👤 ${targetOrgName} ${targetDeptName ? `(${targetDeptName})` : ''} - ${targetContact || '담당자'} - 일자별 거래 장부`}
             </h3>
           </div>
           <button
@@ -182,23 +207,25 @@ export default function CustomerDetailModal({ customer, sales = [], payments = [
           
           {/* 고객 정보 & 잔액 요약 카드 */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-            {/* 기본 정보 */}
-            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-1 md:col-span-1">
+            {/* 기본 정보 (기관 / 과 / 담당 선택 레벨에 맞춰 정확한 표기) */}
+            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-1.5 md:col-span-1 flex flex-col justify-center">
               <div className="flex items-center space-x-1.5 font-bold text-slate-900 text-sm">
                 <span>{targetOrgName}</span>
-                {targetDeptName && (
-                  <span className="text-[11px] bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded font-normal">
-                    {targetDeptName}
-                  </span>
-                )}
               </div>
-              <p className="text-xs text-slate-600 flex items-center space-x-1">
-                <User className="w-3.5 h-3.5 text-slate-400" />
-                <span>담당: {targetContact || '미지정'}</span>
-              </p>
-              {(customer.phone || customer.email) && (
+              {viewLevel !== 'company' && targetDeptName && (
+                <div className="text-xs text-slate-600 font-medium">
+                  부서/과: <strong className="text-slate-800">{targetDeptName}</strong>
+                </div>
+              )}
+              {viewLevel === 'contact' && targetContact && (
                 <p className="text-xs text-slate-600 flex items-center space-x-1">
-                  <Phone className="w-3.5 h-3.5 text-slate-400" />
+                  <User className="w-3.5 h-3.5 text-slate-400" />
+                  <span>담당: <strong className="text-slate-800">{targetContact}</strong></span>
+                </p>
+              )}
+              {viewLevel === 'contact' && (customer.phone || customer.email) && (
+                <p className="text-[11px] text-slate-500 flex items-center space-x-1">
+                  <Phone className="w-3 h-3 text-slate-400" />
                   <span>{customer.phone || customer.email}</span>
                 </p>
               )}
@@ -221,12 +248,12 @@ export default function CustomerDetailModal({ customer, sales = [], payments = [
             </div>
           </div>
 
-          {/* 상세 거래 장부 테이블 (요청된 컬럼: 일자 | 기관명 | 과 | 담당자 | 작업명 | 매출금액 | 수금금액 | 비고) */}
+          {/* 상세 거래 장부 테이블: 일자 | 기관명 | 과 | 담당자 | 작업명 | 매출금액 | 수금금액 | 누적 미수잔액 | 비고 */}
           <div>
             <div className="flex items-center justify-between mb-2">
               <h4 className="font-bold text-slate-800 text-sm flex items-center space-x-2">
                 <FileText className="w-4 h-4 text-sky-600" />
-                <span>일자별 상세 거래 및 수금 장부</span>
+                <span>일자별 거래 및 수금 장부</span>
                 <span className="text-xs font-normal text-slate-500">({ledgerWithBalance.length}건)</span>
               </h4>
             </div>
@@ -242,13 +269,14 @@ export default function CustomerDetailModal({ customer, sales = [], payments = [
                     <th className="p-3">작업명</th>
                     <th className="p-3 text-right">매출금액</th>
                     <th className="p-3 text-right">수금금액</th>
+                    <th className="p-3 text-right font-black text-rose-700">누적 미수잔액</th>
                     <th className="p-3 pr-4">비고</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {ledgerWithBalance.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="p-8 text-center text-slate-400">
+                      <td colSpan={9} className="p-8 text-center text-slate-400">
                         해당 조건에 등록된 거래 및 수금 내역이 없습니다.
                       </td>
                     </tr>
@@ -275,7 +303,10 @@ export default function CustomerDetailModal({ customer, sales = [], payments = [
                         <td className="p-3 text-right font-mono font-bold text-emerald-600">
                           {item.paymentAmount > 0 ? `₩ ${item.paymentAmount.toLocaleString()}` : '-'}
                         </td>
-                        <td className="p-3 pr-4 text-slate-500 text-[11px] max-w-[200px] truncate" title={item.note}>
+                        <td className="p-3 text-right font-mono font-black text-rose-600">
+                          ₩ {item.runningBalance.toLocaleString()} 원
+                        </td>
+                        <td className="p-3 pr-4 text-slate-500 text-[11px] max-w-[180px] truncate" title={item.note}>
                           {item.note || '-'}
                         </td>
                       </tr>
@@ -293,8 +324,11 @@ export default function CustomerDetailModal({ customer, sales = [], payments = [
                     <td className="p-3 text-right font-mono text-emerald-700">
                       ₩ {totalPayment.toLocaleString()} 원
                     </td>
-                    <td className="p-3 pr-4 text-rose-700 font-black">
-                      미수: ₩ {unpaidBalance.toLocaleString()} 원
+                    <td className="p-3 text-right font-mono text-rose-700 font-black">
+                      ₩ {unpaidBalance.toLocaleString()} 원
+                    </td>
+                    <td className="p-3 pr-4 text-slate-500 text-xs">
+                      (최종 잔액)
                     </td>
                   </tr>
                 </tfoot>
@@ -302,11 +336,11 @@ export default function CustomerDetailModal({ customer, sales = [], payments = [
             </div>
           </div>
         </div>
-
         {/* 하단 액션 버튼 */}
         <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between print:hidden">
           <div className="flex items-center space-x-2">
             <button
+
               onClick={handleExportExcel}
               className="flex items-center space-x-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-sm transition active:scale-95"
               title="일자, 기관명, 과, 담당자, 작업명, 매출금액, 수금금액, 비고 순으로 엑셀을 추출합니다."

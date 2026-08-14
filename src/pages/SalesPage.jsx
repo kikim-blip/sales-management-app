@@ -653,14 +653,16 @@ export default function SalesPage() {
       if (!groupMap[groupKey]) {
         groupMap[groupKey] = {
           id: groupKey,
+          reportType: reportType,
+          viewLevel: reportType,
           name: item.orgName,
           orgName: item.orgName,
-          dept: item.deptName,
-          deptName: item.deptName,
-          contact_person: item.contactPerson,
-          contactPerson: item.contactPerson,
-          phone: item.phone,
-          email: item.email,
+          dept: reportType === 'company' ? '' : item.deptName,
+          deptName: reportType === 'company' ? '' : item.deptName,
+          contact_person: reportType === 'contact' ? item.contactPerson : '',
+          contactPerson: reportType === 'contact' ? item.contactPerson : '',
+          phone: reportType === 'contact' ? item.phone : '',
+          email: reportType === 'contact' ? item.email : '',
           sales_manager: item.salesManager,
           salesManager: item.salesManager,
           count: 0,
@@ -675,6 +677,7 @@ export default function SalesPage() {
           customerObj: item.customerObj,
         };
       }
+
 
       const g = groupMap[groupKey];
       if (item.kind === '매출') {
