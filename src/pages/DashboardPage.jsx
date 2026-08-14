@@ -83,17 +83,49 @@ export default function DashboardPage() {
     return { diffDays, label: `📅 D-${diffDays}`, color: 'bg-slate-100 text-slate-700 border-slate-200' };
   };
 
-  // 🚨 납품 일정 급건 순 정렬 리스트 생성
-  const urgentDeliveryList = [...filteredJobOrders]
+  // 🚨 납품 일정 급건 순 정렬 리스트 생성 (작업전표 + 직접 등록된 매출 납품일정 통합)
+  const jobItems = filteredJobOrders
+    .filter(o => o.delivery_date)
     .map(order => {
       const dday = getDDayInfo(order.delivery_date);
       const cust = customers.find(c => c.id === order.customer_id);
       return {
         ...order,
+        itemType: 'jobOrder', // 작업전표
+        displayCode: order.code_number || order.id,
+        displayTitle: order.title || '제목 없음',
         dday,
-        customerNameDisplay: cust ? `${cust.name} - ${cust.dept}` : (order.customer_name || order.customer_id || '미지정'),
+        customerNameDisplay: cust ? `${cust.name}${cust.dept ? ` (${cust.dept})` : ''}` : (order.customer_name || order.customer_id || '미지정'),
+        detailsText: `사양: ${order.spec || '-'} | 수량: ${order.quantity ? `${order.quantity}부` : '-'} | 제본: ${order.binding || '-'}`,
       };
+    });
+
+  const saleItems = filteredSales
+    .filter(s => s.delivery_date)
+    .filter(s => {
+      // 작업전표에서 파생된 중복 건 제외
+      const matchedJob = filteredJobOrders.find(j => 
+        (j.code_number && (s.content?.includes(j.code_number) || s.note?.includes(j.code_number) || s.title?.includes(j.code_number))) ||
+        (j.id && (s.content?.includes(j.id) || s.note?.includes(j.id)))
+      );
+      return !matchedJob;
     })
+    .map(sale => {
+      const dday = getDDayInfo(sale.delivery_date);
+      const cust = customers.find(c => c.id === sale.customer_id);
+      const contentDesc = sale.content || sale.note || '';
+      return {
+        ...sale,
+        itemType: 'sale', // 매출/견적 수동 등록 건
+        displayCode: sale.id || '매출건',
+        displayTitle: sale.title || '제목 없음',
+        dday,
+        customerNameDisplay: cust ? `${cust.name}${cust.dept ? ` (${cust.dept})` : (sale.dept ? ` (${sale.dept})` : '')}` : (sale.customer_name || sale.customer_id || '미지정'),
+        detailsText: `구분: [${sale.type || '매출'}] ${sale.billing_schedule || '진행중'} | 내용: ${contentDesc || '세부내용 없음'}${sale.total_price ? ` | 금액: ₩${Number(sale.total_price).toLocaleString()}원` : ''}`,
+      };
+    });
+
+  const urgentDeliveryList = [...jobItems, ...saleItems]
     .sort((a, b) => {
       if (a.dday.diffDays !== b.dday.diffDays) {
         return a.dday.diffDays - b.dday.diffDays;
@@ -105,20 +137,18 @@ export default function DashboardPage() {
   const handleAddToGoogleCalendar = (order) => {
     const cust = customers.find(c => c.id === order.customer_id);
     const custName = cust ? cust.name : (order.customer_name || '');
-    const title = encodeURIComponent(`[경성문화사 납품일정] ${order.title || '납품 건'} (${custName})`);
+    const title = encodeURIComponent(`[경성문화사 납품일정] ${order.displayTitle || order.title || '납품 건'} (${custName})`);
     
     const rawDate = (order.delivery_date || todayStr).replace(/-/g, '');
     const rawTime = (order.delivery_time || '14:00').replace(':', '') + '00';
     const dates = `${rawDate}T${rawTime}/${rawDate}T${rawTime}`;
     
     const details = encodeURIComponent(
-      `작업전표 코드: ${order.code_number || order.id}\n` +
+      `코드: ${order.displayCode || order.code_number || order.id}\n` +
       `발주처: ${custName}\n` +
-      `작업제목: ${order.title}\n` +
-      `사양: ${order.spec || '-'}\n` +
-      `수량: ${order.quantity ? `${order.quantity}부` : '-'}\n` +
-      `제본: ${order.binding || '-'}\n` +
-      `담당자: ${order.manager_name || '-'}`
+      `작업제목: ${order.displayTitle || order.title}\n` +
+      `내용/사양: ${order.detailsText || '-'}\n` +
+      `담당자: ${order.manager_name || order.sales_manager || '-'}`
     );
     
     const googleCalendarUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${dates}&details=${details}`;
@@ -129,25 +159,27 @@ export default function DashboardPage() {
   const handleSendToSuperthread = async (order) => {
     const cust = customers.find(c => c.id === order.customer_id);
     const custName = cust ? cust.name : (order.customer_name || '');
+    const code = order.displayCode || order.code_number || order.id;
     
     try {
       await fetch('https://api.superthread.com/v1/webhooks/kyungsung-delivery', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          code: order.code_number || order.id,
-          title: order.title,
+          code: code,
+          title: order.displayTitle || order.title,
           customer: custName,
           delivery_date: order.delivery_date,
           delivery_time: order.delivery_time,
         }),
       }).catch(() => {});
 
-      alert(`⚡ [코드: ${order.code_number || order.id}] "${order.title}" 납품 건이 슈퍼스레드(Superthread) 업무 채널로 연동 등록되었습니다!`);
+      alert(`⚡ [코드: ${code}] "${order.displayTitle || order.title}" 납품 건이 슈퍼스레드(Superthread) 업무 채널로 연동 등록되었습니다!`);
     } catch (err) {
-      alert(`⚡ [코드: ${order.code_number || order.id}] 슈퍼스레드 알림 연동이 전달되었습니다!`);
+      alert(`⚡ [코드: ${code}] 슈퍼스레드 알림 연동이 전달되었습니다!`);
     }
   };
+
 
   // 💡 전표 수정 저장 헬퍼
   const handleSaveEditedJobOrder = async (updatedOrder) => {
@@ -247,34 +279,38 @@ export default function DashboardPage() {
         <div className="divide-y divide-slate-100 max-h-[420px] overflow-y-auto">
           {urgentDeliveryList.length === 0 ? (
             <div className="p-8 text-center text-slate-400 text-xs">
-              등록된 납품 일정 작업전표가 없습니다.
+              등록된 납품 일정이 없습니다.
             </div>
           ) : (
-            urgentDeliveryList.map((order) => {
-              const cust = customers.find(c => c.id === order.customer_id);
+            urgentDeliveryList.map((item) => {
+              const isJobOrder = item.itemType === 'jobOrder';
               return (
-                <div key={order.id} className="p-4 hover:bg-slate-50 transition flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                <div key={item.id} className="p-4 hover:bg-slate-50 transition flex flex-col lg:flex-row lg:items-center justify-between gap-3">
                   <div className="space-y-1.5 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className={`text-xs px-2.5 py-1 rounded-lg border font-mono tracking-wide ${order.dday.color}`}>
-                        {order.dday.label}
+                      <span className={`text-xs px-2.5 py-1 rounded-lg border font-mono tracking-wide ${item.dday.color}`}>
+                        {item.dday.label}
                       </span>
 
-                      <span className="font-mono font-bold text-sky-700 bg-sky-50 px-2 py-0.5 rounded border border-sky-200 text-xs">
-                        코드: {order.code_number || order.id}
+                      <span className={`font-mono font-bold px-2 py-0.5 rounded border text-xs ${
+                        isJobOrder 
+                          ? 'text-sky-700 bg-sky-50 border-sky-200' 
+                          : 'text-indigo-700 bg-indigo-50 border-indigo-200'
+                      }`}>
+                        {isJobOrder ? `전표: ${item.displayCode}` : `매출: ${item.displayCode}`}
                       </span>
 
                       <h4 className="font-bold text-slate-900 text-sm">
-                        {order.title || '제목 없음'}
+                        {item.displayTitle}
                       </h4>
                     </div>
 
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600">
                       <span>
-                        발주처: <strong className="text-slate-800">{order.customerNameDisplay}</strong>
+                        발주처: <strong className="text-slate-800">{item.customerNameDisplay}</strong>
                       </span>
                       <span>
-                        사양: {order.spec || '-'} | 수량: {order.quantity ? `${order.quantity}부` : '-'} | 제본: {order.binding || '-'}
+                        {item.detailsText}
                       </span>
                     </div>
                   </div>
@@ -283,13 +319,13 @@ export default function DashboardPage() {
                     <div className="text-right mr-2 hidden sm:block">
                       <p className="text-[10px] text-slate-400 font-medium">납품 예정일시</p>
                       <p className="text-xs font-bold text-rose-600 font-mono">
-                        {order.delivery_date} {order.delivery_time ? `(${order.delivery_time})` : ''}
+                        {item.delivery_date} {item.delivery_time ? `(${item.delivery_time})` : ''}
                       </p>
                     </div>
 
                     {/* 💡 1. 캘린더 등록 버튼 */}
                     <button
-                      onClick={() => handleAddToGoogleCalendar(order)}
+                      onClick={() => handleAddToGoogleCalendar(item)}
                       className="flex items-center space-x-1 bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-300 px-2.5 py-1.5 rounded-xl text-xs font-bold transition"
                       title="이 건만 구글 캘린더에 일정 등록"
                     >
@@ -299,7 +335,7 @@ export default function DashboardPage() {
 
                     {/* 💡 2. 슈퍼스레드 알림 버튼 */}
                     <button
-                      onClick={() => handleSendToSuperthread(order)}
+                      onClick={() => handleSendToSuperthread(item)}
                       className="flex items-center space-x-1 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-300 px-2.5 py-1.5 rounded-xl text-xs font-bold transition"
                       title="이 건만 슈퍼스레드 업무 채널로 전달"
                     >
@@ -307,33 +343,38 @@ export default function DashboardPage() {
                       <span>슈퍼스레드 알림</span>
                     </button>
 
-                    {/* 💡 3. 전표 수정 버튼 (신설!) */}
-                    <button
-                      onClick={() => {
-                        setEditingOrder(order);
-                        setShowJobEditModal(true);
-                      }}
-                      className="flex items-center space-x-1 bg-amber-500 hover:bg-amber-600 text-white px-2.5 py-1.5 rounded-xl text-xs font-bold shadow-sm transition"
-                      title="이 작업전표 세부 내용 즉시 수정"
-                    >
-                      <Pencil className="w-3.5 h-3.5" />
-                      <span>전표 수정</span>
-                    </button>
+                    {/* 💡 3. 전표 수정 버튼 (작업전표인 경우에만) */}
+                    {isJobOrder && (
+                      <button
+                        onClick={() => {
+                          setEditingOrder(item);
+                          setShowJobEditModal(true);
+                        }}
+                        className="flex items-center space-x-1 bg-amber-500 hover:bg-amber-600 text-white px-2.5 py-1.5 rounded-xl text-xs font-bold shadow-sm transition"
+                        title="이 작업전표 세부 내용 즉시 수정"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                        <span>전표 수정</span>
+                      </button>
+                    )}
 
-                    {/* 💡 4. 전표 1:1 인쇄 버튼 */}
-                    <button
-                      onClick={() => setPrintingOrder(order)}
-                      className="flex items-center space-x-1 bg-slate-800 hover:bg-slate-900 text-white px-3 py-1.5 rounded-xl text-xs font-bold shadow-sm transition"
-                    >
-                      <Printer className="w-3.5 h-3.5" />
-                      <span>전표 인쇄</span>
-                    </button>
+                    {/* 💡 4. 전표 1:1 인쇄 버튼 (작업전표인 경우에만) */}
+                    {isJobOrder && (
+                      <button
+                        onClick={() => setPrintingOrder(item)}
+                        className="flex items-center space-x-1 bg-slate-800 hover:bg-slate-900 text-white px-3 py-1.5 rounded-xl text-xs font-bold shadow-sm transition"
+                      >
+                        <Printer className="w-3.5 h-3.5" />
+                        <span>전표 인쇄</span>
+                      </button>
+                    )}
                   </div>
                 </div>
               );
             })
           )}
         </div>
+
       </div>
 
       {/* 2. 거래처별 미수 현황 카드 */}
