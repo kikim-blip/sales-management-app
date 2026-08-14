@@ -1,8 +1,9 @@
 // src/pages/DashboardPage.jsx
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useData } from '../context/DataContext';
 import { useGoogleAuth } from '../context/GoogleAuthContext';
-import { AlertCircle, FileText, RefreshCw, ChevronRight, Clock, AlertTriangle, Calendar, Printer, CheckCircle2, Users, Share2, Zap, Pencil, Truck, XCircle, Plus, Search, Calculator } from 'lucide-react';
+import { AlertCircle, FileText, RefreshCw, ChevronRight, Clock, AlertTriangle, Calendar, Printer, CheckCircle2, Users, Share2, Zap, Pencil, Truck, XCircle, Plus, Search, Calculator, Download, Building2, User, Phone, Layers, ListFilter, ArrowUpDown } from 'lucide-react';
+import * as XLSX from 'xlsx';
 
 import CustomerDetailModal from '../components/common/CustomerDetailModal';
 import JobOrderPrintModal from '../components/common/JobOrderPrintModal';
@@ -39,7 +40,13 @@ export default function DashboardPage() {
   const [estimatingSale, setEstimatingSale] = useState(null);
   const [printingEstimateQuote, setPrintingEstimateQuote] = useState(null);
 
+  // 💡 미수 관리 테이블 상태 (구분: 담당자별 / 부서·과별 / 기관별, 검색어, 미수건만 보기)
+  const [receivableGroupBy, setReceivableGroupBy] = useState('contact'); // 'contact' | 'dept' | 'org'
+  const [receivableSearch, setReceivableSearch] = useState('');
+  const [onlyUnpaidFilter, setOnlyUnpaidFilter] = useState(false);
+
   const todayStr = new Date().toISOString().split('T')[0];
+
 
 
   // 💡 팀/부서 필터링 매칭 헬퍼
@@ -99,22 +106,176 @@ export default function DashboardPage() {
 
 
 
-  const customerSummary = filteredCustomers
-    .map((cust) => {
-      const custSales = filteredSales
-        .filter((s) => s.customer_id === cust.id || (s.customer_name && s.customer_name === cust.name))
-        .reduce((acc, curr) => acc + (Number(curr.total_price) || 0), 0);
-      const custPayments = filteredPayments
-        .filter((p) => p.customer_id === cust.id)
-        .reduce((acc, curr) => acc + (Number(curr.amount) || 0), 0);
+  // ════════════════════════════════════════════════════════════════
+  // 💡 정밀 미수 관리 집계 (담당자별 / 부서·과별 / 기관별 다차원 집계)
+  // ════════════════════════════════════════════════════════════════
+  const customerSummaryList = useMemo(() => {
+    return filteredCustomers.map((cust) => {
+      // 1. 해당 고객 건에 정확히 일치하는 매출만 매칭 (이름 전체 복제 방지)
+      const custSalesList = filteredSales.filter(
+        (s) => s.customer_id === cust.id || 
+               (!s.customer_id && s.customer_name === cust.name && s.dept === cust.dept)
+      );
+      // 2. 해당 고객 건에 일치하는 수금만 매칭
+      const custPaymentsList = filteredPayments.filter(
+        (p) => p.customer_id === cust.id ||
+               (!p.customer_id && p.customer_name === cust.name && p.dept === cust.dept)
+      );
+
+      const totalSales = custSalesList.reduce((acc, curr) => acc + (Number(curr.total_price) || 0), 0);
+      const totalPayment = custPaymentsList.reduce((acc, curr) => acc + (Number(curr.amount) || 0), 0);
+      const unpaid = totalSales - totalPayment;
+
+      // 최근 거래일자 추출
+      const dates = [
+        ...custSalesList.map((s) => s.delivery_date || s.reg_date || s.receipt_date),
+        ...custPaymentsList.map((p) => p.payment_date)
+      ].filter(Boolean).sort().reverse();
+      const lastTradeDate = dates[0] || '-';
+
       return {
         ...cust,
-        totalSales: custSales,
-        totalPayment: custPayments,
-        unpaid: custSales - custPayments,
+        totalSales,
+        totalPayment,
+        unpaid,
+        lastTradeDate,
+        salesList: custSalesList,
+        paymentList: custPaymentsList,
       };
-    })
-    .filter((cust) => cust.totalSales > 0 || cust.totalPayment > 0);
+    }).filter((cust) => cust.totalSales > 0 || cust.totalPayment > 0);
+  }, [filteredCustomers, filteredSales, filteredPayments]);
+
+  // 💡 탭 선택에 따른 그룹핑 (담당자별 / 부서·과별 / 기관별)
+  const groupedReceivables = useMemo(() => {
+    if (receivableGroupBy === 'org') {
+      // 1. 기관/업체별 그룹핑
+      const map = new Map();
+      customerSummaryList.forEach((item) => {
+        const orgName = item.name || '기관미지정';
+        if (!map.has(orgName)) {
+          map.set(orgName, {
+            id: `ORG-${orgName}`,
+            name: orgName,
+            dept: '전체 부서',
+            contact_person: `${new Set(customerSummaryList.filter(c => c.name === orgName).map(c => c.dept).filter(Boolean)).size}개 부서`,
+            phone: '-',
+            email: '-',
+            sales_manager: item.sales_manager || '',
+            custIds: [],
+            totalSales: 0,
+            totalPayment: 0,
+            unpaid: 0,
+            lastTradeDate: item.lastTradeDate,
+            salesList: [],
+            paymentList: [],
+          });
+        }
+        const group = map.get(orgName);
+        group.custIds.push(item.id);
+        group.totalSales += item.totalSales;
+        group.totalPayment += item.totalPayment;
+        group.unpaid += item.unpaid;
+        group.salesList.push(...item.salesList);
+        group.paymentList.push(...item.paymentList);
+        if (item.lastTradeDate !== '-' && (group.lastTradeDate === '-' || item.lastTradeDate > group.lastTradeDate)) {
+          group.lastTradeDate = item.lastTradeDate;
+        }
+      });
+      return Array.from(map.values());
+    } else if (receivableGroupBy === 'dept') {
+      // 2. 부서·과별 그룹핑
+      const map = new Map();
+      customerSummaryList.forEach((item) => {
+        const key = `${item.name}___${item.dept || '부서미지정'}`;
+        if (!map.has(key)) {
+          map.set(key, {
+            id: `DEPT-${key}`,
+            name: item.name,
+            dept: item.dept || '부서미지정',
+            contact_person: item.contact_person || '담당자 미지정',
+            phone: item.phone || '',
+            email: item.email || '',
+            sales_manager: item.sales_manager || '',
+            custIds: [],
+            totalSales: 0,
+            totalPayment: 0,
+            unpaid: 0,
+            lastTradeDate: item.lastTradeDate,
+            salesList: [],
+            paymentList: [],
+          });
+        }
+        const group = map.get(key);
+        group.custIds.push(item.id);
+        group.totalSales += item.totalSales;
+        group.totalPayment += item.totalPayment;
+        group.unpaid += item.unpaid;
+        group.salesList.push(...item.salesList);
+        group.paymentList.push(...item.paymentList);
+        if (item.lastTradeDate !== '-' && (group.lastTradeDate === '-' || item.lastTradeDate > group.lastTradeDate)) {
+          group.lastTradeDate = item.lastTradeDate;
+        }
+      });
+      return Array.from(map.values());
+    } else {
+      // 3. 담당자별 (개별 고객 항목 단위)
+      return customerSummaryList;
+    }
+  }, [customerSummaryList, receivableGroupBy]);
+
+  // 검색어 및 미수 잔액 필터 적용
+  const filteredReceivables = useMemo(() => {
+    return groupedReceivables.filter((item) => {
+      if (onlyUnpaidFilter && item.unpaid <= 0) return false;
+      if (!receivableSearch.trim()) return true;
+      const q = receivableSearch.toLowerCase();
+      return (
+        (item.name && item.name.toLowerCase().includes(q)) ||
+        (item.dept && item.dept.toLowerCase().includes(q)) ||
+        (item.contact_person && item.contact_person.toLowerCase().includes(q)) ||
+        (item.phone && item.phone.includes(q)) ||
+        (item.sales_manager && item.sales_manager.toLowerCase().includes(q))
+      );
+    });
+  }, [groupedReceivables, onlyUnpaidFilter, receivableSearch]);
+
+  // 미수 현황 엑셀 다운로드 기능
+  const handleExportReceivablesExcel = () => {
+    const today = new Date().toISOString().split('T')[0];
+    const modeLabel = receivableGroupBy === 'org' ? '기관별' : receivableGroupBy === 'dept' ? '부서·과별' : '담당자별';
+
+    const excelData = [
+      ['고객사별 미수 관리 현황 리포트', `[조회기준: ${modeLabel}]`, `추출일자: ${today}`],
+      [],
+      ['구분/기관명(고객사)', '부서 / 과', '담당자', '연락처', '이메일', '담당영업', '총 매출액(청구)', '총 수금액', '미수금 잔액', '최근 거래일'],
+      ...filteredReceivables.map((item) => [
+        item.name,
+        item.dept || '-',
+        item.contact_person || '-',
+        item.phone || '-',
+        item.email || '-',
+        item.sales_manager || '-',
+        item.totalSales,
+        item.totalPayment,
+        item.unpaid,
+        item.lastTradeDate,
+      ]),
+      [],
+      [
+        '합계', '', '', '', '', '',
+        filteredReceivables.reduce((a, c) => a + c.totalSales, 0),
+        filteredReceivables.reduce((a, c) => a + c.totalPayment, 0),
+        filteredReceivables.reduce((a, c) => a + c.unpaid, 0),
+        ''
+      ]
+    ];
+
+    const ws = XLSX.utils.aoa_to_sheet(excelData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '미수관리현황');
+    XLSX.writeFile(wb, `미수관리현황_${modeLabel}_${today}.xlsx`);
+  };
+
 
 
   // D-Day 계산 헬퍼
@@ -792,58 +953,204 @@ export default function DashboardPage() {
 
       </div>
 
-      {/* 2. 거래처별 미수 현황 카드 */}
-      <div>
-        <h3 className="font-bold text-slate-800 text-base mb-3">고객사별 미수 관리 현황</h3>
-        {customerSummary.length === 0 ? (
-          <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center text-slate-400 text-xs">
-            현재 매출 또는 수금 내역이 등록된 고객사가 없습니다.
+      {/* 2. 고객사별 미수 관리 현황 (테이블 표 형태 + 다차원 분류 탭 + 엑셀 내보내기 + 일자별 상세 모달 연동) */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        
+        {/* 상단 컨트롤 바: 타이틀, 분류 탭(담당자별/부서·과별/기관별), 검색창, 미수건 필터, 엑셀 다운로드 */}
+        <div className="p-4 sm:p-5 border-b border-slate-100 bg-slate-50/50 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          <div>
+            <h3 className="font-bold text-slate-900 text-base sm:text-lg flex items-center space-x-2">
+              <Building2 className="w-5 h-5 text-sky-600" />
+              <span>미수 관리 현황</span>
+              <span className="text-xs font-normal text-slate-500 ml-1">
+                (총 {filteredReceivables.length}건)
+              </span>
+            </h3>
+            <p className="text-xs text-slate-500 mt-0.5">
+              기관·부서·담당자별 실시간 매출 청구 및 수금 정산 내역을 표 형태로 조회합니다. 행을 클릭하면 일자별 상세 장부가 열립니다.
+            </p>
           </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {customerSummary.map((cust) => (
-              <div
-                key={cust.id}
-                onClick={() => setSelectedCustomer(cust)}
-                className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition cursor-pointer space-y-3 group"
+
+          <div className="flex flex-wrap items-center gap-2 justify-start lg:justify-end">
+            
+            {/* 1. 분류 기준 탭 */}
+            <div className="inline-flex p-1 bg-slate-200/80 rounded-xl text-xs font-bold text-slate-600">
+              <button
+                type="button"
+                onClick={() => setReceivableGroupBy('contact')}
+                className={`px-3 py-1.5 rounded-lg transition ${
+                  receivableGroupBy === 'contact'
+                    ? 'bg-white text-sky-700 shadow-sm font-black'
+                    : 'hover:text-slate-900'
+                }`}
               >
-                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                  <div>
-                    <h3 className="font-bold text-slate-900 group-hover:text-sky-600 transition flex items-center space-x-1.5">
-                      <span>{cust.name}</span>
-                      {cust.dept && (
-                        <span className="text-[11px] font-normal text-slate-500">({cust.dept})</span>
-                      )}
-                    </h3>
-                    <div className="text-[11px] text-slate-500 mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-0.5">
-                      <span>👤 {cust.contact_person || '담당자 미지정'}</span>
-                      {cust.phone && <span>📞 {cust.phone}</span>}
-                      {cust.email && <span>✉️ {cust.email}</span>}
-                      {cust.sales_manager && <span className="text-rose-600 font-semibold">💼 {cust.sales_manager}</span>}
-                    </div>
-                  </div>
-                  <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-sky-600 transition flex-shrink-0" />
-                </div>
+                👤 담당자별
+              </button>
+              <button
+                type="button"
+                onClick={() => setReceivableGroupBy('dept')}
+                className={`px-3 py-1.5 rounded-lg transition ${
+                  receivableGroupBy === 'dept'
+                    ? 'bg-white text-sky-700 shadow-sm font-black'
+                    : 'hover:text-slate-900'
+                }`}
+              >
+                🏢 부서·과별
+              </button>
+              <button
+                type="button"
+                onClick={() => setReceivableGroupBy('org')}
+                className={`px-3 py-1.5 rounded-lg transition ${
+                  receivableGroupBy === 'org'
+                    ? 'bg-white text-sky-700 shadow-sm font-black'
+                    : 'hover:text-slate-900'
+                }`}
+              >
+                🏛️ 기관별
+              </button>
+            </div>
 
+            {/* 2. 검색창 */}
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="기관/과/담당자 검색..."
+                value={receivableSearch}
+                onChange={(e) => setReceivableSearch(e.target.value)}
+                className="pl-8 pr-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs w-36 sm:w-44 focus:outline-none focus:ring-2 focus:ring-sky-500"
+              />
+            </div>
 
-                <div className="grid grid-cols-3 gap-2 text-center text-xs">
-                  <div className="bg-slate-50 p-2 rounded-xl">
-                    <p className="text-slate-400 text-[10px] mb-0.5 font-medium">총 매출</p>
-                    <p className="font-bold text-slate-700">₩ {cust.totalSales.toLocaleString()}</p>
-                  </div>
-                  <div className="bg-emerald-50/50 p-2 rounded-xl">
-                    <p className="text-emerald-600 text-[10px] mb-0.5 font-medium">수금 완료</p>
-                    <p className="font-bold text-emerald-700">₩ {cust.totalPayment.toLocaleString()}</p>
-                  </div>
-                  <div className="bg-rose-50/50 p-2 rounded-xl">
-                    <p className="text-rose-500 text-[10px] mb-0.5 font-medium">미수 잔액</p>
-                    <p className="font-bold text-rose-600">₩ {cust.unpaid.toLocaleString()}</p>
-                  </div>
-                </div>
-              </div>
-            ))}
+            {/* 3. 미수잔액 발생건만 필터 토글 */}
+            <label className="flex items-center space-x-1.5 text-xs font-semibold text-slate-700 cursor-pointer bg-white px-2.5 py-1.5 border border-slate-200 rounded-xl hover:bg-slate-50">
+              <input
+                type="checkbox"
+                checked={onlyUnpaidFilter}
+                onChange={(e) => setOnlyUnpaidFilter(e.target.checked)}
+                className="rounded text-sky-600 focus:ring-sky-500 w-3.5 h-3.5"
+              />
+              <span>미수 잔액만</span>
+            </label>
+
+            {/* 4. 엑셀 다운로드 버튼 */}
+            <button
+              onClick={handleExportReceivablesExcel}
+              className="flex items-center space-x-1 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-xl text-xs font-bold shadow-sm transition active:scale-95 whitespace-nowrap"
+              title="현재 조회된 미수 관리 목록을 엑셀(.xlsx) 파일로 내보냅니다."
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>엑셀 다운로드</span>
+            </button>
           </div>
-        )}
+        </div>
+
+        {/* 미수 관리 데이터 테이블 */}
+        <div className="overflow-x-auto max-h-[560px] overflow-y-auto">
+          {filteredReceivables.length === 0 ? (
+            <div className="p-12 text-center text-slate-400 text-xs">
+              조건에 일치하는 미수 관리 내역이 없습니다.
+            </div>
+          ) : (
+            <table className="w-full text-left text-xs border-collapse">
+              <thead className="bg-slate-100/90 text-slate-600 font-bold sticky top-0 z-10 border-b border-slate-200 shadow-sm">
+                <tr>
+                  <th className="p-3 pl-4">기관명 (고객사)</th>
+                  <th className="p-3">부서 / 과</th>
+                  <th className="p-3">담당자 / 연락처</th>
+                  <th className="p-3">담당영업</th>
+                  <th className="p-3 text-right">총 매출 청구액</th>
+                  <th className="p-3 text-right">총 수금액</th>
+                  <th className="p-3 text-right font-black text-rose-700">미수금 잔액</th>
+                  <th className="p-3 text-center">최근거래일</th>
+                  <th className="p-3 text-center pr-4">상세내역</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filteredReceivables.map((item) => {
+                  const hasUnpaid = item.unpaid > 0;
+                  return (
+                    <tr
+                      key={item.id}
+                      onClick={() => setSelectedCustomer(item)}
+                      className="hover:bg-sky-50/60 transition cursor-pointer group"
+                    >
+                      <td className="p-3 pl-4 font-bold text-slate-900 group-hover:text-sky-700">
+                        <div className="flex items-center space-x-1.5">
+                          <Building2 className="w-3.5 h-3.5 text-slate-400 group-hover:text-sky-600" />
+                          <span>{item.name}</span>
+                        </div>
+                      </td>
+                      <td className="p-3 text-slate-600 font-medium">
+                        {item.dept || '-'}
+                      </td>
+                      <td className="p-3 text-slate-600">
+                        <div className="flex flex-col">
+                          <span className="font-semibold text-slate-800">{item.contact_person || '-'}</span>
+                          {(item.phone || item.email) && (
+                            <span className="text-[11px] text-slate-400">
+                              {item.phone} {item.email ? `| ${item.email}` : ''}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="p-3 text-slate-600">
+                        {item.sales_manager ? (
+                          <span className="px-2 py-0.5 bg-rose-50 text-rose-700 rounded border border-rose-200 text-[11px] font-semibold">
+                            {item.sales_manager}
+                          </span>
+                        ) : '-'}
+                      </td>
+                      <td className="p-3 text-right font-mono font-bold text-slate-800">
+                        ₩ {item.totalSales.toLocaleString()} 원
+                      </td>
+                      <td className="p-3 text-right font-mono font-bold text-emerald-600">
+                        ₩ {item.totalPayment.toLocaleString()} 원
+                      </td>
+                      <td className="p-3 text-right font-mono">
+                        <span className={`inline-block px-2 py-0.5 rounded-lg font-black ${
+                          hasUnpaid
+                            ? 'bg-rose-50 text-rose-600 border border-rose-200'
+                            : 'bg-slate-100 text-slate-500'
+                        }`}>
+                          ₩ {item.unpaid.toLocaleString()} 원
+                        </span>
+                      </td>
+                      <td className="p-3 text-center text-slate-500 font-mono text-[11px]">
+                        {item.lastTradeDate}
+                      </td>
+                      <td className="p-3 text-center pr-4" onClick={(e) => { e.stopPropagation(); setSelectedCustomer(item); }}>
+                        <button
+                          type="button"
+                          className="px-2.5 py-1 bg-white hover:bg-sky-600 text-sky-700 hover:text-white border border-sky-300 rounded-lg text-[11px] font-bold shadow-xs transition"
+                        >
+                          일자별 내역
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot className="bg-slate-50 font-bold text-slate-800 border-t-2 border-slate-200 sticky bottom-0 z-10">
+                <tr>
+                  <td className="p-3 pl-4" colSpan={4}>
+                    합계 ({filteredReceivables.length}건)
+                  </td>
+                  <td className="p-3 text-right font-mono text-slate-900">
+                    ₩ {filteredReceivables.reduce((a, c) => a + c.totalSales, 0).toLocaleString()} 원
+                  </td>
+                  <td className="p-3 text-right font-mono text-emerald-700">
+                    ₩ {filteredReceivables.reduce((a, c) => a + c.totalPayment, 0).toLocaleString()} 원
+                  </td>
+                  <td className="p-3 text-right font-mono text-rose-700 font-black">
+                    ₩ {filteredReceivables.reduce((a, c) => a + c.unpaid, 0).toLocaleString()} 원
+                  </td>
+                  <td className="p-3" colSpan={2}></td>
+                </tr>
+              </tfoot>
+            </table>
+          )}
+        </div>
       </div>
 
 
@@ -851,9 +1158,12 @@ export default function DashboardPage() {
       {selectedCustomer && (
         <CustomerDetailModal
           customer={selectedCustomer}
+          sales={sales}
+          payments={payments}
           onClose={() => setSelectedCustomer(null)}
         />
       )}
+
 
       {/* 1:1 실물 전표 인쇄 모달 */}
       {printingOrder && (

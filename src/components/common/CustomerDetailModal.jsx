@@ -8,9 +8,15 @@ export default function CustomerDetailModal({ customer, sales, payments, onClose
 
   if (!customer) return null;
 
-  // 고객사의 매출 및 수금 내역 추출
-  const customerSales = sales.filter(s => s.customer_id === customer.id);
-  const customerPayments = payments.filter(p => p.customer_id === customer.id);
+  // 고객사의 매출 및 수금 내역 추출 (개별 고객사 및 기관/부서 그룹 완벽 지원)
+  const customerSales = (customer.salesList && customer.salesList.length > 0)
+    ? customer.salesList
+    : (sales || []).filter(s => (customer.custIds ? customer.custIds.includes(s.customer_id) : (s.customer_id === customer.id || (s.customer_name && s.customer_name === customer.name && s.dept === customer.dept))));
+
+  const customerPayments = (customer.paymentList && customer.paymentList.length > 0)
+    ? customer.paymentList
+    : (payments || []).filter(p => (customer.custIds ? customer.custIds.includes(p.customer_id) : p.customer_id === customer.id));
+
 
   const totalSales = customerSales.reduce((acc, curr) => acc + (curr.total_price || 0), 0);
   const totalPayment = customerPayments.reduce((acc, curr) => acc + (curr.amount || 0), 0);
