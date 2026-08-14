@@ -14,7 +14,7 @@ import CustomerDetailModal from '../components/common/CustomerDetailModal';
 
 
 export default function SalesPage() {
-  const { sales, customers, jobOrders, payments, addSales, updateSales, deleteSales, addJobOrder, addPayment, addCustomer, selectedTeamGroup } = useData();
+  const { sales, customers, jobOrders, payments, staffs = [], addSales, updateSales, deleteSales, addJobOrder, addPayment, addCustomer, selectedTeamGroup } = useData();
   const { user } = useGoogleAuth();
   const loggedInUserName = user?.userName || '김광일';
 
@@ -45,13 +45,13 @@ export default function SalesPage() {
   // 💡 견적서 작성/산출 모달 상태
   const [estimatingSale, setEstimatingSale] = useState(null);
 
-
-  const today = new Date().toISOString().split('T')[0];
-
-  // 탭 상태: 'list' (매출/견적 목록) | 'erp' (ERP 매출조회 및 미수관리 현황)
+  // 💡 탭 상태: 'list' (전체 목록) | 'unbilled' (미청구 건) | 'erp' (ERP 보고서)
   const [reportTab, setReportTab] = useState('list');
-  const [reportType, setReportType] = useState('company'); // 'company' | 'dept' | 'contact' | 'ledger'
+
+  // ERP 보고서 상태: 조회 구분 ('company' | 'dept' | 'contact' | 'ledger')
+  const [reportType, setReportType] = useState('company'); 
   const [analysisPeriodMode, setAnalysisPeriodMode] = useState('all'); // 'all' | 'month' | 'range'
+  const today = new Date().toISOString().split('T')[0];
   const [startDate, setStartDate] = useState(() => {
     const d = new Date();
     d.setMonth(d.getMonth() - 1);
@@ -93,14 +93,38 @@ export default function SalesPage() {
     return s;
   }
 
-  // 💡 전체 목록 및 미청구 관리용 정밀 필터링 (발주처, 과, 담당자, 작업명, 기간 전체 지원)
-  const filteredSales = sales.filter(s => {
+  // 💡 선택된 팀/부서에 소속된 사원 이름 목록
+  const teamStaffNames = useMemo(() => {
+    if (!selectedTeamGroup || selectedTeamGroup === 'ALL') return [];
+    return (staffs || [])
+      .filter(st => st.team === selectedTeamGroup || st.dept === selectedTeamGroup || st.userName === selectedTeamGroup)
+      .map(st => st.userName)
+      .filter(Boolean);
+  }, [staffs, selectedTeamGroup]);
+
+  // 💡 팀/부서 필터링 매칭 헬퍼
+  const isTeamMatch = (item, custId) => {
     if (!selectedTeamGroup || selectedTeamGroup === 'ALL') return true;
-    if (s.dept && s.dept === selectedTeamGroup) return true;
-    const cust = customers.find(c => c.id === s.customer_id);
-    if (cust && cust.dept === selectedTeamGroup) return true;
+    if (item?.dept === selectedTeamGroup || item?.team === selectedTeamGroup) return true;
+
+    const mgr = item?.sales_manager || item?.manager_name;
+    if (mgr) {
+      if (mgr === selectedTeamGroup) return true;
+      if (teamStaffNames.includes(mgr)) return true;
+    }
+
+    const cust = custId ? customers.find(c => c.id === custId) : null;
+    if (cust) {
+      if (cust.dept === selectedTeamGroup || cust.team === selectedTeamGroup) return true;
+      if (cust.sales_manager === selectedTeamGroup) return true;
+      if (cust.sales_manager && teamStaffNames.includes(cust.sales_manager)) return true;
+    }
+
     return false;
-  }).filter(item => {
+  };
+
+  // 💡 전체 목록 및 미청구 관리용 정밀 필터링 (발주처, 과, 담당자, 작업명, 기간 전체 지원)
+  const filteredSales = sales.filter(s => isTeamMatch(s, s.customer_id)).filter(item => {
     const cust = customers.find(c => c.id === item.customer_id);
     const orgName = cust?.name || item.customer_name || '';
     const deptName = cust?.dept || item.dept || '';
@@ -547,7 +571,7 @@ export default function SalesPage() {
       return true; // 'all'
     };
 
-    const pSales = filteredSales.filter(s => {
+    const pSales = sales.filter(s => isTeamMatch(s, s.customer_id)).filter(s => {
       const cust = customers.find(c => c.id === s.customer_id);
       if (!isMatchedCustomer(s.customer_id, s.customer_name)) return false;
       if (!isMatchedSearch(s, cust)) return false;
@@ -555,7 +579,7 @@ export default function SalesPage() {
       return isMatchedDate(rawDate);
     });
 
-    const pPayments = payments.filter(p => {
+    const pPayments = payments.filter(p => isTeamMatch(p, p.customer_id)).filter(p => {
       const cust = customers.find(c => c.id === p.customer_id);
       if (!isMatchedCustomer(p.customer_id, p.customer_name)) return false;
       if (!isMatchedSearch(p, cust)) return false;
@@ -563,7 +587,8 @@ export default function SalesPage() {
     });
 
     return { periodSales: pSales, periodPayments: pPayments };
-  }, [filteredSales, payments, customers, selectedCustomerFilter, analysisSearchText, analysisPeriodMode, selectedMonth, startDate, endDate]);
+  }, [sales, payments, customers, selectedCustomerFilter, analysisSearchText, analysisPeriodMode, selectedMonth, startDate, endDate, selectedTeamGroup, teamStaffNames]);
+
 
   // 2. 다차원 집계 (회사별 / 과별 / 담당자별 / 상세거래원장)
   const { analysisList, analysisSummary, ledgerList } = useMemo(() => {

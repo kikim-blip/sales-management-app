@@ -12,7 +12,7 @@ import EstimateModal from '../components/common/EstimateModal';
 import QuotePrintModal from '../components/common/QuotePrintModal';
 
 export default function DashboardPage() {
-  const { customers, sales, payments, jobOrders, loading, error, selectedTeamGroup, updateJobOrder, updateSales, addSales, addCustomer } = useData();
+  const { customers, sales, payments, jobOrders, staffs = [], loading, error, selectedTeamGroup, updateJobOrder, updateSales, addSales, addCustomer } = useData();
   const { user } = useGoogleAuth();
 
   const customerDropdownRef = useRef(null);
@@ -47,24 +47,45 @@ export default function DashboardPage() {
 
   const todayStr = new Date().toISOString().split('T')[0];
 
+  // 💡 선택된 팀/부서에 소속된 사원 이름 목록
+  const teamStaffNames = useMemo(() => {
+    if (!selectedTeamGroup || selectedTeamGroup === 'ALL') return [];
+    return (staffs || [])
+      .filter(st => st.team === selectedTeamGroup || st.dept === selectedTeamGroup || st.userName === selectedTeamGroup)
+      .map(st => st.userName)
+      .filter(Boolean);
+  }, [staffs, selectedTeamGroup]);
 
-
-  // 💡 팀/부서 필터링 매칭 헬퍼
-  const isTeamMatch = (itemDept, custId) => {
+  // 💡 팀/부서 필터링 매칭 헬퍼 (영업담당자, 사원 소속팀, 부서, 고객사 매핑 포괄)
+  const isTeamMatch = (item, custId) => {
     if (!selectedTeamGroup || selectedTeamGroup === 'ALL') return true;
-    if (itemDept && itemDept === selectedTeamGroup) return true;
-    if (custId) {
-      const foundCust = customers.find(c => c.id === custId);
-      if (foundCust && foundCust.dept === selectedTeamGroup) return true;
+    
+    // 1) 항목 자체의 부서 또는 팀이 일치
+    if (item?.dept === selectedTeamGroup || item?.team === selectedTeamGroup) return true;
+
+    // 2) 항목의 담당 영업(sales_manager / manager_name)이 해당 팀에 소속되어 있거나 일치
+    const mgr = item?.sales_manager || item?.manager_name;
+    if (mgr) {
+      if (mgr === selectedTeamGroup) return true;
+      if (teamStaffNames.includes(mgr)) return true;
     }
+
+    // 3) 연결된 고객사(Customer) 매칭
+    const foundCust = custId ? customers.find(c => c.id === custId) : null;
+    if (foundCust) {
+      if (foundCust.dept === selectedTeamGroup || foundCust.team === selectedTeamGroup) return true;
+      if (foundCust.sales_manager === selectedTeamGroup) return true;
+      if (foundCust.sales_manager && teamStaffNames.includes(foundCust.sales_manager)) return true;
+    }
+
     return false;
   };
 
   // 팀별 데이터 스코프
-  const filteredSales = sales.filter(s => isTeamMatch(s.dept, s.customer_id));
-  const filteredPayments = payments.filter(p => isTeamMatch(p.dept, p.customer_id));
-  const filteredJobOrders = jobOrders.filter(o => isTeamMatch(o.dept, o.customer_id));
-  const filteredCustomers = customers.filter(c => !selectedTeamGroup || selectedTeamGroup === 'ALL' || c.dept === selectedTeamGroup);
+  const filteredSales = sales.filter(s => isTeamMatch(s, s.customer_id));
+  const filteredPayments = payments.filter(p => isTeamMatch(p, p.customer_id));
+  const filteredJobOrders = jobOrders.filter(o => isTeamMatch(o, o.customer_id));
+  const filteredCustomers = customers.filter(c => isTeamMatch(c, c.id));
 
   const totalSalesAmount = filteredSales.reduce((acc, curr) => acc + (Number(curr.total_price) || 0), 0);
   const totalPaymentAmount = filteredPayments.reduce((acc, curr) => acc + (Number(curr.amount) || 0), 0);
