@@ -9,6 +9,8 @@ import SelectJobOrderModal from '../components/common/SelectJobOrderModal';
 import QuotePrintModal from '../components/common/QuotePrintModal';
 import JobOrderPrintModal from '../components/common/JobOrderPrintModal';
 import EstimateModal from '../components/common/EstimateModal';
+import CustomerDetailModal from '../components/common/CustomerDetailModal';
+
 
 
 export default function SalesPage() {
@@ -48,17 +50,19 @@ export default function SalesPage() {
 
   // 탭 상태: 'list' (매출/견적 목록) | 'erp' (ERP 매출조회 및 미수관리 현황)
   const [reportTab, setReportTab] = useState('list');
-  const [reportType, setReportType] = useState('all'); // 'all' | 'customer' | 'manager'
-  const [timeResolution, setTimeResolution] = useState('month'); // 'day' | 'month' | 'year'
+  const [reportType, setReportType] = useState('company'); // 'company' | 'dept' | 'contact' | 'ledger'
+  const [analysisPeriodMode, setAnalysisPeriodMode] = useState('all'); // 'all' | 'month' | 'range'
   const [startDate, setStartDate] = useState(() => {
     const d = new Date();
-    d.setMonth(d.getMonth() - 3);
+    d.setMonth(d.getMonth() - 1);
     return d.toISOString().split('T')[0];
   });
   const [endDate, setEndDate] = useState(today);
   const [selectedMonth, setSelectedMonth] = useState(today.slice(0, 7)); // e.g. "2026-08"
-  const [selectedYear, setSelectedYear] = useState(today.slice(0, 4)); // e.g. "2026"
-  const [selectedCustomerFilter, setSelectedCustomerFilter] = useState('ALL'); // 💡 특정 거래처 지정 검색
+  const [selectedCustomerFilter, setSelectedCustomerFilter] = useState('ALL'); // 특정 거래처 지정 검색
+  const [analysisSearchText, setAnalysisSearchText] = useState(''); // 분석 탭 검색어
+  const [selectedAnalysisCustomer, setSelectedAnalysisCustomer] = useState(null); // 분석 탭에서 클릭한 고객 상세 모달
+
   const [listSearchText, setListSearchText] = useState('');
   const [listCustomerFilter, setListCustomerFilter] = useState('ALL');
   const [listStatusFilter, setListStatusFilter] = useState('ALL');
@@ -487,291 +491,325 @@ export default function SalesPage() {
     }
   };
 
-  // --- 📊 ERP 매출 조회 및 미수 보고서 생성 로직 ---
-  const getFilteredByTime = () => {
+  // ── 📊 ERP 다차원 분석 및 거래원장 집계 로직 ──
+  const [onlyUnpaidAnalysis, setOnlyUnpaidAnalysis] = useState(false);
 
-    return filteredSales.filter(item => {
-      // 1. 특정 거래처 지정 필터링
-      if (selectedCustomerFilter !== 'ALL') {
-        const cust = customers.find(c => c.id === item.customer_id);
-        const matchById = item.customer_id === selectedCustomerFilter;
-        const matchByName = (cust && cust.name === selectedCustomerFilter) || (item.customer_name === selectedCustomerFilter);
-        const matchByFull = cust && `${cust.name} (${cust.dept})` === selectedCustomerFilter;
-        if (!matchById && !matchByName && !matchByFull) {
-          return false;
-        }
-      }
-
-      // 2. 일/월/년 날짜 기간 필터링
-      const rawDate = item.reg_date || item.receipt_date || item.delivery_date;
-      if (!rawDate) return true; // 날짜 미지정 건 포함
-
-      const normDate = normalizeDateStr(rawDate);
-
-      if (timeResolution === 'day') {
-        if (startDate && endDate) {
-          return normDate >= startDate && normDate <= endDate;
-        }
-        return true;
-      }
-      if (timeResolution === 'month') {
-        return normDate.startsWith(selectedMonth);
-      }
-      if (timeResolution === 'year') {
-        return normDate.startsWith(selectedYear);
-      }
-      return true;
-    });
-  };
-
-  const currentReportSales = getFilteredByTime();
-
-  const getReportSummaryAndData = () => {
-    const summary = {
-      totalCount: currentReportSales.length,
-      totalSales: 0,
-      totalCollected: 0,
-      totalOutstanding: 0
+  // 1. 기간 및 검색어 필터링된 매출/수금 데이터 추출
+  const { periodSales, periodPayments } = useMemo(() => {
+    const isMatchedCustomer = (itemCustomerId, itemCustomerName) => {
+      if (selectedCustomerFilter === 'ALL') return true;
+      const cust = customers.find(c => c.id === itemCustomerId);
+      const matchById = itemCustomerId === selectedCustomerFilter;
+      const matchByName = (cust && cust.name === selectedCustomerFilter) || (itemCustomerName === selectedCustomerFilter);
+      const matchByFull = cust && `${cust.name} (${cust.dept})` === selectedCustomerFilter;
+      return matchById || matchByName || matchByFull;
     };
 
-    currentReportSales.forEach(s => {
-      const price = Number(s.total_price) || 0;
-      summary.totalSales += price;
-      if (s.billing_schedule === '청구완료' || s.billing_schedule === '수금완료') {
-        summary.totalCollected += price;
-      } else {
-        summary.totalOutstanding += price;
+    const isMatchedSearch = (item, cust) => {
+      if (!analysisSearchText.trim()) return true;
+      const q = analysisSearchText.toLowerCase();
+      const text = `${cust?.name || ''} ${cust?.dept || ''} ${cust?.contact_person || ''} ${cust?.sales_manager || ''} ${item.title || ''} ${item.customer_name || ''} ${item.content || ''}`.toLowerCase();
+      return text.includes(q);
+    };
+
+    const isMatchedDate = (rawDate) => {
+      if (!rawDate) return true; // 날짜 없는 건 포함
+      const normDate = normalizeDateStr(rawDate);
+      if (analysisPeriodMode === 'month') {
+        return normDate.startsWith(selectedMonth);
       }
+      if (analysisPeriodMode === 'range') {
+        if (startDate && normDate < startDate) return false;
+        if (endDate && normDate > endDate) return false;
+        return true;
+      }
+      return true; // 'all'
+    };
+
+    const pSales = filteredSales.filter(s => {
+      const cust = customers.find(c => c.id === s.customer_id);
+      if (!isMatchedCustomer(s.customer_id, s.customer_name)) return false;
+      if (!isMatchedSearch(s, cust)) return false;
+      const rawDate = s.reg_date || s.receipt_date || s.delivery_date;
+      return isMatchedDate(rawDate);
     });
 
-    if (reportType === 'customer') {
-      const map = {};
-      currentReportSales.forEach(s => {
-        const cust = customers.find(c => c.id === s.customer_id);
-        const key = cust ? `${cust.name}${cust.dept ? ` (${cust.dept})` : ''}` : (s.customer_name || s.customer_id || '미지정 거래처');
-        if (!map[key]) {
-          map[key] = { name: key, count: 0, sales: 0, collected: 0, outstanding: 0 };
-        }
-        const price = Number(s.total_price) || 0;
-        map[key].count += 1;
-        map[key].sales += price;
-        if (s.billing_schedule === '청구완료' || s.billing_schedule === '수금완료') {
-          map[key].collected += price;
-        } else {
-          map[key].outstanding += price;
-        }
-      });
-      return { summary, list: Object.values(map) };
-    }
-
-    if (reportType === 'manager') {
-      const map = {};
-      currentReportSales.forEach(s => {
-        const cust = customers.find(c => c.id === s.customer_id);
-        const manager = (cust && cust.sales_manager) || s.manager_name || '담당자 미지정';
-        if (!map[manager]) {
-          map[manager] = { name: manager, count: 0, sales: 0, collected: 0, outstanding: 0 };
-        }
-        const price = Number(s.total_price) || 0;
-        map[manager].count += 1;
-        map[manager].sales += price;
-        if (s.billing_schedule === '청구완료' || s.billing_schedule === '수금완료') {
-          map[manager].collected += price;
-        } else {
-          map[manager].outstanding += price;
-        }
-      });
-      return { summary, list: Object.values(map) };
-    }
-
-    return { summary, list: currentReportSales };
-  };
-
-  const { summary: reportSummary, list: reportList } = getReportSummaryAndData();
-
-  // 💡 거래원장 데이터 산출 (거래처별 독립 잔액 누적 계산)
-  const buildLedgerEntries = () => {
-    const filteredLedgerSales = sales.filter((sale) => {
-      const cust = customers.find((c) => c.id === sale.customer_id);
-      const cName = cust ? cust.name : (sale.customer_name || sale.customer_id || '');
-      const cFull = cust ? `${cust.name} (${cust.dept})` : cName;
-
-      if (selectedCustomerFilter !== 'ALL') {
-        if (sale.customer_id !== selectedCustomerFilter && cName !== selectedCustomerFilter && cFull !== selectedCustomerFilter) {
-          return false;
-        }
-      }
-
-      const dateValue = normalizeDateStr(sale.reg_date || sale.receipt_date || sale.delivery_date);
-      if (!dateValue) return true;
-      if (startDate && dateValue < startDate) return false;
-      if (endDate && dateValue > endDate) return false;
-      return true;
+    const pPayments = payments.filter(p => {
+      const cust = customers.find(c => c.id === p.customer_id);
+      if (!isMatchedCustomer(p.customer_id, p.customer_name)) return false;
+      if (!isMatchedSearch(p, cust)) return false;
+      return isMatchedDate(p.payment_date);
     });
 
-    const filteredLedgerPayments = payments.filter((payment) => {
-      const cust = customers.find((c) => c.id === payment.customer_id);
-      const cName = cust ? cust.name : (payment.customer_name || payment.customer_id || '');
-      const cFull = cust ? `${cust.name} (${cust.dept})` : cName;
+    return { periodSales: pSales, periodPayments: pPayments };
+  }, [filteredSales, payments, customers, selectedCustomerFilter, analysisSearchText, analysisPeriodMode, selectedMonth, startDate, endDate]);
 
-      if (selectedCustomerFilter !== 'ALL') {
-        if (payment.customer_id !== selectedCustomerFilter && cName !== selectedCustomerFilter && cFull !== selectedCustomerFilter) {
-          return false;
-        }
-      }
+  // 2. 다차원 집계 (회사별 / 과별 / 담당자별 / 상세거래원장)
+  const { analysisList, analysisSummary, ledgerList } = useMemo(() => {
+    let totalSales = 0;
+    let totalPayment = 0;
 
-      const dateValue = normalizeDateStr(payment.payment_date);
-      if (!dateValue) return true;
-      if (startDate && dateValue < startDate) return false;
-      if (endDate && dateValue > endDate) return false;
-      return true;
-    });
-
-    const rawEntries = [];
-
-    filteredLedgerSales.forEach((sale) => {
-      const cust = customers.find((c) => c.id === sale.customer_id);
-      const orgName = cust ? cust.name : (sale.customer_name || '미지정 기관');
-      const deptName = cust?.dept || sale.dept || '';
-      const contactPerson = cust?.contact_person || sale.client_contact_person || '';
-      const key = `${orgName}___${deptName}`;
-
-      rawEntries.push({
-        date: normalizeDateStr(sale.reg_date || sale.receipt_date || sale.delivery_date),
-        customerKey: key,
+    // 상세 거래원장 항목 산출
+    const rawLedger = [];
+    periodSales.forEach(s => {
+      const cust = customers.find(c => c.id === s.customer_id);
+      const orgName = cust ? cust.name : (s.customer_name || '미지정 고객');
+      const deptName = cust?.dept || s.dept || '';
+      const contactPerson = cust?.contact_person || s.client_contact_person || '';
+      const amount = Number(s.total_price || 0);
+      totalSales += amount;
+      rawLedger.push({
+        id: s.id,
+        date: normalizeDateStr(s.reg_date || s.receipt_date || s.delivery_date),
+        customerKey: `${orgName}___${deptName}`,
         orgName,
         deptName,
         contactPerson,
-        customerDisplay: `${orgName}${deptName ? ` (${deptName})` : ''}`,
+        phone: cust?.phone || s.phone || '',
+        email: cust?.email || s.email || '',
+        salesManager: cust?.sales_manager || s.manager_name || '',
         kind: '매출',
-        description: sale.title || '매출 건',
-        sales: Number(sale.total_price || 0),
+        title: s.title || '매출 건',
+        sales: amount,
         payment: 0,
+        customerObj: cust || { id: s.customer_id, name: orgName, dept: deptName, contact_person: contactPerson },
       });
     });
 
-    filteredLedgerPayments.forEach((payment) => {
-      const cust = customers.find((c) => c.id === payment.customer_id);
-      const orgName = cust ? cust.name : (payment.customer_name || '미지정 기관');
-      const deptName = cust?.dept || payment.dept || '';
+    periodPayments.forEach(p => {
+      const cust = customers.find(c => c.id === p.customer_id);
+      const orgName = cust ? cust.name : (p.customer_name || '미지정 고객');
+      const deptName = cust?.dept || p.dept || '';
       const contactPerson = cust?.contact_person || '';
-      const key = `${orgName}___${deptName}`;
-
-      rawEntries.push({
-        date: normalizeDateStr(payment.payment_date),
-        customerKey: key,
+      const amount = Number(p.amount || 0);
+      totalPayment += amount;
+      rawLedger.push({
+        id: p.id,
+        date: normalizeDateStr(p.payment_date),
+        customerKey: `${orgName}___${deptName}`,
         orgName,
         deptName,
         contactPerson,
-        customerDisplay: `${orgName}${deptName ? ` (${deptName})` : ''}`,
+        phone: cust?.phone || '',
+        email: cust?.email || '',
+        salesManager: cust?.sales_manager || '',
         kind: '수금',
-        description: `수금 입금 (${payment.method || '계좌이체'})`,
+        title: `수금 입금 (${p.method || '계좌이체'})`,
         sales: 0,
-        payment: Number(payment.amount || 0),
+        payment: amount,
+        customerObj: cust || { id: p.customer_id, name: orgName, dept: deptName, contact_person: contactPerson },
       });
     });
 
-    rawEntries.sort((a, b) => (a.date || '9999-12-31').localeCompare(b.date || '9999-12-31'));
+    rawLedger.sort((a, b) => (a.date || '9999-12-31').localeCompare(b.date || '9999-12-31'));
 
-    // 거래처별 독립 잔액 누적 계산
-    const customerBalanceMap = {};
-    const finalEntries = rawEntries.map((entry) => {
-      if (customerBalanceMap[entry.customerKey] === undefined) {
-        customerBalanceMap[entry.customerKey] = 0;
+    // 거래처별 누적 잔액 계산
+    const balanceTracker = {};
+    const finalLedger = rawLedger.map(item => {
+      if (balanceTracker[item.customerKey] === undefined) {
+        balanceTracker[item.customerKey] = 0;
       }
-      customerBalanceMap[entry.customerKey] += (entry.sales - entry.payment);
+      balanceTracker[item.customerKey] += (item.sales - item.payment);
       return {
-        ...entry,
-        customerBalance: customerBalanceMap[entry.customerKey],
+        ...item,
+        balance: balanceTracker[item.customerKey],
       };
     });
 
-    return finalEntries;
-  };
+    // ── 그룹핑 (회사별 / 과별 / 담당자별) ──
+    const groupMap = {};
 
-  const ledgerEntries = buildLedgerEntries();
+    finalLedger.forEach(item => {
+      let groupKey = '';
+      if (reportType === 'company') {
+        groupKey = item.orgName;
+      } else if (reportType === 'dept') {
+        groupKey = `${item.orgName}___${item.deptName || '부서미지정'}`;
+      } else { // contact
+        groupKey = `${item.orgName}___${item.deptName || ''}___${item.contactPerson || '담당자미지정'}`;
+      }
 
-  // 💡 엑셀 거래원장 다운로드 (.xlsx)
-  const handleExportLedgerExcel = () => {
-    const today = new Date().toISOString().split('T')[0];
-    const selectedLabel = selectedCustomerFilter === 'ALL' ? '전체거래처' : selectedCustomerFilter;
+      if (!groupMap[groupKey]) {
+        groupMap[groupKey] = {
+          id: groupKey,
+          name: item.orgName,
+          orgName: item.orgName,
+          dept: item.deptName,
+          deptName: item.deptName,
+          contact_person: item.contactPerson,
+          contactPerson: item.contactPerson,
+          phone: item.phone,
+          email: item.email,
+          sales_manager: item.salesManager,
+          salesManager: item.salesManager,
+          count: 0,
+          sales: 0,
+          totalSales: 0,
+          payment: 0,
+          totalPayment: 0,
+          lastTradeDate: '',
+          salesList: [],
+          paymentList: [],
+          custIds: new Set(),
+          customerObj: item.customerObj,
+        };
+      }
 
-    const excelData = [
-      ['경성문화사 거래원장 리포트', `[대상: ${selectedLabel}]`, `추출일자: ${today}`],
-      [],
-      ['거래일자', '기관명(고객사)', '부서 / 과', '담당자', '구분', '적요 / 작업내용', '매출금액', '수금금액', '거래처 누적잔액'],
-      ...ledgerEntries.map((entry) => [
-        entry.date || '-',
-        entry.orgName,
-        entry.deptName || '-',
-        entry.contactPerson || '-',
-        entry.kind,
-        entry.description,
-        entry.sales,
-        entry.payment,
-        entry.customerBalance,
-      ]),
-      [],
-      [
-        '합계', '', '', '', '', '',
-        ledgerEntries.reduce((a, c) => a + c.sales, 0),
-        ledgerEntries.reduce((a, c) => a + c.payment, 0),
-        ledgerEntries.reduce((a, c) => a + c.sales, 0) - ledgerEntries.reduce((a, c) => a + c.payment, 0),
-      ]
-    ];
+      const g = groupMap[groupKey];
+      if (item.kind === '매출') {
+        g.count += 1;
+        g.sales += item.sales;
+        g.totalSales += item.sales;
+        g.salesList.push(item);
+      } else {
+        g.payment += item.payment;
+        g.totalPayment += item.payment;
+        g.paymentList.push(item);
+      }
+      if (item.customerObj?.id) g.custIds.add(item.customerObj.id);
+      if (item.date && (!g.lastTradeDate || item.date > g.lastTradeDate)) {
+        g.lastTradeDate = item.date;
+      }
+    });
 
-    const ws = XLSX.utils.aoa_to_sheet(excelData);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, '거래원장');
-    XLSX.writeFile(wb, `거래원장_${selectedLabel}_${today}.xlsx`);
-  };
+    let groupedList = Object.values(groupMap).map(g => ({
+      ...g,
+      unpaid: g.sales - g.payment,
+      custIds: Array.from(g.custIds),
+    }));
 
-  // 💡 엑셀 분석보고서 다운로드 (.xlsx)
+    // 미수금 발생건만 필터
+    if (onlyUnpaidAnalysis) {
+      groupedList = groupedList.filter(g => g.unpaid > 0);
+    }
+
+    // 매출액 내림차순 정렬
+    groupedList.sort((a, b) => b.sales - a.sales || b.unpaid - a.unpaid);
+
+    const summary = {
+      totalCount: periodSales.length,
+      totalSales,
+      totalPayment,
+      totalUnpaid: totalSales - totalPayment,
+    };
+
+    return { analysisList: groupedList, analysisSummary: summary, ledgerList: finalLedger };
+  }, [periodSales, periodPayments, customers, reportType, onlyUnpaidAnalysis]);
+
+  // 💡 통합 엑셀 다운로드 (.xlsx)
   const handleExportAnalysisExcel = () => {
-    const today = new Date().toISOString().split('T')[0];
-    const typeLabel = reportType === 'customer' ? '거래처별' : reportType === 'manager' ? '영업담당자별' : '전체';
+    const todayStr = new Date().toISOString().split('T')[0];
+    const typeLabel = reportType === 'company' ? '회사별' : reportType === 'dept' ? '과·부서별' : reportType === 'contact' ? '담당자별' : '상세거래원장';
+    const periodLabel = analysisPeriodMode === 'month' ? selectedMonth : analysisPeriodMode === 'range' ? `${startDate}~${endDate}` : '전체기간';
 
     let excelData = [];
-    if (reportType === 'all') {
+    if (reportType === 'ledger') {
       excelData = [
-        ['경성문화사 ERP 매출현황 분석보고서', `[기준: 전체]`, `추출일자: ${today}`],
+        [`경성문화사 ERP 거래원장 리포트 [${periodLabel}]`, `구분: ${typeLabel}`, `추출일자: ${todayStr}`],
         [],
-        ['등록일', '기관명(고객사)', '부서/과', '작업명', '진행상태', '공급가액', '합계금액(VAT포함)', '수금완료액', '미수금 잔액'],
-        ...reportList.map(s => {
-          const cust = customers.find(c => c.id === s.customer_id);
-          const isCollected = s.billing_schedule === '청구완료' || s.billing_schedule === '수금완료';
-          return [
-            s.reg_date || s.receipt_date || '-',
-            cust ? cust.name : (s.customer_name || '-'),
-            cust ? (cust.dept || '-') : '-',
-            s.title || '-',
-            s.billing_schedule || '진행중',
-            s.supply_price || 0,
-            s.total_price || 0,
-            isCollected ? s.total_price : 0,
-            isCollected ? 0 : s.total_price,
-          ];
-        }),
+        ['거래일자', '회사명(고객사)', '부서 / 과', '담당자', '구분', '적요 / 작업내용', '매출금액', '수금금액', '거래처 누적잔액'],
+        ...ledgerList.map((entry) => [
+          entry.date || '-',
+          entry.orgName,
+          entry.deptName || '-',
+          entry.contactPerson || '-',
+          entry.kind,
+          entry.title,
+          entry.sales,
+          entry.payment,
+          entry.balance,
+        ]),
+        [],
+        [
+          '합계', '', '', '', '', '',
+          analysisSummary.totalSales,
+          analysisSummary.totalPayment,
+          analysisSummary.totalUnpaid,
+        ]
       ];
-    } else {
+    } else if (reportType === 'company') {
       excelData = [
-        ['경성문화사 ERP 매출현황 분석보고서', `[기준: ${typeLabel}]`, `추출일자: ${today}`],
+        [`경성문화사 ERP 회사별 매출·수금·미수 분석보고서 [${periodLabel}]`, '', `추출일자: ${todayStr}`],
         [],
-        [typeLabel, '매출 건수', '총 매출액(VAT포함)', '총 수금완료액', '총 미수금 잔액'],
-        ...reportList.map(item => [
-          item.name,
+        ['회사명(고객사)', '거래건수', '총 매출액(VAT포함)', '총 수금액', '미수금 잔액', '최근 거래일'],
+        ...analysisList.map(item => [
+          item.orgName,
           item.count,
           item.sales,
-          item.collected,
-          item.outstanding,
+          item.payment,
+          item.unpaid,
+          item.lastTradeDate || '-',
         ]),
+        [],
+        [
+          '합계',
+          analysisSummary.totalCount,
+          analysisSummary.totalSales,
+          analysisSummary.totalPayment,
+          analysisSummary.totalUnpaid,
+          '-'
+        ]
+      ];
+    } else if (reportType === 'dept') {
+      excelData = [
+        [`경성문화사 ERP 과·부서별 매출·수금·미수 분석보고서 [${periodLabel}]`, '', `추출일자: ${todayStr}`],
+        [],
+        ['회사명(고객사)', '부서 / 과', '거래건수', '총 매출액(VAT포함)', '총 수금액', '미수금 잔액', '최근 거래일'],
+        ...analysisList.map(item => [
+          item.orgName,
+          item.deptName || '-',
+          item.count,
+          item.sales,
+          item.payment,
+          item.unpaid,
+          item.lastTradeDate || '-',
+        ]),
+        [],
+        [
+          '합계', '',
+          analysisSummary.totalCount,
+          analysisSummary.totalSales,
+          analysisSummary.totalPayment,
+          analysisSummary.totalUnpaid,
+          '-'
+        ]
+      ];
+    } else { // contact
+      excelData = [
+        [`경성문화사 ERP 담당자별 매출·수금·미수 분석보고서 [${periodLabel}]`, '', `추출일자: ${todayStr}`],
+        [],
+        ['회사명(고객사)', '부서 / 과', '담당자명', '연락처', '이메일', '담당영업', '거래건수', '총 매출액(VAT포함)', '총 수금액', '미수금 잔액', '최근 거래일'],
+        ...analysisList.map(item => [
+          item.orgName,
+          item.deptName || '-',
+          item.contactPerson || '-',
+          item.phone || '-',
+          item.email || '-',
+          item.salesManager || '-',
+          item.count,
+          item.sales,
+          item.payment,
+          item.unpaid,
+          item.lastTradeDate || '-',
+        ]),
+        [],
+        [
+          '합계', '', '', '', '', '',
+          analysisSummary.totalCount,
+          analysisSummary.totalSales,
+          analysisSummary.totalPayment,
+          analysisSummary.totalUnpaid,
+          '-'
+        ]
       ];
     }
 
     const ws = XLSX.utils.aoa_to_sheet(excelData);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, '매출분석보고서');
+    XLSX.utils.book_append_sheet(wb, ws, `${typeLabel}_분석`);
+    XLSX.writeFile(wb, `경성문화사_${typeLabel}_매출미수보고서_${periodLabel}_${todayStr}.xlsx`);
   };
+
 
   const renderStatusBadge = (status) => {
 
@@ -1247,331 +1285,447 @@ export default function SalesPage() {
 
       {/* ----------------- 탭 3: 📊 ERP 매출 및 미수 통계 보고서 ----------------- */}
       {reportTab === 'erp' && (
-
+        /* ── 📊 혁신적인 ERP 매출/수금/미수 분석 및 거래원장 통합 뷰 ── */
         <div className="space-y-4">
-          
-          {/* ERP 보고서 필터링 카드 */}
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-            <h3 className="font-extrabold text-slate-800 text-sm flex items-center space-x-2">
-              <BarChart3 className="w-4.5 h-4.5 text-sky-600" />
-              <span>분석 조건</span>
-            </h3>
 
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-3.5 text-xs font-bold">
-              {/* 1. 보고서 유형 */}
+          
+          {/* 1. 상단 컨트롤 패널: 조회 구분 탭, 기간 설정, 거래처 필터, 검색, 엑셀 다운로드 */}
+          <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3.5">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+              
+              {/* (1) 조회 구분 탭: 회사별 / 과별 / 담당자별 / 상세거래원장 */}
               <div>
-                <label className="block text-slate-600 mb-1.5">1. 보고서 현황 구분</label>
-                <div className="flex space-x-1 bg-slate-100 p-1 rounded-xl">
+                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                  1. 분석 및 원장 조회 구분
+                </label>
+                <div className="inline-flex p-1 bg-slate-100 rounded-xl text-xs font-bold text-slate-600">
                   <button
                     type="button"
-                    onClick={() => setReportType('all')}
-                    className={`flex-1 py-1.5 rounded-lg transition ${reportType === 'all' ? 'bg-white text-sky-700 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                    onClick={() => setReportType('company')}
+                    className={`px-3 py-1.5 rounded-lg transition ${
+                      reportType === 'company'
+                        ? 'bg-white text-sky-700 shadow-sm font-black'
+                        : 'hover:text-slate-900'
+                    }`}
                   >
-                    전체 매출현황
+                    🏢 회사별
                   </button>
                   <button
                     type="button"
-                    onClick={() => setReportType('customer')}
-                    className={`flex-1 py-1.5 rounded-lg transition ${reportType === 'customer' ? 'bg-white text-sky-700 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                    onClick={() => setReportType('dept')}
+                    className={`px-3 py-1.5 rounded-lg transition ${
+                      reportType === 'dept'
+                        ? 'bg-white text-sky-700 shadow-sm font-black'
+                        : 'hover:text-slate-900'
+                    }`}
                   >
-                    거래처별
+                    🏛️ 과·부서별
                   </button>
                   <button
                     type="button"
-                    onClick={() => setReportType('manager')}
-                    className={`flex-1 py-1.5 rounded-lg transition ${reportType === 'manager' ? 'bg-white text-sky-700 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                    onClick={() => setReportType('contact')}
+                    className={`px-3 py-1.5 rounded-lg transition ${
+                      reportType === 'contact'
+                        ? 'bg-white text-sky-700 shadow-sm font-black'
+                        : 'hover:text-slate-900'
+                    }`}
                   >
-                    영업담당자별
+                    👤 담당자별
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setReportType('ledger')}
+                    className={`px-3 py-1.5 rounded-lg transition ${
+                      reportType === 'ledger'
+                        ? 'bg-white text-violet-700 shadow-sm font-black'
+                        : 'hover:text-slate-900'
+                    }`}
+                  >
+                    📒 상세 거래원장
                   </button>
                 </div>
               </div>
 
-              {/* 2. 조회 기간 기준 */}
+              {/* (2) 엑셀 다운로드 버튼 */}
+              <div className="flex items-center gap-2 self-start lg:self-end">
+                <button
+                  type="button"
+                  onClick={handleExportAnalysisExcel}
+                  className="flex items-center space-x-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-md transition active:scale-95 whitespace-nowrap"
+                  title="현재 조회된 분석/원장 데이터를 엑셀(.xlsx) 파일로 내보냅니다."
+                >
+                  <Download className="w-4 h-4" />
+                  <span>📊 엑셀 다운로드 (.xlsx)</span>
+                </button>
+              </div>
+            </div>
+
+            {/* 2단 필터 컨트롤: 기간 기준, 거래처 지정, 검색창, 미수 필터 */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-3 border-t border-slate-100">
+              
+              {/* 기간 모드 선택 */}
               <div>
-                <label className="block text-slate-600 mb-1.5">2. 조회 기간 기준</label>
-                <div className="flex space-x-1 bg-slate-100 p-1 rounded-xl">
+                <label className="block text-[11px] font-bold text-slate-500 mb-1">
+                  2. 조회 기간 기준
+                </label>
+                <div className="flex space-x-1 bg-slate-100 p-1 rounded-xl text-xs">
                   <button
                     type="button"
-                    onClick={() => setTimeResolution('day')}
-                    className={`flex-1 py-1.5 rounded-lg transition ${timeResolution === 'day' ? 'bg-white text-sky-700 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                    onClick={() => setAnalysisPeriodMode('all')}
+                    className={`flex-1 py-1 rounded-lg transition ${
+                      analysisPeriodMode === 'all' ? 'bg-white text-sky-700 font-bold shadow-sm' : 'text-slate-500'
+                    }`}
                   >
-                    일별
+                    전체
                   </button>
                   <button
                     type="button"
-                    onClick={() => setTimeResolution('month')}
-                    className={`flex-1 py-1.5 rounded-lg transition ${timeResolution === 'month' ? 'bg-white text-sky-700 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                    onClick={() => {
+                      setAnalysisPeriodMode('month');
+                      setSelectedMonth(today.slice(0, 7));
+                    }}
+                    className={`flex-1 py-1 rounded-lg transition ${
+                      analysisPeriodMode === 'month' ? 'bg-white text-sky-700 font-bold shadow-sm' : 'text-slate-500'
+                    }`}
                   >
                     월별
                   </button>
                   <button
                     type="button"
-                    onClick={() => setTimeResolution('year')}
-                    className={`flex-1 py-1.5 rounded-lg transition ${timeResolution === 'year' ? 'bg-white text-sky-700 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                    onClick={() => setAnalysisPeriodMode('range')}
+                    className={`flex-1 py-1 rounded-lg transition ${
+                      analysisPeriodMode === 'range' ? 'bg-white text-sky-700 font-bold shadow-sm' : 'text-slate-500'
+                    }`}
                   >
-                    연별
+                    직접지정
                   </button>
                 </div>
               </div>
 
-              {/* 3. 기간 조건부 입력 창 */}
+              {/* 대상 일/월 선택 */}
               <div>
-                <label className="block text-slate-600 mb-1.5">3. 조회 대상 일/월/년 선택</label>
-                
-                {timeResolution === 'day' && (
-                  <div className="flex items-center space-x-1.5">
-                    <input
-                      type="date"
-                      value={startDate}
-                      onChange={e => setStartDate(e.target.value)}
-                      className="p-1.5 border border-slate-200 rounded-xl w-full text-center"
-                    />
-                    <span className="text-slate-400">~</span>
-                    <input
-                      type="date"
-                      value={endDate}
-                      onChange={e => setEndDate(e.target.value)}
-                      className="p-1.5 border border-slate-200 rounded-xl w-full text-center"
-                    />
-                  </div>
-                )}
-
-                {timeResolution === 'month' && (
+                <label className="block text-[11px] font-bold text-slate-500 mb-1">
+                  3. 기간 범위
+                </label>
+                {analysisPeriodMode === 'month' && (
                   <input
                     type="month"
                     value={selectedMonth}
-                    onChange={e => setSelectedMonth(e.target.value)}
-                    className="p-1.5 border border-slate-200 rounded-xl w-full text-center font-bold text-sky-700"
+                    onChange={(e) => setSelectedMonth(e.target.value)}
+                    className="p-1.5 border border-slate-200 rounded-xl w-full text-xs font-bold text-sky-700 text-center bg-white"
                   />
                 )}
-
-                {timeResolution === 'year' && (
-                  <select
-                    value={selectedYear}
-                    onChange={e => setSelectedYear(e.target.value)}
-                    className="p-1.5 border border-slate-200 rounded-xl w-full text-center font-bold text-sky-700"
-                  >
-                    <option value="2026">2026 년</option>
-                    <option value="2025">2025 년</option>
-                    <option value="2024">2024 년</option>
-                  </select>
+                {analysisPeriodMode === 'range' && (
+                  <div className="flex items-center space-x-1">
+                    <input
+                      type="date"
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
+                      className="p-1 border border-slate-200 rounded-xl w-full text-[11px] text-center bg-white"
+                    />
+                    <span className="text-slate-400 text-xs">~</span>
+                    <input
+                      type="date"
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                      className="p-1 border border-slate-200 rounded-xl w-full text-[11px] text-center bg-white"
+                    />
+                  </div>
+                )}
+                {analysisPeriodMode === 'all' && (
+                  <div className="p-1.5 bg-slate-50 border border-slate-200 rounded-xl text-center text-xs font-medium text-slate-500">
+                    전체 누적 기간
+                  </div>
                 )}
               </div>
 
-              {/* 4. 특정 거래처 지정 조회 필터 */}
+              {/* 특정 거래처 지정 조회 */}
               <div>
-                <label className="block text-slate-600 mb-1.5">4. 특정 거래처 지정 조회</label>
+                <label className="block text-[11px] font-bold text-slate-500 mb-1">
+                  4. 특정 거래처 지정
+                </label>
                 <select
                   value={selectedCustomerFilter}
-                  onChange={e => setSelectedCustomerFilter(e.target.value)}
-                  className="p-1.5 border border-slate-200 rounded-xl w-full font-bold text-slate-800 focus:border-sky-500"
+                  onChange={(e) => setSelectedCustomerFilter(e.target.value)}
+                  className="p-1.5 border border-slate-200 rounded-xl w-full text-xs font-bold text-slate-800 bg-white focus:border-sky-500"
                 >
                   <option value="ALL">🏢 전체 거래처 보기</option>
-                  {customers.map(c => (
+                  {customers.map((c) => (
                     <option key={c.id} value={c.id}>
                       🏢 {c.name} {c.dept ? `(${c.dept})` : ''} {c.contact_person ? `- ${c.contact_person}` : ''}
                     </option>
                   ))}
                 </select>
               </div>
-            </div>
 
-            {/* 조회 다운로드 조작 구역 */}
-            <div className="flex flex-wrap justify-between items-center gap-2 pt-2 border-t border-slate-100">
-              <span className="text-xs text-slate-500 font-semibold">
-                필터 결과: 총 <strong className="text-sky-600 font-bold">{currentReportSales.length}</strong> 건의 매출 데이터가 검색되었습니다.
-              </span>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleExportLedgerExcel}
-                  className="flex items-center space-x-1.5 bg-violet-600 hover:bg-violet-700 text-white px-3.5 py-1.5 rounded-xl text-xs font-bold shadow-md transition"
-                >
-                  <Download className="w-4 h-4" />
-                  <span>📒 거래원장 엑셀 (.xlsx)</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={handleExportAnalysisExcel}
-                  className="flex items-center space-x-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-1.5 rounded-xl text-xs font-bold shadow-md transition"
-                >
-                  <Download className="w-4 h-4" />
-                  <span>📥 매출보고서 엑셀 (.xlsx)</span>
-                </button>
+              {/* 검색 및 미수 잔액 필터 */}
+              <div>
+                <label className="block text-[11px] font-bold text-slate-500 mb-1">
+                  5. 실시간 검색 & 필터
+                </label>
+                <div className="flex items-center space-x-1.5">
+                  <div className="relative flex-1">
+                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      placeholder="회사/과/담당자 검색..."
+                      value={analysisSearchText}
+                      onChange={(e) => setAnalysisSearchText(e.target.value)}
+                      className="pl-7 pr-2 py-1.5 border border-slate-200 rounded-xl w-full text-xs bg-white focus:outline-none focus:ring-1 focus:ring-sky-500"
+                    />
+                  </div>
+                  {reportType !== 'ledger' && (
+                    <label className="flex items-center space-x-1 text-xs font-semibold text-slate-700 cursor-pointer bg-slate-50 px-2 py-1.5 border border-slate-200 rounded-xl whitespace-nowrap hover:bg-slate-100">
+                      <input
+                        type="checkbox"
+                        checked={onlyUnpaidAnalysis}
+                        onChange={(e) => setOnlyUnpaidAnalysis(e.target.checked)}
+                        className="rounded text-sky-600 focus:ring-sky-500 w-3.5 h-3.5"
+                      />
+                      <span>미수만</span>
+                    </label>
+                  )}
+                </div>
               </div>
+
             </div>
           </div>
 
-          {/* 거래원장 상세 테이블 */}
+          {/* 2. ERP 핵심 요약 통계 카드 4종 */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="bg-slate-900 text-white p-4 rounded-2xl shadow-sm border border-slate-800 space-y-1">
+              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">조회 기간 매출 건수</p>
+              <h4 className="text-xl font-black text-white">{analysisSummary.totalCount} 건</h4>
+            </div>
+            <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 space-y-1">
+              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">총 매출액 (VAT 포함)</p>
+              <h4 className="text-xl font-black text-slate-900">₩ {analysisSummary.totalSales.toLocaleString()} 원</h4>
+            </div>
+            <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 space-y-1">
+              <p className="text-[10px] text-emerald-600 font-bold uppercase tracking-wider">총 수금 완료액</p>
+              <h4 className="text-xl font-black text-emerald-600">₩ {analysisSummary.totalPayment.toLocaleString()} 원</h4>
+            </div>
+            <div className="bg-rose-50 p-4 rounded-2xl shadow-sm border border-rose-200 space-y-1">
+              <p className="text-[10px] text-rose-500 font-bold uppercase tracking-wider">총 미수금 잔액</p>
+              <h4 className="text-xl font-black text-rose-600">₩ {analysisSummary.totalUnpaid.toLocaleString()} 원</h4>
+            </div>
+          </div>
+
+          {/* 3. ERP 통합 고밀도 데이터 테이블 */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            
             <div className="px-4 py-3 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
               <div className="flex items-center space-x-2">
-                <Building2 className="w-4 h-4 text-violet-600" />
-                <h4 className="font-extrabold text-sm text-slate-800">거래원장 (거래처별 잔액 추이)</h4>
+                <Building2 className="w-4 h-4 text-sky-600" />
+                <h4 className="font-extrabold text-sm text-slate-800">
+                  {reportType === 'company' && '🏢 회사(기관)별 매출·수금·미수 정산표'}
+                  {reportType === 'dept' && '🏛️ 과·부서별 매출·수금·미수 정산표'}
+                  {reportType === 'contact' && '👤 담당자별 매출·수금·미수 정산표'}
+                  {reportType === 'ledger' && '📒 일자별 상세 거래원장'}
+                </h4>
+                <span className="text-xs text-slate-500 font-normal">
+                  (총 {reportType === 'ledger' ? ledgerList.length : analysisList.length}건)
+                </span>
               </div>
-              <span className="text-[11px] text-slate-500 font-mono">
-                {selectedCustomerFilter === 'ALL' ? '전체 거래처' : (customers.find(c => c.id === selectedCustomerFilter)?.name || selectedCustomerFilter)} / {startDate || '전체기간'} ~ {endDate || ''}
+              <span className="text-xs text-slate-400 font-mono">
+                행을 클릭하면 일자별 거래 장부가 열립니다.
               </span>
             </div>
-            <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
-              <table className="w-full text-xs border-collapse">
-                <thead className="bg-slate-100/90 text-slate-700 uppercase font-extrabold border-b border-slate-200 sticky top-0 z-10">
-                  <tr>
-                    <th className="p-3 pl-4 text-left">거래일자</th>
-                    <th className="p-3 text-left">기관명 (고객사)</th>
-                    <th className="p-3 text-left">부서 / 과</th>
-                    <th className="p-3 text-left">담당자</th>
-                    <th className="p-3 text-center">구분</th>
-                    <th className="p-3 text-left">작업명 / 적요</th>
-                    <th className="p-3 text-right">매출금액</th>
-                    <th className="p-3 text-right">수금금액</th>
-                    <th className="p-3 pr-4 text-right">해당 거래처 잔액</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 text-slate-800">
-                  {ledgerEntries.length === 0 ? (
-                    <tr>
-                      <td colSpan={9} className="p-10 text-center text-slate-400 font-bold">선택한 조건에 해당하는 거래원장 내역이 없습니다.</td>
-                    </tr>
-                  ) : (
-                    ledgerEntries.map((entry, idx) => (
-                      <tr key={`${entry.date}-${entry.customerKey}-${entry.kind}-${idx}`} className="hover:bg-slate-50 transition">
-                        <td className="p-3 pl-4 font-mono text-slate-500">{entry.date || '-'}</td>
-                        <td className="p-3 font-bold text-slate-900">{entry.orgName}</td>
-                        <td className="p-3 text-slate-600">{entry.deptName || '-'}</td>
-                        <td className="p-3 text-slate-600 font-medium">{entry.contactPerson || '-'}</td>
-                        <td className="p-3 text-center">
-                          <span className={`px-2 py-0.5 rounded-md font-bold text-[11px] ${
-                            entry.kind === '매출'
-                              ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                              : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                          }`}>
-                            {entry.kind}
-                          </span>
+
+            <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
+              
+              {/* ── (A) 상세 거래원장 테이블 ── */}
+              {reportType === 'ledger' ? (
+                ledgerList.length === 0 ? (
+                  <div className="p-12 text-center text-slate-400 text-xs">조회 조건에 일치하는 거래원장 내역이 없습니다.</div>
+                ) : (
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead className="bg-slate-100/90 text-slate-700 font-bold sticky top-0 z-10 border-b border-slate-200">
+                      <tr>
+                        <th className="p-3 pl-4">거래일자</th>
+                        <th className="p-3">회사명 (고객사)</th>
+                        <th className="p-3">부서 / 과</th>
+                        <th className="p-3">담당자</th>
+                        <th className="p-3 text-center">구분</th>
+                        <th className="p-3">작업명 / 적요</th>
+                        <th className="p-3 text-right">매출금액</th>
+                        <th className="p-3 text-right">수금금액</th>
+                        <th className="p-3 pr-4 text-right">해당 거래처 잔액</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-slate-800">
+                      {ledgerList.map((entry, idx) => (
+                        <tr
+                          key={`${entry.id || idx}`}
+                          onClick={() => setSelectedAnalysisCustomer(entry.customerObj)}
+                          className="hover:bg-sky-50/60 transition cursor-pointer group"
+                        >
+                          <td className="p-3 pl-4 font-mono text-slate-500">{entry.date || '-'}</td>
+                          <td className="p-3 font-bold text-slate-900 group-hover:text-sky-700">{entry.orgName}</td>
+                          <td className="p-3 text-slate-600">{entry.deptName || '-'}</td>
+                          <td className="p-3 text-slate-600">{entry.contactPerson || '-'}</td>
+                          <td className="p-3 text-center">
+                            <span className={`px-2 py-0.5 rounded-md font-bold text-[11px] ${
+                              entry.kind === '매출'
+                                ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                                : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                            }`}>
+                              {entry.kind}
+                            </span>
+                          </td>
+                          <td className="p-3 text-slate-700 font-medium">{entry.title}</td>
+                          <td className="p-3 text-right font-mono font-bold text-slate-900">
+                            {entry.sales > 0 ? `₩ ${entry.sales.toLocaleString()} 원` : '-'}
+                          </td>
+                          <td className="p-3 text-right font-mono font-bold text-emerald-600">
+                            {entry.payment > 0 ? `₩ ${entry.payment.toLocaleString()} 원` : '-'}
+                          </td>
+                          <td className="p-3 pr-4 text-right font-mono font-black">
+                            <span className={entry.balance > 0 ? 'text-rose-600' : 'text-slate-700'}>
+                              ₩ {entry.balance.toLocaleString()} 원
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot className="bg-slate-100 font-bold text-slate-900 border-t-2 border-slate-200 sticky bottom-0 z-10">
+                      <tr>
+                        <td className="p-3 pl-4" colSpan={6}>
+                          합계 ({ledgerList.length}건)
                         </td>
-                        <td className="p-3 text-slate-700">{entry.description}</td>
-                        <td className="p-3 text-right font-mono font-bold text-slate-800">
-                          {entry.sales > 0 ? `₩ ${entry.sales.toLocaleString()} 원` : '-'}
+                        <td className="p-3 text-right font-mono text-slate-900">
+                          ₩ {analysisSummary.totalSales.toLocaleString()} 원
                         </td>
-                        <td className="p-3 text-right font-mono font-bold text-emerald-600">
-                          {entry.payment > 0 ? `₩ ${entry.payment.toLocaleString()} 원` : '-'}
+                        <td className="p-3 text-right font-mono text-emerald-700">
+                          ₩ {analysisSummary.totalPayment.toLocaleString()} 원
                         </td>
-                        <td className="p-3 pr-4 text-right font-mono font-black">
-                          <span className={entry.customerBalance > 0 ? 'text-rose-600' : 'text-slate-700'}>
-                            ₩ {entry.customerBalance.toLocaleString()} 원
-                          </span>
+                        <td className="p-3 pr-4 text-right font-mono text-rose-700 font-black">
+                          ₩ {analysisSummary.totalUnpaid.toLocaleString()} 원
                         </td>
                       </tr>
-                    ))
-                  )}
-                </tbody>
-                <tfoot className="bg-slate-100 font-bold text-slate-900 border-t-2 border-slate-200 sticky bottom-0 z-10">
-                  <tr>
-                    <td className="p-3 pl-4" colSpan={6}>
-                      합계 ({ledgerEntries.length}건)
-                    </td>
-                    <td className="p-3 text-right font-mono text-slate-900">
-                      ₩ {ledgerEntries.reduce((a, c) => a + c.sales, 0).toLocaleString()} 원
-                    </td>
-                    <td className="p-3 text-right font-mono text-emerald-700">
-                      ₩ {ledgerEntries.reduce((a, c) => a + c.payment, 0).toLocaleString()} 원
-                    </td>
-                    <td className="p-3 pr-4 text-right font-mono text-rose-700 font-black">
-                      ₩ {(ledgerEntries.reduce((a, c) => a + c.sales, 0) - ledgerEntries.reduce((a, c) => a + c.payment, 0)).toLocaleString()} 원
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          </div>
-
-
-          {/* ERP 요약 통계 카드 */}
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3.5">
-            <div className="bg-slate-900 text-white p-4.5 rounded-2xl shadow-sm border border-slate-800 space-y-1">
-              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">조회 기간 총 매출 건수</p>
-              <h4 className="text-xl font-black text-white">{reportSummary.totalCount} 건</h4>
-            </div>
-            <div className="bg-white p-4.5 rounded-2xl shadow-sm border border-slate-200 space-y-1">
-              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">총 매출액 (VAT 포함)</p>
-              <h4 className="text-xl font-black text-slate-900">₩ {reportSummary.totalSales.toLocaleString()} 원</h4>
-            </div>
-            <div className="bg-white p-4.5 rounded-2xl shadow-sm border border-slate-200 space-y-1">
-              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider text-emerald-600">총 수금 완료액</p>
-              <h4 className="text-xl font-black text-emerald-600">₩ {reportSummary.totalCollected.toLocaleString()} 원</h4>
-            </div>
-            <div className="bg-rose-50 p-4.5 rounded-2xl shadow-sm border border-rose-200 space-y-1">
-              <p className="text-[10px] text-rose-500 font-bold uppercase tracking-wider">미수금 잔액 (미회수금)</p>
-              <h4 className="text-xl font-black text-rose-600">₩ {reportSummary.totalOutstanding.toLocaleString()} 원</h4>
-            </div>
-          </div>
-
-          {/* ERP 데이터 집계 테이블 */}
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs text-left border-collapse">
-                <thead className="bg-slate-50 text-slate-700 uppercase font-extrabold border-b border-slate-200">
-                  {reportType === 'all' ? (
-                    <tr>
-                      <th className="p-3.5">등록일</th>
-                      <th className="p-3.5">거래처명</th>
-                      <th className="p-3.5">작업명 (제목)</th>
-                      <th className="p-3.5 text-center">진행 상태</th>
-                      <th className="p-3.5 text-right">공급가액</th>
-                      <th className="p-3.5 text-right">합계액 (VAT포함)</th>
-                      <th className="p-3.5 text-right text-emerald-700">수금액</th>
-                      <th className="p-3.5 text-right text-rose-600">미수금</th>
-                    </tr>
-                  ) : (
-                    <tr>
-                      <th className="p-3.5">{reportType === 'customer' ? '거래처명' : '영업담당자'}</th>
-                      <th className="p-3.5 text-center">매출 건수</th>
-                      <th className="p-3.5 text-right">총 매출액 (VAT포함)</th>
-                      <th className="p-3.5 text-right text-emerald-700">총 수금액</th>
-                      <th className="p-3.5 text-right text-rose-600">총 미수금 잔액</th>
-                    </tr>
-                  )}
-                </thead>
-                <tbody className="divide-y divide-slate-100 font-medium text-slate-800">
-                  {reportList.length === 0 ? (
-                    <tr>
-                      <td colSpan={10} className="p-10 text-center text-slate-400 font-bold">
-                        선택하신 조건(기간 및 거래처)에 해당하는 매출 데이터가 없습니다.
-                      </td>
-                    </tr>
-                  ) : (
-                    reportType === 'all' ? (
-                      reportList.map((s, idx) => {
-                        const cust = customers.find(c => c.id === s.customer_id);
-                        const cName = cust ? cust.name : (s.customer_name || s.customer_id);
-                        const isCollected = s.billing_schedule === '청구완료';
+                    </tfoot>
+                  </table>
+                )
+              ) : (
+                /* ── (B) 회사별 / 과별 / 담당자별 분석 집계 테이블 ── */
+                analysisList.length === 0 ? (
+                  <div className="p-12 text-center text-slate-400 text-xs">조회 조건에 일치하는 분석 내역이 없습니다.</div>
+                ) : (
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead className="bg-slate-100/90 text-slate-700 font-bold sticky top-0 z-10 border-b border-slate-200">
+                      <tr>
+                        <th className="p-3 pl-4">회사명 (고객사)</th>
+                        {reportType !== 'company' && <th className="p-3">부서 / 과</th>}
+                        {reportType === 'contact' && <th className="p-3">담당자 (연락처/이메일)</th>}
+                        {reportType === 'contact' && <th className="p-3">담당영업</th>}
+                        <th className="p-3 text-center">건수</th>
+                        <th className="p-3 text-right">총 매출액 (청구)</th>
+                        <th className="p-3 text-right">총 수금액</th>
+                        <th className="p-3 text-right font-black text-rose-700">미수금 잔액</th>
+                        <th className="p-3 text-center">최근거래일</th>
+                        <th className="p-3 text-center pr-4">상세보기</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-slate-800">
+                      {analysisList.map((item) => {
+                        const hasUnpaid = item.unpaid > 0;
                         return (
-                          <tr key={s.id || idx} className="hover:bg-slate-50 transition">
-                            <td className="p-3.5 font-mono text-slate-500">{s.reg_date || s.receipt_date || '-'}</td>
-                            <td className="p-3.5 font-bold text-slate-900">{cName}</td>
-                            <td className="p-3.5 font-semibold">{s.title}</td>
-                            <td className="p-3.5 text-center">{renderStatusBadge(s.billing_schedule)}</td>
-                            <td className="p-3.5 text-right font-mono">₩ {Number(s.supply_price || 0).toLocaleString()}</td>
-                            <td className="p-3.5 text-right font-mono font-bold text-slate-900">₩ {Number(s.total_price || 0).toLocaleString()}</td>
-                            <td className="p-3.5 text-right font-mono font-bold text-emerald-700">₩ {isCollected ? Number(s.total_price || 0).toLocaleString() : '0'}</td>
-                            <td className="p-3.5 text-right font-mono font-bold text-rose-600">₩ {!isCollected ? Number(s.total_price || 0).toLocaleString() : '0'}</td>
+                          <tr
+                            key={item.id}
+                            onClick={() => setSelectedAnalysisCustomer(item)}
+                            className="hover:bg-sky-50/60 transition cursor-pointer group"
+                          >
+                            <td className="p-3 pl-4 font-bold text-slate-900 group-hover:text-sky-700">
+                              <div className="flex items-center space-x-1.5">
+                                <Building2 className="w-3.5 h-3.5 text-slate-400 group-hover:text-sky-600" />
+                                <span>{item.orgName}</span>
+                              </div>
+                            </td>
+                            {reportType !== 'company' && (
+                              <td className="p-3 text-slate-600 font-medium">
+                                {item.deptName || '-'}
+                              </td>
+                            )}
+                            {reportType === 'contact' && (
+                              <td className="p-3 text-slate-600">
+                                <div className="flex flex-col">
+                                  <span className="font-semibold text-slate-800">{item.contactPerson || '-'}</span>
+                                  {(item.phone || item.email) && (
+                                    <span className="text-[11px] text-slate-400">
+                                      {item.phone} {item.email ? `| ${item.email}` : ''}
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                            )}
+                            {reportType === 'contact' && (
+                              <td className="p-3 text-slate-600">
+                                {item.salesManager ? (
+                                  <span className="px-2 py-0.5 bg-rose-50 text-rose-700 rounded border border-rose-200 text-[11px] font-semibold">
+                                    {item.salesManager}
+                                  </span>
+                                ) : '-'}
+                              </td>
+                            )}
+                            <td className="p-3 text-center font-mono font-semibold text-slate-700">
+                              {item.count} 건
+                            </td>
+                            <td className="p-3 text-right font-mono font-bold text-slate-900">
+                              ₩ {item.sales.toLocaleString()} 원
+                            </td>
+                            <td className="p-3 text-right font-mono font-bold text-emerald-600">
+                              ₩ {item.payment.toLocaleString()} 원
+                            </td>
+                            <td className="p-3 text-right font-mono">
+                              <span className={`inline-block px-2 py-0.5 rounded-lg font-black ${
+                                hasUnpaid
+                                  ? 'bg-rose-50 text-rose-600 border border-rose-200'
+                                  : 'bg-slate-100 text-slate-500'
+                              }`}>
+                                ₩ {item.unpaid.toLocaleString()} 원
+                              </span>
+                            </td>
+                            <td className="p-3 text-center text-slate-500 font-mono text-[11px]">
+                              {item.lastTradeDate || '-'}
+                            </td>
+                            <td className="p-3 text-center pr-4" onClick={(e) => { e.stopPropagation(); setSelectedAnalysisCustomer(item); }}>
+                              <button
+                                type="button"
+                                className="px-2.5 py-1 bg-white hover:bg-sky-600 text-sky-700 hover:text-white border border-sky-300 rounded-lg text-[11px] font-bold shadow-xs transition"
+                              >
+                                일자별 장부
+                              </button>
+                            </td>
                           </tr>
                         );
-                      })
-                    ) : (
-                      reportList.map((item, idx) => (
-                        <tr key={idx} className="hover:bg-slate-50 transition">
-                          <td className="p-3.5 font-bold text-slate-900">{item.name}</td>
-                          <td className="p-3.5 text-center font-mono font-bold">{item.count} 건</td>
-                          <td className="p-3.5 text-right font-mono font-bold text-slate-900">₩ {item.sales.toLocaleString()}</td>
-                          <td className="p-3.5 text-right font-mono font-bold text-emerald-700">₩ {item.collected.toLocaleString()}</td>
-                          <td className="p-3.5 text-right font-mono font-bold text-rose-600">₩ {item.outstanding.toLocaleString()}</td>
-                        </tr>
-                      ))
-                    )
-                  )}
-                </tbody>
-              </table>
+                      })}
+                    </tbody>
+                    <tfoot className="bg-slate-100 font-bold text-slate-900 border-t-2 border-slate-200 sticky bottom-0 z-10">
+                      <tr>
+                        <td
+                          className="p-3 pl-4"
+                          colSpan={reportType === 'contact' ? 4 : reportType === 'dept' ? 2 : 1}
+                        >
+                          합계 ({analysisList.length}개 대상)
+                        </td>
+                        <td className="p-3 text-center font-mono">
+                          {analysisSummary.totalCount} 건
+                        </td>
+                        <td className="p-3 text-right font-mono text-slate-900">
+                          ₩ {analysisSummary.totalSales.toLocaleString()} 원
+                        </td>
+                        <td className="p-3 text-right font-mono text-emerald-700">
+                          ₩ {analysisSummary.totalPayment.toLocaleString()} 원
+                        </td>
+                        <td className="p-3 text-right font-mono text-rose-700 font-black">
+                          ₩ {analysisSummary.totalUnpaid.toLocaleString()} 원
+                        </td>
+                        <td className="p-3" colSpan={2}></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                )
+              )}
             </div>
           </div>
 
@@ -1579,8 +1733,19 @@ export default function SalesPage() {
       )}
 
       {/* ----------------- 모달 레이어 ----------------- */}
-      
+
+      {/* 0. 분석 탭 전용 일자별 고객 상세 장부 모달 */}
+      {selectedAnalysisCustomer && (
+        <CustomerDetailModal
+          customer={selectedAnalysisCustomer}
+          sales={sales}
+          payments={payments}
+          onClose={() => setSelectedAnalysisCustomer(null)}
+        />
+      )}
+
       {/* 1. 매출 등록/수정 모달 */}
+
       {showModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <form onSubmit={handleSubmit} className="bg-white w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-2xl shadow-xl p-5 space-y-4">
