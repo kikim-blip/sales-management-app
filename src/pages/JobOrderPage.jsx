@@ -65,29 +65,50 @@ export default function JobOrderPage() {
     window.location.href = '/sales';
   };
 
-  // 💡 건별 구글 캘린더 연동 헬퍼
+  // 💡 구글 캘린더 건별 선택 등록 연동 헬퍼
   const handleAddToGoogleCalendar = (order) => {
     const cust = customers.find(c => c.id === order.customer_id);
-    const custName = cust ? cust.name : (order.customer_name || '');
-    const title = encodeURIComponent(`[경성문화사 납품일정] ${order.title || '납품 건'} (${custName})`);
+    const orgName = cust ? cust.name : (order.customer_name || '');
+    const deptName = cust ? cust.dept : (order.dept || '');
+    const jobTitle = order.title || '작업 건';
+
+    // 1. 제목: [기관명/부서] 작업제목 (부서 없으면 [기관명] 작업제목)
+    const orgDeptHeader = deptName ? `[${orgName}/${deptName}]` : (orgName ? `[${orgName}]` : '');
+    const calTitle = `${orgDeptHeader} ${jobTitle}`.trim();
+    const title = encodeURIComponent(calTitle);
     
     const rawDate = (order.delivery_date || todayStr).replace(/-/g, '');
     const rawTime = (order.delivery_time || '14:00').replace(':', '') + '00';
     const dates = `${rawDate}T${rawTime}/${rawDate}T${rawTime}`;
+
+    // 담당자 및 연락처
+    const contactPerson = cust?.contact_person || order.client_contact_person || '';
+    const contactPhone = cust?.phone || order.client_phone || '';
+    const contactStr = contactPerson ? `${contactPerson}${contactPhone ? ` (${contactPhone})` : ''}` : '-';
+
+    // 상세 작업내용
+    const specText = `사양: ${order.spec || '-'} | 수량: ${order.quantity ? `${order.quantity}부` : '-'} | 제본: ${order.binding || '-'}`;
+    const contentText = `${specText}${order.request_note ? `\n요청사항: ${order.request_note}` : ''}`;
+    const deliveryTimeStr = `${order.delivery_date || todayStr} ${order.delivery_time || '14:00'}`;
+    const managerStr = order.manager_name || (cust ? cust.sales_manager : '-');
     
-    const details = encodeURIComponent(
-      `작업전표 코드: ${order.code_number || order.id}\n` +
-      `발주처: ${custName}\n` +
-      `작업제목: ${order.title}\n` +
-      `사양: ${order.spec || '-'}\n` +
-      `수량: ${order.quantity ? `${order.quantity}부` : '-'}\n` +
-      `제본: ${order.binding || '-'}\n` +
-      `담당자: ${order.manager_name || '-'}`
-    );
+    // 2. 본문 내용 포맷
+    const detailsContent = [
+      `발주처 / 발주부서: ${orgName}${deptName ? ` / ${deptName}` : ''}`,
+      `담당자 이름 / 연락처: ${contactStr}`,
+      `작업제목: ${jobTitle}`,
+      `납품 일시: ${deliveryTimeStr}`,
+      `상세 작업내용: ${contentText}`,
+      `영업담당자: ${managerStr}`,
+      `작업전표 코드: ${order.code_number || order.id || '-'}`
+    ].join('\n');
+
+    const details = encodeURIComponent(detailsContent);
     
     const googleCalendarUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${dates}&details=${details}`;
     window.open(googleCalendarUrl, '_blank');
   };
+
 
   // 💡 건별 슈퍼스레드 연동 헬퍼
   const handleSendToSuperthread = async (order) => {
