@@ -633,7 +633,7 @@ export default function DashboardPage() {
 
 
 
-        <div className="divide-y divide-slate-100 max-h-[420px] overflow-y-auto">
+        <div className="divide-y divide-slate-100 max-h-[520px] overflow-y-auto">
           {urgentDeliveryList.length === 0 ? (
             <div className="p-8 text-center text-slate-400 text-xs">
               등록된 납품 일정이 없습니다.
@@ -643,7 +643,9 @@ export default function DashboardPage() {
               const isJobOrder = item.itemType === 'jobOrder';
               return (
                 <div key={item.id} className="p-4 hover:bg-slate-50 transition flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-                  <div className="space-y-1.5 flex-1">
+                  
+                  {/* 좌측: D-Day 뱃지, 코드, 작업명, 발주처/담당자 정보, 세부사양 */}
+                  <div className="space-y-1.5 flex-1 min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className={`text-xs px-2.5 py-1 rounded-lg border font-mono tracking-wide ${item.dday.color}`}>
                         {item.dday.label}
@@ -662,24 +664,62 @@ export default function DashboardPage() {
                       </h4>
                     </div>
 
-                                 {/* 💡 1. 납품 완료 상태 및 빠른 완료 처리 버튼 */}
+                    {/* 발주처 및 담당자 연락망 */}
+                    <div className="flex flex-col gap-0.5 text-xs text-slate-600">
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
+                        <span>
+                          발주처: <strong className="text-slate-800">{item.customerNameDisplay}</strong>
+                        </span>
+                        {(() => {
+                          const cust = customers.find(c => c.id === item.customer_id);
+                          const contactPerson = cust?.contact_person || item.client_contact_person || item.contact_person || '';
+                          const phone = cust?.phone || item.client_phone || item.phone || '';
+                          const email = cust?.email || item.client_email || item.email || '';
+                          const manager = item.manager_name || item.sales_manager || cust?.sales_manager || '';
+                          if (!contactPerson && !phone && !email && !manager) return null;
+                          return (
+                            <span className="flex flex-wrap items-center gap-x-2 text-[11px] text-slate-500 font-medium">
+                              {contactPerson && <span>👤 담당: <strong className="text-slate-700">{contactPerson}</strong></span>}
+                              {phone && <span>📞 {phone}</span>}
+                              {email && <span>✉️ {email}</span>}
+                              {manager && <span className="text-rose-600 font-semibold">💼 영업: {manager}</span>}
+                            </span>
+                          );
+                        })()}
+                      </div>
+                      <div className="text-xs text-slate-500 pt-0.5">
+                        {item.detailsText}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 우측: 납품 예정일시 및 조작 버튼 그룹 */}
+                  <div className="flex flex-wrap items-center space-x-1.5 justify-end flex-shrink-0 pt-2 lg:pt-0 border-t lg:border-t-0 border-slate-100">
+                    <div className="text-right mr-2 hidden sm:block">
+                      <p className="text-[10px] text-slate-400 font-medium">납품 예정일시</p>
+                      <p className="text-xs font-bold text-rose-600 font-mono">
+                        {item.delivery_date} {item.delivery_time ? `(${item.delivery_time})` : ''}
+                      </p>
+                    </div>
+
+                    {/* 1. 납품 완료 상태 및 빠른 완료 처리 버튼 */}
                     {item.billing_schedule === '납품완료' || item.billing_schedule === '청구완료' || item.status === '납품완료' ? (
-                      <span className="flex items-center space-x-1 px-2 py-1 sm:px-2.5 sm:py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-300 rounded-xl text-[11px] sm:text-xs font-bold">
-                        <CheckCircle2 className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-emerald-600" />
+                      <span className="flex items-center space-x-1 px-2.5 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-300 rounded-xl text-xs font-bold">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                         <span>납품완료</span>
                       </span>
                     ) : (
                       <button
                         onClick={() => handleMarkDelivered(item)}
-                        className="flex items-center space-x-1 bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-xl text-[11px] sm:text-xs font-bold shadow-sm transition"
+                        className="flex items-center space-x-1 bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1.5 rounded-xl text-xs font-bold shadow-sm transition"
                         title="이 건을 납품완료 상태로 즉시 변경"
                       >
-                        <Truck className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                        <Truck className="w-3.5 h-3.5" />
                         <span>납품 완료</span>
                       </button>
                     )}
 
-                    {/* 💡 2. 납품 일정 / 전표 변경 버튼 */}
+                    {/* 2. 납품 일정 / 전표 변경 버튼 */}
                     <button
                       onClick={() => {
                         if (isJobOrder) {
@@ -690,78 +730,58 @@ export default function DashboardPage() {
                           setShowSaleScheduleModal(true);
                         }
                       }}
-                      className="flex items-center space-x-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-xl text-[11px] sm:text-xs font-bold transition"
+                      className="flex items-center space-x-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 px-2.5 py-1.5 rounded-xl text-xs font-bold transition"
                       title={isJobOrder ? "작업전표 상세 수정" : "납품 일정 및 진행 상태 변경"}
                     >
-                      <Pencil className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-600" />
+                      <Pencil className="w-3.5 h-3.5 text-amber-600" />
                       <span>일정 변경</span>
                     </button>
 
-                    {/* 💡 2-1. 견적서 작성 단추 (견적 금액을 매출액/전표금액으로 즉시 연동) */}
-                    {/* 💡 2. 납품 일정 / 전표 변경 버튼 */}
-                    <button
-                      onClick={() => {
-                        if (isJobOrder) {
-                          setEditingOrder(item);
-                          setShowJobEditModal(true);
-                        } else {
-                          setEditingSale({ ...item });
-                          setShowSaleScheduleModal(true);
-                        }
-                      }}
-                      className="flex items-center space-x-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-xl text-[11px] sm:text-xs font-bold transition"
-                      title={isJobOrder ? "작업전표 상세 수정" : "납품 일정 및 진행 상태 변경"}
-                    >
-                      <Pencil className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-600" />
-                      <span>일정 변경</span>
-                    </button>
-
-                    {/* 💡 2-1. 견적서 작성 단추 (견적 금액을 매출액/전표금액으로 즉시 연동) */}
+                    {/* 3. 견적서 작성 단추 */}
                     <button
                       onClick={() => {
                         const cust = customers.find(c => c.id === item.customer_id);
                         setEstimatingSale({ sale: item, customer: cust });
                       }}
-                      className="flex items-center space-x-1 bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-300 px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-xl text-[11px] sm:text-xs font-bold transition"
+                      className="flex items-center space-x-1 bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-300 px-2.5 py-1.5 rounded-xl text-xs font-bold transition"
                       title="상세 품목 단가 산출 및 매출액 자동 반영"
                     >
                       <Calculator className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-sky-600" />
                       <span>견적서 작성</span>
                     </button>
 
-                    {/* 💡 3. 캘린더 등록 버튼 */}
+                    {/* 4. 캘린더 등록 버튼 */}
                     <button
                       onClick={() => handleAddToGoogleCalendar(item)}
-                      className="flex items-center space-x-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-xl text-[11px] sm:text-xs font-bold transition"
+                      className="flex items-center space-x-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 px-2.5 py-1.5 rounded-xl text-xs font-bold transition"
                       title="이 건만 구글 캘린더에 일정 등록"
                     >
-                      <Calendar className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-600" />
-                      <span className="hidden xs:inline">캘린더</span>
-                      <span className="xs:hidden">캘린더</span>
+                      <Calendar className="w-3.5 h-3.5 text-slate-600" />
+                      <span>캘린더</span>
                     </button>
 
-                    {/* 💡 4. 슈퍼스레드 알림 버튼 */}
+                    {/* 5. 슈퍼스레드 알림 버튼 */}
                     <button
                       onClick={() => handleSendToSuperthread(item)}
-                      className="flex items-center space-x-1 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-300 px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-xl text-[11px] sm:text-xs font-bold transition"
+                      className="flex items-center space-x-1 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-300 px-2.5 py-1.5 rounded-xl text-xs font-bold transition"
                       title="이 건만 슈퍼스레드 업무 채널로 전달"
                     >
-                      <Zap className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-purple-600" />
-                      <span className="hidden xs:inline">슈퍼스레드</span>
-                      <span className="xs:hidden">알림</span>
+                      <Zap className="w-3.5 h-3.5 text-purple-600" />
+                      <span>알림</span>
                     </button>
 
-                    {/* 💡 5. 전표 1:1 인쇄 버튼 (작업전표인 경우에만) */}
+                    {/* 6. 전표 1:1 인쇄 버튼 (작업전표인 경우) */}
                     {isJobOrder && (
                       <button
                         onClick={() => setPrintingOrder(item)}
-                        className="flex items-center space-x-1 bg-slate-800 hover:bg-slate-900 text-white px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-xl text-[11px] sm:text-xs font-bold shadow-sm transition"
+                        className="flex items-center space-x-1 bg-slate-800 hover:bg-slate-900 text-white px-2.5 py-1.5 rounded-xl text-xs font-bold shadow-sm transition"
                       >
-                        <Printer className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                        <Printer className="w-3.5 h-3.5" />
                         <span>전표 인쇄</span>
                       </button>
                     )}
                   </div>
+
 
 
                 </div>
