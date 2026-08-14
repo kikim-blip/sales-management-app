@@ -18,6 +18,7 @@ export default function SalesPage() {
   const [submitting, setSubmitting] = useState(false);
 
   const [showJobOrderModal, setShowJobOrderModal] = useState(false);
+  const [jobOrderInitialData, setJobOrderInitialData] = useState(null);
   const [showSelectJobModal, setShowSelectJobModal] = useState(false);
 
   const [printingQuote, setPrintingQuote] = useState(null);
@@ -164,7 +165,33 @@ export default function SalesPage() {
     await addJobOrder(newOrder);
     alert('작업전표가 정상 등록되었습니다!');
     setShowJobOrderModal(false);
+    setJobOrderInitialData(null);
   };
+
+  // 💡 매출 건 정보를 바탕으로 작업전표 작성 모달 열기
+  const handleCreateJobOrderFromSale = (item) => {
+    const cust = customers.find(c => c.id === item.customer_id);
+    const cName = cust ? cust.name : (item.customer_name || item.customer_id || '');
+    const cDept = cust ? cust.dept : (item.dept || '');
+
+    setJobOrderInitialData({
+      customer_id: item.customer_id || (cust ? cust.id : ''),
+      customer_name: cName,
+      dept: cDept,
+      title: item.title || '',
+      estimated_price: item.supply_price || item.total_price || '',
+      delivery_date: item.delivery_date || today,
+      delivery_time: item.delivery_time || '14:00',
+      receipt_date: item.receipt_date || item.reg_date || today,
+      request_note: item.content || item.note || '',
+      client_contact_person: cust ? (cust.contact_person || '') : (item.contact_person || ''),
+      client_phone: cust ? (cust.phone || '') : (item.phone || ''),
+      client_email: cust ? (cust.email || '') : (item.email || ''),
+      manager_name: item.sales_manager || (cust ? cust.sales_manager : loggedInUserName),
+    });
+    setShowJobOrderModal(true);
+  };
+
 
   // 작업전표 불러오기 (자동채우기)
   const handleSelectJobOrder = (order) => {
@@ -653,7 +680,10 @@ export default function SalesPage() {
           </button>
 
           <button
-            onClick={() => setShowJobOrderModal(true)}
+            onClick={() => {
+              setJobOrderInitialData(null);
+              setShowJobOrderModal(true);
+            }}
             className="flex items-center justify-center space-x-1.5 bg-slate-800 hover:bg-slate-900 text-white px-3.5 py-2 rounded-xl text-xs font-semibold shadow-sm transition"
           >
             <ClipboardList className="w-4 h-4 text-sky-400" />
@@ -836,6 +866,15 @@ export default function SalesPage() {
                         >
                           <FileText className="w-3.5 h-3.5 text-sky-600" />
                           <span>인쇄</span>
+                        </button>
+
+                        <button
+                          onClick={() => handleCreateJobOrderFromSale(item)}
+                          className="flex items-center space-x-1 px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-lg text-xs font-bold transition mr-1 shadow-sm"
+                          title="이 매출 건의 정보로 신규 작업전표 작성"
+                        >
+                          <ClipboardList className="w-3.5 h-3.5 text-amber-600" />
+                          <span>작업전표 작성</span>
                         </button>
 
                         <button
@@ -1508,10 +1547,15 @@ export default function SalesPage() {
       {showJobOrderModal && (
         <JobOrderModal
           customers={customers}
+          initialData={jobOrderInitialData}
           onSave={handleSaveJobOrder}
-          onClose={() => setShowJobOrderModal(false)}
+          onClose={() => {
+            setShowJobOrderModal(false);
+            setJobOrderInitialData(null);
+          }}
         />
       )}
+
 
       {/* 3. 작업전표 불러오기 (선택) 모달 */}
       {showSelectJobModal && (
