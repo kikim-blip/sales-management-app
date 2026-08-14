@@ -1,6 +1,7 @@
 // src/components/common/EstimateModal.jsx
 import React, { useState } from 'react';
-import { X, Plus, Trash2, Calculator, Printer, Save, FileText, CheckCircle2, DollarSign } from 'lucide-react';
+import { X, Plus, Trash2, Calculator, Printer, Save, FileText, CheckCircle2 } from 'lucide-react';
+
 
 export default function EstimateModal({ sale, customer, onClose, onSave, onPrint }) {
   if (!sale) return null;
@@ -347,8 +348,10 @@ export default function EstimateModal({ sale, customer, onClose, onSave, onPrint
             </div>
 
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <span className="text-sm font-extrabold text-slate-200 flex items-center gap-1.5">
-                <DollarSign className="w-4 h-4 text-emerald-400" />
+              <span className="text-sm font-extrabold text-slate-200 flex items-center gap-2">
+                <span className="w-5 h-5 rounded-lg bg-emerald-500/20 text-emerald-400 font-black text-xs flex items-center justify-center border border-emerald-400/30">
+                  ₩
+                </span>
                 <span>최종 총 견적금액 (VAT 포함)</span>
               </span>
               <div className="text-right">
@@ -357,6 +360,7 @@ export default function EstimateModal({ sale, customer, onClose, onSave, onPrint
                 </span>
               </div>
             </div>
+
           </div>
 
           {/* 5. 견적 특이사항 / 비고 */}

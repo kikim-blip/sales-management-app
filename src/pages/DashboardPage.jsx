@@ -2,7 +2,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useData } from '../context/DataContext';
 import { useGoogleAuth } from '../context/GoogleAuthContext';
-import { AlertCircle, FileText, RefreshCw, ChevronRight, Clock, AlertTriangle, Calendar, Printer, CheckCircle2, Users, Share2, Zap, Pencil, Truck, XCircle, Plus, Search, Calculator, DollarSign } from 'lucide-react';
+import { AlertCircle, FileText, RefreshCw, ChevronRight, Clock, AlertTriangle, Calendar, Printer, CheckCircle2, Users, Share2, Zap, Pencil, Truck, XCircle, Plus, Search, Calculator } from 'lucide-react';
+
 import CustomerDetailModal from '../components/common/CustomerDetailModal';
 import JobOrderPrintModal from '../components/common/JobOrderPrintModal';
 import JobOrderModal from '../components/common/JobOrderModal';
