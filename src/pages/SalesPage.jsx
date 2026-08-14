@@ -361,7 +361,9 @@ export default function SalesPage() {
       await updateSales(item.id, {
         ...item,
         billing_schedule: '청구완료',
+        billing_date: today,
       });
+
 
       alert(`[${custName}] 수금 처리 (${amountStr}원) 및 [청구완료] 최종 전환이 완료되었습니다!`);
     } catch (err) {

@@ -65,20 +65,37 @@ export default function DashboardPage() {
   const displayUnpaid = Math.max(0, totalUnpaidAmount);
   const isOverpaid = totalUnpaidAmount < 0;
 
-  // 💡 당월 (현재 연월) 실적 통계 계산
+  // 💡 당월 (현재 연월) 실적 통계 계산 (수금/청구 완료 일자 기준 정리)
   const currentYearMonth = todayStr.substring(0, 7); // 예: '2026-08'
   const currentMonthNum = Number(todayStr.split('-')[1]);
   const currentMonthDisplay = `${currentMonthNum}월`;
 
-  const currentMonthSales = filteredSales.filter(s => (s.reg_date || s.receipt_date || '').startsWith(currentYearMonth));
-  const currentMonthSalesAmount = currentMonthSales.reduce((acc, curr) => acc + (Number(curr.total_price) || 0), 0);
-
+  // 1. 당월 입금/수금액: payments 테이블에서 수금일자(payment_date)가 당월인 금액 합계
   const currentMonthPayments = filteredPayments.filter(p => (p.payment_date || '').startsWith(currentYearMonth));
   const currentMonthPaymentAmount = currentMonthPayments.reduce((acc, curr) => acc + (Number(curr.amount) || 0), 0);
 
-  const currentMonthUnpaidAmount = currentMonthSalesAmount - currentMonthPaymentAmount;
-  const currentMonthDisplayUnpaid = Math.max(0, currentMonthUnpaidAmount);
-  const currentMonthOverpaid = currentMonthUnpaidAmount < 0;
+  // 2. 당월 매출 합산: 수금/청구 완료 건 (billing_schedule === '청구완료' || '수금완료') 중
+  //    수금/청구 완료 일자(billing_date, payment_date, reg_date 등)가 당월인 건의 총액
+  const currentMonthCompletedSales = filteredSales.filter(s => {
+    const isCompleted = s.billing_schedule === '청구완료' || s.billing_schedule === '수금완료';
+    if (!isCompleted) return false;
+
+    const billDate = s.billing_date || s.reg_date || s.receipt_date || '';
+    const hasMonthPayment = currentMonthPayments.some(p => p.customer_id === s.customer_id);
+    return billDate.startsWith(currentYearMonth) || hasMonthPayment;
+  });
+  const currentMonthSalesAmount = currentMonthCompletedSales.reduce((acc, curr) => acc + (Number(curr.total_price) || 0), 0);
+
+  // 3. 당월 미수금(미청구 잔액): 당월 진행 중인 건 중 아직 수금/청구 완료되지 않은 건들의 합계
+  const currentMonthUnbilledSales = filteredSales.filter(s => {
+    const isUnbilled = s.billing_schedule !== '청구완료' && s.billing_schedule !== '수금완료';
+    const isThisMonth = (s.delivery_date || s.reg_date || s.receipt_date || '').startsWith(currentYearMonth);
+    return isUnbilled && isThisMonth;
+  });
+  const currentMonthUnpaidAmount = currentMonthUnbilledSales.reduce((acc, curr) => acc + (Number(curr.total_price) || 0), 0);
+  const currentMonthDisplayUnpaid = currentMonthUnpaidAmount;
+  const currentMonthOverpaid = false;
+
 
 
   const customerSummary = filteredCustomers
