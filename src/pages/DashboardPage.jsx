@@ -367,14 +367,19 @@ export default function DashboardPage() {
 
     try {
       setSubmittingSale(true);
-      let targetCustomerId = newSaleFormData.customer_id;
+      // 1. 기존 고객 목록에서 동일한 고객사명 + 부서 + 담당자 성명이 모두 일치하는지 확인
+      const inputName = custName.toLowerCase();
+      const inputDept = (newSaleFormData.dept || '').trim().toLowerCase();
+      const inputContact = (newSaleFormData.contact_person || '').trim().toLowerCase();
 
-      const matchedCust = customers.find(c => 
-        (targetCustomerId && c.id === targetCustomerId) ||
-        ((c.name || '').trim().toLowerCase() === custName.toLowerCase() && 
-         (c.dept || '').trim().toLowerCase() === (newSaleFormData.dept || '').trim().toLowerCase())
-      );
+      const matchedCust = customers.find(c => {
+        const cName = (c.name || '').trim().toLowerCase();
+        const cDept = (c.dept || '').trim().toLowerCase();
+        const cContact = (c.contact_person || '').trim().toLowerCase();
+        return cName === inputName && cDept === inputDept && cContact === inputContact;
+      });
 
+      // 2. 담당자가 다르거나 미등록 고객인 경우 신규 고객으로 자동 등록
       if (!matchedCust) {
         const newCustData = {
           name: custName,
@@ -389,6 +394,7 @@ export default function DashboardPage() {
       } else {
         targetCustomerId = matchedCust.id;
       }
+
 
       const salePayload = {
         ...newSaleFormData,
@@ -850,8 +856,33 @@ export default function DashboardPage() {
                 <span className="text-xs font-bold text-slate-700 flex items-center space-x-1">
                   <span>🏢 고객(거래처) 정보</span>
                 </span>
-                <span className="text-[11px] text-sky-600 font-semibold">+ 저장 시 신규 고객 자동 등록</span>
+                {(() => {
+                  const inputName = (customerNameInput || newSaleFormData.customer_name || '').trim().toLowerCase();
+                  const inputDept = (newSaleFormData.dept || '').trim().toLowerCase();
+                  const inputContact = (newSaleFormData.contact_person || '').trim().toLowerCase();
+                  if (!inputName) return null;
+
+                  const isFullyMatched = customers.some(c => 
+                    (c.name || '').trim().toLowerCase() === inputName &&
+                    (c.dept || '').trim().toLowerCase() === inputDept &&
+                    (c.contact_person || '').trim().toLowerCase() === inputContact
+                  );
+
+                  if (isFullyMatched) {
+                    return (
+                      <span className="text-[11px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-semibold">
+                        ✓ 등록 고객 연결됨
+                      </span>
+                    );
+                  }
+                  return (
+                    <span className="text-[11px] bg-sky-100 text-sky-700 px-2 py-0.5 rounded-full font-semibold">
+                      + 저장 시 신규 고객 자동 등록
+                    </span>
+                  );
+                })()}
               </div>
+
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {/* 1. 고객사명 실시간 검색 드롭다운 */}

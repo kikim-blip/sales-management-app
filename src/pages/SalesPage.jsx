@@ -412,16 +412,19 @@ export default function SalesPage() {
     try {
       setSubmitting(true);
 
-      let targetCustomerId = formData.customer_id;
+      // 1. 기존 고객 목록에서 동일한 고객사명 + 부서 + 담당자 성명이 모두 일치하는지 확인
+      const inputName = custName.toLowerCase();
+      const inputDept = (formData.dept || '').trim().toLowerCase();
+      const inputContact = (formData.contact_person || '').trim().toLowerCase();
 
-      // 1. 기존 고객 목록에서 동일한 고객사명 + 부서가 존재하는지 확인
-      const matchedCust = customers.find(c => 
-        (targetCustomerId && c.id === targetCustomerId) ||
-        ((c.name || '').trim().toLowerCase() === custName.toLowerCase() && 
-         (c.dept || '').trim().toLowerCase() === (formData.dept || '').trim().toLowerCase())
-      );
+      const matchedCust = customers.find(c => {
+        const cName = (c.name || '').trim().toLowerCase();
+        const cDept = (c.dept || '').trim().toLowerCase();
+        const cContact = (c.contact_person || '').trim().toLowerCase();
+        return cName === inputName && cDept === inputDept && cContact === inputContact;
+      });
 
-      // 2. 미등록 고객이거나 신규 고객인 경우 고객 DB에 자동 등록
+      // 2. 담당자가 다르거나 미등록 고객인 경우 신규 고객으로 자동 등록
       if (!matchedCust) {
         const newCustData = {
           name: custName,
@@ -436,6 +439,7 @@ export default function SalesPage() {
       } else {
         targetCustomerId = matchedCust.id;
       }
+
 
       const salePayload = {
         ...formData,
@@ -1490,15 +1494,32 @@ export default function SalesPage() {
                     <Building className="w-3.5 h-3.5 text-sky-600" />
                     고객(거래처) 정보
                   </span>
-                  {formData.customer_id ? (
-                    <span className="text-[11px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-semibold">
-                      ✓ 등록 고객 연결됨
-                    </span>
-                  ) : customerNameInput.trim() ? (
-                    <span className="text-[11px] bg-sky-100 text-sky-700 px-2 py-0.5 rounded-full font-semibold">
-                      + 저장 시 신규 고객 자동 등록
-                    </span>
-                  ) : null}
+                  {(() => {
+                    const inputName = (customerNameInput || formData.customer_name || '').trim().toLowerCase();
+                    const inputDept = (formData.dept || '').trim().toLowerCase();
+                    const inputContact = (formData.contact_person || '').trim().toLowerCase();
+                    if (!inputName) return null;
+
+                    const isFullyMatched = customers.some(c => 
+                      (c.name || '').trim().toLowerCase() === inputName &&
+                      (c.dept || '').trim().toLowerCase() === inputDept &&
+                      (c.contact_person || '').trim().toLowerCase() === inputContact
+                    );
+
+                    if (isFullyMatched) {
+                      return (
+                        <span className="text-[11px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-semibold">
+                          ✓ 등록 고객 연결됨
+                        </span>
+                      );
+                    }
+                    return (
+                      <span className="text-[11px] bg-sky-100 text-sky-700 px-2 py-0.5 rounded-full font-semibold">
+                        + 저장 시 신규 고객 자동 등록
+                      </span>
+                    );
+                  })()}
+
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 relative">
