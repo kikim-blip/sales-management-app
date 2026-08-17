@@ -10,6 +10,7 @@ import QuotePrintModal from '../components/common/QuotePrintModal';
 import JobOrderPrintModal from '../components/common/JobOrderPrintModal';
 import EstimateModal from '../components/common/EstimateModal';
 import CustomerDetailModal from '../components/common/CustomerDetailModal';
+import { getLocalDateStr } from '../utils/dateUtils';
 
 
 
@@ -51,11 +52,11 @@ export default function SalesPage() {
   // ERP 보고서 상태: 조회 구분 ('company' | 'dept' | 'contact' | 'ledger')
   const [reportType, setReportType] = useState('company'); 
   const [analysisPeriodMode, setAnalysisPeriodMode] = useState('all'); // 'all' | 'month' | 'range'
-  const today = new Date().toISOString().split('T')[0];
+  const today = getLocalDateStr();
   const [startDate, setStartDate] = useState(() => {
     const d = new Date();
     d.setMonth(d.getMonth() - 1);
-    return d.toISOString().split('T')[0];
+    return getLocalDateStr(d);
   });
   const [endDate, setEndDate] = useState(today);
   const [selectedMonth, setSelectedMonth] = useState(today.slice(0, 7)); // e.g. "2026-08"
@@ -71,7 +72,7 @@ export default function SalesPage() {
   const [listStartDate, setListStartDate] = useState(() => {
     const d = new Date();
     d.setMonth(d.getMonth() - 1);
-    return d.toISOString().split('T')[0];
+    return getLocalDateStr(d);
   });
   const [listEndDate, setListEndDate] = useState(today);
 

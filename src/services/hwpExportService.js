@@ -1,4 +1,6 @@
 // src/services/hwpExportService.js
+import { getLocalDateStr } from '../utils/dateUtils';
+
 /**
  * 📄 43개 세부 데이터 100% 완벽 매칭 및 표 테두리/레이아웃 보정
  * 한컴오피스 HWP (2010~2024 호환) 1:1 실물 규격 작업전표 HWP 문서 생성 서비스
@@ -7,7 +9,7 @@
 export async function exportJobOrderToHWP(order, customer) {
   if (!order) return;
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = getLocalDateStr();
   const custName = customer ? customer.name : (order.customer_name || order.customer_id || '');
   const custDept = customer ? customer.dept : (order.dept || '');
   const custContact = customer ? customer.contact_person : (order.client_contact_person || '');

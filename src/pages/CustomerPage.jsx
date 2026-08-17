@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { useData } from '../context/DataContext';
 import { useGoogleAuth } from '../context/GoogleAuthContext';
 import { Plus, Search, Pencil, Trash2, Download } from 'lucide-react';
+import { getLocalDateStr } from '../utils/dateUtils';
 
 export default function CustomerPage() {
   const { customers, addCustomer, updateCustomer, deleteCustomer, selectedTeamGroup } = useData();
@@ -92,7 +93,7 @@ export default function CustomerPage() {
       c.email || '',
       c.sales_manager || '',
     ]);
-    const today = new Date().toISOString().split('T')[0];
+    const today = getLocalDateStr();
     const csv = '\uFEFF' + [headers, ...rows]
       .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}`).join(','))
       .join('\n');

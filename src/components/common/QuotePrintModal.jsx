@@ -3,6 +3,7 @@ import React, { useRef, useState } from 'react';
 import { X, Download, Printer, FileText, Stamp, Layers, BookOpen, Package } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { useGoogleAuth } from '../../context/GoogleAuthContext';
+import { getLocalDateStr } from '../../utils/dateUtils';
 
 // 숫자를 한글 금액 표기(일백삼십이만)로 변환하는 유틸리티
 function numberToKoreanWon(num) {
@@ -43,7 +44,7 @@ export default function QuotePrintModal({ quote, customer, onClose }) {
 
   if (!quote) return null;
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = getLocalDateStr();
   const todayKorean = `${today.split('-')[0]}년 ${Number(today.split('-')[1])}월 ${Number(today.split('-')[2])}일`;
 
   const custName = customer ? customer.name : (quote.customer_name || '거래처');

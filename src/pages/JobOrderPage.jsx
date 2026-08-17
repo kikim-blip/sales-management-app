@@ -6,6 +6,7 @@ import JobOrderModal from '../components/common/JobOrderModal';
 import JobOrderPrintModal from '../components/common/JobOrderPrintModal';
 import EstimateModal from '../components/common/EstimateModal';
 import QuotePrintModal from '../components/common/QuotePrintModal';
+import { getLocalDateStr } from '../utils/dateUtils';
 
 export default function JobOrderPage() {
   const { jobOrders, customers, addJobOrder, updateJobOrder, deleteJobOrder, selectedTeamGroup } = useData();
@@ -19,7 +20,7 @@ export default function JobOrderPage() {
   const [printingQuote, setPrintingQuote] = useState(null);
 
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = getLocalDateStr();
 
   // 💡 팀 그룹 필터링 적용
   const filteredOrders = jobOrders.filter(order => {

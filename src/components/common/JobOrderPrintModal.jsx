@@ -5,6 +5,7 @@ import * as XLSX from 'xlsx';
 import { exportJobOrderToHWP } from '../../services/hwpExportService';
 import { syncAndFetchTemplateSheet } from '../../services/googleSheetsApi';
 import { useGoogleAuth } from '../../context/GoogleAuthContext';
+import { getLocalDateStr } from '../../utils/dateUtils';
 
 export default function JobOrderPrintModal({ order, customer, onClose }) {
   const printRef = useRef();
@@ -48,7 +49,7 @@ export default function JobOrderPrintModal({ order, customer, onClose }) {
 
   if (!order) return null;
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = getLocalDateStr();
   const custName = customer ? customer.name : (order.customer_name || order.customer_id || '');
   const custDept = customer ? customer.dept : (order.dept || '');
   const custContact = customer ? customer.contact_person : (order.client_contact_person || '');

@@ -1,12 +1,12 @@
 // src/components/common/EstimateModal.jsx
 import React, { useState } from 'react';
 import { X, Plus, Trash2, Calculator, Printer, Save, FileText, CheckCircle2, Layers, BookOpen, Package } from 'lucide-react';
-
+import { getLocalDateStr } from '../../utils/dateUtils';
 
 export default function EstimateModal({ sale, customer, onClose, onSave, onPrint }) {
   if (!sale) return null;
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = getLocalDateStr();
 
   // 기존에 저장된 estimate_type이 있으면 불러오고 없으면 기본 'print' (인쇄제작형)
   const [estimateType, setEstimateType] = useState(sale.estimate_type || 'print'); // 'print' | 'general'

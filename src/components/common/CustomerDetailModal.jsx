@@ -2,6 +2,7 @@
 import React, { useRef } from 'react';
 import { X, Download, Printer, Building2, User, Phone, FileText } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import { getLocalDateStr } from '../../utils/dateUtils';
 
 export default function CustomerDetailModal({ customer, sales = [], payments = [], onClose }) {
   const printRef = useRef();
@@ -118,7 +119,7 @@ export default function CustomerDetailModal({ customer, sales = [], payments = [
 
   // 1. 요청하신 순서의 엑셀 추출: 일자 | 기관명 | 과 | 담당자 | 작업명 | 매출금액 | 수금금액 | 누적 미수잔액 | 비고
   const handleExportExcel = () => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getLocalDateStr();
 
     // 상단 타이틀 및 조건 표기
     const excelHeaderTitle = viewLevel === 'company'

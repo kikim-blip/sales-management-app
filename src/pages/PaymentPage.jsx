@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { useData } from '../context/DataContext';
 import { Plus, CreditCard, Calendar, Pencil, Trash2, FileSearch } from 'lucide-react';
 import SelectJobOrderModal from '../components/common/SelectJobOrderModal';
+import { getLocalDateStr } from '../utils/dateUtils';
 
 export default function PaymentPage() {
   const { payments, customers, jobOrders, addPayment, updatePayment, deletePayment, selectedTeamGroup } = useData();
@@ -12,7 +13,7 @@ export default function PaymentPage() {
 
   const [showSelectJobModal, setShowSelectJobModal] = useState(false);
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = getLocalDateStr();
 
   const filteredPayments = payments.filter(p => {
     if (!selectedTeamGroup || selectedTeamGroup === 'ALL') return true;

@@ -10,6 +10,7 @@ import JobOrderPrintModal from '../components/common/JobOrderPrintModal';
 import JobOrderModal from '../components/common/JobOrderModal';
 import EstimateModal from '../components/common/EstimateModal';
 import QuotePrintModal from '../components/common/QuotePrintModal';
+import { getLocalDateStr, calculateDDay } from '../utils/dateUtils';
 
 export default function DashboardPage() {
   const { customers, sales, payments, jobOrders, staffs = [], loading, error, selectedTeamGroup, updateJobOrder, updateSales, addSales, addCustomer } = useData();
@@ -45,7 +46,7 @@ export default function DashboardPage() {
   const [receivableSearch, setReceivableSearch] = useState('');
   const [onlyUnpaidFilter, setOnlyUnpaidFilter] = useState(false);
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = getLocalDateStr();
 
   // 💡 선택된 팀/부서에 소속된 사원 이름 목록
   const teamStaffNames = useMemo(() => {
@@ -299,27 +300,9 @@ export default function DashboardPage() {
 
 
 
-  // D-Day 계산 헬퍼
+  // D-Day 계산 헬퍼 (로컬 날짜 기준 안전 계산)
   const getDDayInfo = (deliveryDateStr) => {
-    if (!deliveryDateStr) return { diffDays: 999, label: '일정미정', color: 'bg-slate-100 text-slate-600 border-slate-200' };
-    const target = new Date(deliveryDateStr);
-    const now = new Date(todayStr);
-    const diffTime = target.getTime() - now.getTime();
-    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
-
-    if (diffDays < 0) {
-      return { diffDays, label: `⚠️ 납품 지연 (D+${Math.abs(diffDays)})`, color: 'bg-rose-600 text-white border-rose-700 animate-pulse' };
-    }
-    if (diffDays === 0) {
-      return { diffDays, label: '🚨 오늘 납품 (D-DAY)', color: 'bg-rose-500 text-white border-rose-600 font-black animate-bounce' };
-    }
-    if (diffDays === 1) {
-      return { diffDays, label: '⚡ 내일 납품 (D-1)', color: 'bg-amber-500 text-white border-amber-600 font-bold' };
-    }
-    if (diffDays <= 3) {
-      return { diffDays, label: `🔥 긴급 임박 (D-${diffDays})`, color: 'bg-sky-500 text-white border-sky-600 font-bold' };
-    }
-    return { diffDays, label: `📅 D-${diffDays}`, color: 'bg-slate-100 text-slate-700 border-slate-200' };
+    return calculateDDay(deliveryDateStr, todayStr);
   };
 
   // 🚨 납품 일정 급건 순 정렬 리스트 생성 (미완료 진행 건만 노출: 납품완료/청구완료 완료건 제외)

@@ -3,13 +3,14 @@ import React, { useState } from 'react';
 import { X, CheckCircle2, UserCheck, Hash, Save, AlertTriangle } from 'lucide-react';
 import { useGoogleAuth } from '../../context/GoogleAuthContext';
 import { useData } from '../../context/DataContext';
+import { getLocalDateStr } from '../../utils/dateUtils';
 
 export default function JobOrderModal({ customers = [], initialData = null, onSave, onClose }) {
   const { user } = useGoogleAuth();
   const { addCustomer } = useData();
 
   const isEditMode = !!initialData;
-  const today = new Date().toISOString().split('T')[0];
+  const today = getLocalDateStr();
   
   const d = new Date();
   const currentYear = d.getFullYear();
