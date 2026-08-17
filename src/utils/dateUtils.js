@@ -45,7 +45,7 @@ export function calculateDDay(deliveryDateStr, baseDateStr = null) {
     return { diffDays, label: '⚡ 내일 납품 (D-1)', color: 'bg-amber-500 text-white border-amber-600 font-bold' };
   }
   if (diffDays <= 3) {
-    return { diffDays, label: `🔥 긴급 임박 (D-${diffDays})`, color: 'bg-sky-500 text-white border-sky-600 font-bold' };
+    return { diffDays, label: `🔥 납품 임박 (D-${diffDays})`, color: 'bg-sky-500 text-white border-sky-600 font-bold' };
   }
   return { diffDays, label: `📅 D-${diffDays}`, color: 'bg-slate-100 text-slate-700 border-slate-200' };
 }

@@ -778,20 +778,22 @@ export default function DashboardPage() {
                       </p>
                     </div>
 
-                    {/* 1. 납품 완료 상태 및 빠른 완료 처리 버튼 */}
-                    {item.billing_schedule === '납품완료' || item.billing_schedule === '청구완료' || item.status === '납품완료' ? (
-                      <span className="flex items-center space-x-1 px-2.5 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-300 rounded-xl text-xs font-bold">
+                    {/* 1. 납품 상태 버튼 (진행중 ➔ 클릭 시 납품완료 변경) */}
+                    {item.billing_schedule === '납품완료' || item.billing_schedule === '청구완료' || item.status === '납품완료' || item.status === '완료' ? (
+                      <span className="flex items-center space-x-1 px-2.5 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-300 rounded-xl text-xs font-bold whitespace-nowrap">
                         <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                         <span>납품완료</span>
                       </span>
                     ) : (
                       <button
                         onClick={() => handleMarkDelivered(item)}
-                        className="flex items-center space-x-1 bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1.5 rounded-xl text-xs font-bold shadow-sm transition"
-                        title="이 건을 납품완료 상태로 즉시 변경"
+                        className="flex items-center space-x-1 bg-sky-600 hover:bg-emerald-600 text-white px-2.5 py-1.5 rounded-xl text-xs font-bold shadow-sm transition active:scale-95 whitespace-nowrap group"
+                        title="현재 진행중 상태입니다. 클릭 시 [납품완료]로 변경됩니다."
                       >
-                        <Truck className="w-3.5 h-3.5" />
-                        <span>납품 완료</span>
+                        <Truck className="w-3.5 h-3.5 group-hover:hidden" />
+                        <CheckCircle2 className="w-3.5 h-3.5 hidden group-hover:inline" />
+                        <span className="group-hover:hidden">진행중</span>
+                        <span className="hidden group-hover:inline">납품완료 처리</span>
                       </button>
                     )}
 
