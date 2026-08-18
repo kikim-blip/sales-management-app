@@ -429,6 +429,7 @@ async function getStaffs(db) {
   ).all();
   // 프론트엔드 호환 형태로 변환
   return json(results.map(s => ({
+    id: s.id,
     userCode: s.user_code,
     userName: s.user_name,
     companyCode: s.company_code,
@@ -443,6 +444,7 @@ async function getStaffs(db) {
 
 async function upsertStaff(db, request) {
   const body = await request.json();
+  const staffId = body.id ? Number(body.id) : null;
   const email = (body.email || '').toLowerCase().trim();
   const userName = String(body.userName || '').trim();
   const userCode = String(body.userCode || '').trim();
@@ -450,20 +452,20 @@ async function upsertStaff(db, request) {
   const dept = String(body.dept || '').trim();
   const position = String(body.position || '담당자').trim();
   const team = String(body.team || body.dept || '').trim();
-  const role = String(body.role || '일반사원').trim();
+  const role = String(body.role || (email === 'richkikim@gmail.com' ? '관리자' : '일반사원')).trim();
   const status = String(body.status || '승인완료').trim();
 
-  // 1. 구글 이메일(우선) 또는 성명으로 기존 사원 레코드 검색 (사원번호는 팀 공유 가능)
+  // 1. 고유 ID 또는 고유 이메일로만 기존 사원 검색 (성명으로 절대 덮어쓰지 않음!)
   let existing = null;
-  if (email) {
-    existing = await db.prepare('SELECT * FROM staffs WHERE email = ?').bind(email).first();
+  if (staffId) {
+    existing = await db.prepare('SELECT * FROM staffs WHERE id = ?').bind(staffId).first();
   }
-  if (!existing && userName) {
-    existing = await db.prepare('SELECT * FROM staffs WHERE user_name = ?').bind(userName).first();
+  if (!existing && email) {
+    existing = await db.prepare('SELECT * FROM staffs WHERE email = ?').bind(email).first();
   }
 
   if (existing) {
-    // 기존 사원 정보 업데이트
+    // 기존 사원 정보 업데이트 (해당 사원의 고유 레코드만 안전하게 수정)
     await db.prepare(
       `UPDATE staffs SET
          user_code = ?, user_name = ?, company_code = ?, email = ?,
@@ -482,23 +484,56 @@ async function upsertStaff(db, request) {
       status || existing.status,
       existing.id
     ).run();
+
+    const row = await db.prepare('SELECT * FROM staffs WHERE id = ?').bind(existing.id).first();
+    return json({
+      id: row.id,
+      userCode: row.user_code,
+      userName: row.user_name,
+      companyCode: row.company_code,
+      email: row.email,
+      dept: row.dept,
+      position: row.position,
+      team: row.team,
+      role: row.role,
+      status: row.status,
+    });
   } else {
-    // 신규 사원 등록 (사원번호 중복 허용)
-    await db.prepare(
-      `INSERT INTO staffs (user_code, user_name, company_code, email, dept, position, team, role, status, updated_at)
-       VALUES (?,?,?,?,?,?,?,?,?,datetime('now','localtime'))`
+    // 신규 사원 등록
+    const result = await db.prepare(
+      `INSERT INTO staffs (user_code, user_name, company_code, email, dept, position, team, role, status, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now','localtime'), datetime('now','localtime'))`
     ).bind(
       userCode, userName, companyCode, email, dept, position, team, role, status
     ).run();
-  }
 
-  return json({ success: true }, 201);
+    const newId = result.meta?.last_row_id;
+    const row = newId
+      ? await db.prepare('SELECT * FROM staffs WHERE id = ?').bind(newId).first()
+      : (email ? await db.prepare('SELECT * FROM staffs WHERE email = ?').bind(email).first() : null);
+
+    return json({
+      id: row?.id || newId,
+      userCode: row?.user_code || userCode,
+      userName: row?.user_name || userName,
+      companyCode: row?.company_code || companyCode,
+      email: row?.email || email,
+      dept: row?.dept || dept,
+      position: row?.position || position,
+      team: row?.team || team,
+      role: row?.role || role,
+      status: row?.status || status,
+    }, 201);
+  }
 }
 
 async function deleteStaff(db, identifier) {
-  await db.prepare(
-    'DELETE FROM staffs WHERE user_code = ? OR email = ? OR user_name = ?'
-  ).bind(identifier, identifier, identifier).run();
+  // 숫자 ID, 이메일, 또는 고유 성명으로 삭제
+  if (!isNaN(Number(identifier))) {
+    await db.prepare('DELETE FROM staffs WHERE id = ?').bind(Number(identifier)).run();
+  } else {
+    await db.prepare('DELETE FROM staffs WHERE email = ? OR (email IS NULL AND user_name = ?)').bind(identifier, identifier).run();
+  }
   return json({ success: true });
 }
 
@@ -701,6 +736,7 @@ async function batchFetch(db) {
     payments: payments.results,
     jobOrders: jobOrders.results,
     staffs: staffsRaw.results.map(s => ({
+      id: s.id,
       userCode: s.user_code,
       userName: s.user_name,
       companyCode: s.company_code,

@@ -67,6 +67,7 @@ export default function StaffManagementPage() {
   const openEditModal = (s) => {
     setEditingStaff(s);
     setFormData({
+      id: s.id || undefined,
       dept: s.dept || (allDepartments[0] || '세종영업본부'),
       team: s.team || (allTeams[0] || '영업1조'),
       userName: s.userName || s.name || '',
@@ -114,10 +115,10 @@ export default function StaffManagementPage() {
   };
 
   const handleDeleteClick = async (targetStaff) => {
-    const identifier = targetStaff.email || targetStaff.userName || targetStaff.userCode;
+    const identifier = targetStaff.id || targetStaff.email || targetStaff.userName;
     if (!identifier) return;
 
-    if (!window.confirm(`정말 사원 [${targetStaff.userName || targetStaff.userCode}] 님의 정보를 DB 시트에서 삭제하시겠습니까?`)) {
+    if (!window.confirm(`정말 사원 [${targetStaff.userName || targetStaff.userCode}] 님의 정보를 DB에서 삭제하시겠습니까?`)) {
       return;
     }
 
@@ -287,7 +288,7 @@ export default function StaffManagementPage() {
                 filteredStaffs.map((s, idx) => {
                   const isApproved = (s.status || '승인완료') === '승인완료';
                   return (
-                    <tr key={s.userCode || s.email || idx} className="hover:bg-slate-50 transition">
+                    <tr key={s.id || s.email || `${s.userName}_${idx}`} className="hover:bg-slate-50 transition">
                       <td className="p-3.5 font-bold text-sky-900">{s.dept || '부서 미지정'}</td>
                       <td className="p-3.5 text-slate-600">{s.team || s.dept || '팀 미지정'}</td>
                       <td className="p-3.5 font-extrabold text-slate-900">{s.userName || s.name || '-'}</td>

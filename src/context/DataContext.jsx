@@ -223,6 +223,7 @@ export function DataProvider({ children }) {
   // ════════════════════════════════════════════════════════════════
   const saveStaffToSheet = async (staffData) => {
     const finalData = {
+      id: staffData.id || undefined,
       userCode: staffData.userCode || staffData.code || '',
       userName: staffData.userName || staffData.name || '',
       companyCode: staffData.companyCode || '3',
@@ -230,27 +231,46 @@ export function DataProvider({ children }) {
       dept: staffData.dept || '',
       position: staffData.position || '담당자',
       team: staffData.team || staffData.dept || '',
-      role: staffData.role || '일반사원',
+      role: staffData.role || ((staffData.email || '').toLowerCase().trim() === 'richkikim@gmail.com' ? '관리자' : '일반사원'),
       status: staffData.status || '승인완료',
     };
 
-    await upsertStaffApi(finalData);
+    try {
+      const res = await upsertStaffApi(finalData);
+      const savedItem = res?.id ? res : { ...finalData, id: res?.id || staffData.id };
 
-    setStaffs(prev => {
-      const idx = prev.findIndex(s =>
-        (finalData.email && s.email && s.email.toLowerCase() === finalData.email.toLowerCase()) ||
-        (!finalData.email && finalData.userName && s.userName === finalData.userName)
-      );
-      let next;
-      if (idx !== -1) {
-        next = [...prev];
-        next[idx] = finalData;
-      } else {
-        next = [...prev, finalData];
+      setStaffs(prev => {
+        const idx = prev.findIndex(s =>
+          (savedItem.id && s.id && Number(s.id) === Number(savedItem.id)) ||
+          (savedItem.email && s.email && s.email.toLowerCase().trim() === savedItem.email.toLowerCase().trim())
+        );
+        let next;
+        if (idx !== -1) {
+          next = [...prev];
+          next[idx] = { ...prev[idx], ...savedItem };
+        } else {
+          next = [...prev, savedItem];
+        }
+        saveCache('staffs', next);
+        return next;
+      });
+
+      // 만약 수정한 사원이 현재 로그인한 본인이라면 세션 프로필도 업데이트
+      if (user?.email && savedItem.email && user.email.toLowerCase().trim() === savedItem.email.toLowerCase().trim()) {
+        updateUserProfile({
+          id: savedItem.id,
+          userCode: savedItem.userCode,
+          userName: savedItem.userName,
+          companyCode: savedItem.companyCode,
+          dept: savedItem.dept,
+          team: savedItem.team,
+          role: savedItem.role,
+        });
       }
-      saveCache('staffs', next);
-      return next;
-    });
+    } catch (err) {
+      console.error('사원 저장 에러:', err);
+      throw err;
+    }
   };
 
   const deleteStaff = async (targetUserCodeOrEmail) => {

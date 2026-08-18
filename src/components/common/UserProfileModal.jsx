@@ -19,20 +19,25 @@ export default function UserProfileModal({ onClose }) {
   ]));
 
   const [formData, setFormData] = useState({
+    id: user?.id || undefined,
     userCode: user?.userCode || '',
     userName: user?.userName || user?.name || '',
     companyCode: user?.companyCode || '3',
-    email: user?.email || '',
+    email: (user?.email || '').toLowerCase().trim(),
     dept: user?.dept || (allDepartments[0] || '세종영업본부'),
     team: user?.team || (allTeams[0] || '영업1조'),
   });
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    updateUserProfile(formData);
-    await saveStaffToSheet(formData).catch(console.error);
+    const finalForm = {
+      ...formData,
+      email: (formData.email || user?.email || '').toLowerCase().trim(),
+    };
+    updateUserProfile(finalForm);
+    await saveStaffToSheet(finalForm).catch(console.error);
 
-    alert(`사원 프로필 정보가 저장되었습니다!\n사원번호: ${formData.userCode} | 담당자: ${formData.userName} | 부서: ${formData.dept} | 팀: ${formData.team}`);
+    alert(`사원 프로필 정보가 저장되었습니다!\n사원번호: ${finalForm.userCode} | 담당자: ${finalForm.userName} | 부서: ${finalForm.dept} | 팀: ${finalForm.team}`);
     onClose();
   };
 
