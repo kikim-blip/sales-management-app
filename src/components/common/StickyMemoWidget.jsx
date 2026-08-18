@@ -159,82 +159,86 @@ function SingleStickyNote({ memo, onUpdate, onDelete, onBringToFront, zIndex }) 
         zIndex: memo.is_pinned ? 9999 : zIndex,
       }}
       className={`rounded-2xl border ${theme.border} ${theme.bg} shadow-xl ${theme.shadow} transition-shadow select-none flex flex-col ${
-        isMinimized ? 'w-56 h-10' : 'w-64 sm:w-72 h-72'
+        isMinimized ? 'w-64 sm:w-72 h-auto' : 'w-64 sm:w-72 h-72'
       }`}
       onMouseDown={() => onBringToFront(memo.id)}
     >
-      {/* 포스트잇 상단 헤더 / 드래그 핸들 */}
+      {/* 포스트잇 상단 헤더 / 드래그 핸들 (2줄 레이아웃으로 접혔을 때도 제목이 길고 시원하게 보임!) */}
       <div
         onMouseDown={handleMouseDown}
-        className={`px-3 py-2 border-b ${theme.header} flex items-center justify-between cursor-grab active:cursor-grabbing`}
+        className={`px-3 py-2 border-b ${theme.header} flex flex-col gap-1 cursor-grab active:cursor-grabbing select-none`}
       >
-        <div className="flex items-center space-x-1.5 min-w-0">
-          <StickyNote className="w-3.5 h-3.5 text-amber-700 flex-shrink-0" />
-          <span className={`text-xs font-black truncate ${theme.text}`}>
-            {content.trim() ? content.trim().split('\n')[0].slice(0, 12) : '새 메모'}
-          </span>
-        </div>
-
-        <div className="flex items-center space-x-1 no-drag">
-          {/* 저장 상태 표시 */}
-          <span className="text-[10px] text-slate-500 font-medium mr-1 flex items-center gap-0.5">
-            {saveStatus === 'saving' && <span className="text-blue-600 animate-pulse">저장중...</span>}
-            {saveStatus === 'saved' && <span className="text-emerald-700 font-bold">✓ 저장됨</span>}
-          </span>
-
-          {/* 색상 선택기 토글 */}
-          <div className="relative">
-            <button
-              onClick={() => setShowColorPicker(v => !v)}
-              className="p-1 rounded hover:bg-black/10 transition"
-              title="포스트잇 색상 변경"
-            >
-              <Palette className="w-3.5 h-3.5 text-slate-700" />
-            </button>
-            {showColorPicker && (
-              <div className="absolute right-0 top-6 bg-white/95 backdrop-blur-md rounded-xl p-1.5 shadow-xl border border-slate-200 flex gap-1 z-50">
-                {COLOR_KEYS.map(ck => (
-                  <button
-                    key={ck}
-                    onClick={() => {
-                      onUpdate(memo.id, { color: ck });
-                      setShowColorPicker(false);
-                    }}
-                    className={`w-5 h-5 rounded-full border border-black/20 ${MEMO_COLORS[ck].bg} hover:scale-110 transition flex items-center justify-center`}
-                  >
-                    {memo.color === ck && <Check className="w-3 h-3 text-slate-700" />}
-                  </button>
-                ))}
-              </div>
-            )}
+        {/* 1줄: 메모 아이콘 + 넉넉하게 확장된 첫줄 제목 + 닫기 버튼 */}
+        <div className="flex items-center justify-between gap-1.5 min-w-0">
+          <div className="flex items-center space-x-1.5 min-w-0 flex-1">
+            <StickyNote className="w-3.5 h-3.5 text-amber-800 flex-shrink-0" />
+            <span className={`text-xs font-black truncate ${theme.text}`} title={content.trim().split('\n')[0]}>
+              {content.trim() ? content.trim().split('\n')[0] : '새 메모'}
+            </span>
           </div>
 
-          {/* 상단 핀 고정 */}
-          <button
-            onClick={() => onUpdate(memo.id, { is_pinned: !memo.is_pinned })}
-            className={`p-1 rounded hover:bg-black/10 transition ${memo.is_pinned ? 'text-blue-600 font-bold' : 'text-slate-600'}`}
-            title={memo.is_pinned ? '상단 고정 해제' : '상단 고정'}
-          >
-            <Pin className={`w-3.5 h-3.5 ${memo.is_pinned ? 'fill-blue-600 text-blue-600' : ''}`} />
-          </button>
-
-          {/* 접기 / 펼치기 */}
-          <button
-            onClick={() => setIsMinimized(v => !v)}
-            className="p-1 rounded hover:bg-black/10 text-slate-700 transition"
-            title={isMinimized ? '펼치기' : '접기 (최소화)'}
-          >
-            {isMinimized ? <Maximize2 className="w-3.5 h-3.5" /> : <Minimize2 className="w-3.5 h-3.5" />}
-          </button>
-
-          {/* ❌ 닫기 버튼: 화면에서 닫기 (메모함에 영구 보관되며 언제든 다시 열기 가능!) */}
           <button
             onClick={() => onUpdate(memo.id, { is_closed: true })}
-            className="p-1 rounded hover:bg-black/15 text-slate-600 hover:text-slate-900 transition"
+            className="no-drag p-0.5 rounded hover:bg-black/15 text-slate-600 hover:text-slate-900 transition flex-shrink-0"
             title="화면에서 닫기 (메모함에 안전하게 저장되며 언제든 다시 열 수 있습니다)"
           >
             <X className="w-3.5 h-3.5" />
           </button>
+        </div>
+
+        {/* 2줄: 저장 상태 인디케이터 + 아이콘 도구 모음 */}
+        <div className="flex items-center justify-between text-[11px] pt-0.5 border-t border-black/5 no-drag">
+          <span className="text-[10px] text-slate-600 font-bold flex items-center gap-0.5">
+            {saveStatus === 'saving' && <span className="text-blue-600 animate-pulse">● 저장중...</span>}
+            {saveStatus === 'saved' && <span className="text-emerald-800 font-bold">✓ 저장됨</span>}
+          </span>
+
+          <div className="flex items-center space-x-1">
+            {/* 색상 선택기 토글 */}
+            <div className="relative">
+              <button
+                onClick={() => setShowColorPicker(v => !v)}
+                className="p-1 rounded hover:bg-black/10 transition text-slate-700"
+                title="포스트잇 색상 변경"
+              >
+                <Palette className="w-3.5 h-3.5" />
+              </button>
+              {showColorPicker && (
+                <div className="absolute right-0 top-6 bg-white/95 backdrop-blur-md rounded-xl p-1.5 shadow-xl border border-slate-200 flex gap-1 z-50">
+                  {COLOR_KEYS.map(ck => (
+                    <button
+                      key={ck}
+                      onClick={() => {
+                        onUpdate(memo.id, { color: ck });
+                        setShowColorPicker(false);
+                      }}
+                      className={`w-5 h-5 rounded-full border border-black/20 ${MEMO_COLORS[ck].bg} hover:scale-110 transition flex items-center justify-center`}
+                    >
+                      {memo.color === ck && <Check className="w-3 h-3 text-slate-700" />}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* 상단 핀 고정 */}
+            <button
+              onClick={() => onUpdate(memo.id, { is_pinned: !memo.is_pinned })}
+              className={`p-1 rounded hover:bg-black/10 transition ${memo.is_pinned ? 'text-blue-600 font-bold' : 'text-slate-600'}`}
+              title={memo.is_pinned ? '상단 고정 해제' : '상단 고정'}
+            >
+              <Pin className={`w-3.5 h-3.5 ${memo.is_pinned ? 'fill-blue-600 text-blue-600' : ''}`} />
+            </button>
+
+            {/* 접기 / 펼치기 */}
+            <button
+              onClick={() => setIsMinimized(v => !v)}
+              className="p-1 rounded hover:bg-black/10 text-slate-700 transition"
+              title={isMinimized ? '펼치기' : '접기 (최소화)'}
+            >
+              {isMinimized ? <Maximize2 className="w-3.5 h-3.5" /> : <Minimize2 className="w-3.5 h-3.5" />}
+            </button>
+          </div>
         </div>
       </div>
 
