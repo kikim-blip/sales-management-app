@@ -138,6 +138,18 @@ export default {
         if (method === 'DELETE') return await deleteStaff(env.DB, id);
       }
 
+      // ── POSTS (업무 자료 / 게시판) ────────────────────────────
+      if (path === '/api/posts') {
+        if (method === 'GET') return await getPosts(env.DB);
+        if (method === 'POST') return await createPost(env.DB, request);
+      }
+      const postMatch = path.match(/^\/api\/posts\/(.+)$/);
+      if (postMatch) {
+        const id = decodeURIComponent(postMatch[1]);
+        if (method === 'PUT') return await updatePost(env.DB, id, request);
+        if (method === 'DELETE') return await deletePost(env.DB, id);
+      }
+
       // ── DEPARTMENTS ────────────────────────────────────────────
       if (path === '/api/departments') {
         if (method === 'GET') return await getDepartments(env.DB);
@@ -530,8 +542,62 @@ async function deleteTeam(db, name) {
 // ════════════════════════════════════════════════════════════════
 // BATCH FETCH (프론트엔드 초기 로딩 - 1회 요청으로 전체 조회)
 // ════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════
+// POSTS (업무 자료 / 정보 게시판)
+// ════════════════════════════════════════════════════════════════
+async function getPosts(db) {
+  const { results } = await db.prepare(
+    'SELECT * FROM posts ORDER BY is_pinned DESC, created_at DESC'
+  ).all();
+  return json(results.map(p => ({
+    ...p,
+    is_pinned: p.is_pinned === 1,
+  })));
+}
+
+async function createPost(db, request) {
+  const b = await request.json();
+  const id = b.id || `POST-${Date.now()}`;
+  await db.prepare(
+    `INSERT INTO posts (id, title, content, author_name, author_email, category, is_pinned, file_url, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now','localtime'), datetime('now','localtime'))`
+  ).bind(
+    id, b.title || '', b.content || '', b.author_name || '', b.author_email || '',
+    b.category || '공지', b.is_pinned ? 1 : 0, b.file_url || ''
+  ).run();
+  const row = await db.prepare('SELECT * FROM posts WHERE id = ?').bind(id).first();
+  return json({ ...row, is_pinned: row?.is_pinned === 1 }, 201);
+}
+
+async function updatePost(db, id, request) {
+  const b = await request.json();
+  const existing = await db.prepare('SELECT * FROM posts WHERE id = ?').bind(id).first();
+  if (!existing) return error('Post not found', 404);
+
+  const merged = { ...existing, ...b };
+  await db.prepare(
+    `UPDATE posts SET
+       title = ?, content = ?, author_name = ?, author_email = ?,
+       category = ?, is_pinned = ?, file_url = ?, updated_at = datetime('now','localtime')
+     WHERE id = ?`
+  ).bind(
+    merged.title, merged.content, merged.author_name, merged.author_email,
+    merged.category, merged.is_pinned ? 1 : 0, merged.file_url || '', id
+  ).run();
+  const row = await db.prepare('SELECT * FROM posts WHERE id = ?').bind(id).first();
+  return json({ ...row, is_pinned: row?.is_pinned === 1 });
+}
+
+async function deletePost(db, id) {
+  await db.prepare('DELETE FROM posts WHERE id = ?').bind(id).run();
+  return json({ success: true });
+}
+
+// ════════════════════════════════════════════════════════════════
+// BATCH FETCH (프론트엔드 초기 로딩 - 1회 요청으로 전체 조회)
+// ════════════════════════════════════════════════════════════════
 async function batchFetch(db) {
-  const [customers, sales, payments, jobOrders, staffsRaw, departments, teams] = await Promise.all([
+  const [customers, sales, payments, jobOrders, staffsRaw, departments, teams, posts] = await Promise.all([
     db.prepare('SELECT * FROM customers ORDER BY name').all(),
     db.prepare('SELECT * FROM sales ORDER BY reg_date DESC').all(),
     db.prepare('SELECT * FROM payments ORDER BY payment_date DESC').all(),
@@ -539,6 +605,7 @@ async function batchFetch(db) {
     db.prepare("SELECT * FROM staffs WHERE user_name != '' OR user_code != '' OR email != '' ORDER BY user_name").all(),
     db.prepare('SELECT name FROM departments ORDER BY id').all(),
     db.prepare('SELECT name FROM teams ORDER BY id').all(),
+    db.prepare('SELECT * FROM posts ORDER BY is_pinned DESC, created_at DESC').all(),
   ]);
 
   return json({
@@ -563,5 +630,10 @@ async function batchFetch(db) {
     })),
     departments: departments.results.map(r => r.name),
     teams: teams.results.map(r => r.name),
+    posts: posts.results.map(p => ({
+      ...p,
+      is_pinned: p.is_pinned === 1,
+    })),
   });
 }
+

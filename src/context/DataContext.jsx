@@ -12,6 +12,7 @@ import {
   upsertStaffApi, deleteStaffApi,
   createDepartmentApi, updateDepartmentApi, deleteDepartmentApi,
   createTeamApi, updateTeamApi, deleteTeamApi,
+  createPostApi, updatePostApi, deletePostApi,
 } from '../services/d1Api';
 
 const DataContext = createContext();
@@ -36,6 +37,7 @@ export function DataProvider({ children }) {
   const [payments, setPayments] = useState(() => loadCache('payments', []));
   const [staffs, setStaffs] = useState(() => loadCache('staffs', []));
   const [jobOrders, setJobOrders] = useState(() => loadCache('jobOrders', []));
+  const [posts, setPosts] = useState(() => loadCache('posts', []));
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -101,6 +103,10 @@ export function DataProvider({ children }) {
       if (data.teams) {
         setTeams(data.teams);
         saveCache('teams', data.teams);
+      }
+      if (Array.isArray(data.posts)) {
+        setPosts(data.posts);
+        saveCache('posts', data.posts);
       }
     } catch (err) {
       console.warn('D1 API 데이터 로드 오류:', err.message);
@@ -445,6 +451,34 @@ export function DataProvider({ children }) {
     await deleteTeamApi(name).catch(console.error);
   };
 
+  // ════════════════════════════════════════════════════════════════
+  // POSTS (업무 게시판) CRUD
+  // ════════════════════════════════════════════════════════════════
+  const addPost = async (newPost) => {
+    const tempId = `POST-${Date.now()}`;
+    const item = { ...newPost, id: tempId, created_at: new Date().toLocaleString('ko-KR') };
+    setPosts(prev => { const next = [item, ...prev]; saveCache('posts', next); return next; });
+    try {
+      const created = await createPostApi({ ...newPost, id: tempId });
+      if (created?.id) {
+        setPosts(prev => { const next = prev.map(p => p.id === tempId ? created : p); saveCache('posts', next); return next; });
+      }
+    } catch (e) { console.error('Post add error:', e); }
+  };
+
+  const updatePost = async (id, updatedData) => {
+    setPosts(prev => { const next = prev.map(p => p.id === id ? { ...p, ...updatedData } : p); saveCache('posts', next); return next; });
+    try {
+      const res = await updatePostApi(id, updatedData);
+      if (res?.id) setPosts(prev => { const next = prev.map(p => p.id === id ? res : p); saveCache('posts', next); return next; });
+    } catch (e) { console.error('Post update error:', e); }
+  };
+
+  const deletePost = async (id) => {
+    setPosts(prev => { const next = prev.filter(p => p.id !== id); saveCache('posts', next); return next; });
+    try { await deletePostApi(id); } catch (e) { console.error('Post delete error:', e); }
+  };
+
   return (
     <DataContext.Provider
       value={{
@@ -453,6 +487,7 @@ export function DataProvider({ children }) {
         payments,
         staffs,
         jobOrders,
+        posts,
         departments,
         teams,
         addDepartment,
@@ -480,6 +515,9 @@ export function DataProvider({ children }) {
         addPayment,
         updatePayment,
         deletePayment,
+        addPost,
+        updatePost,
+        deletePost,
         isUsingSheetsDB: false, // D1으로 전환 완료
       }}
     >

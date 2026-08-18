@@ -1,7 +1,7 @@
 // src/components/layout/BottomNav.jsx
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Users, ClipboardList, FileSpreadsheet, CreditCard, Shield } from 'lucide-react';
+import { LayoutDashboard, Users, ClipboardList, FileSpreadsheet, CreditCard, Shield, Megaphone } from 'lucide-react';
 
 import { useGoogleAuth } from '../../context/GoogleAuthContext';
 
@@ -11,6 +11,7 @@ const navItems = [
   { name: '매출관리', path: '/sales', icon: FileSpreadsheet },
   { name: '수금관리', path: '/payments', icon: CreditCard },
   { name: '고객관리', path: '/customers', icon: Users },
+  { name: '게시판', path: '/board', icon: Megaphone },
   { name: '사용자', path: '/staffs', icon: Shield },
 ];
 

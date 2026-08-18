@@ -143,3 +143,20 @@ export async function updateTeamApi(oldName, newName) {
 export async function deleteTeamApi(name) {
   return apiFetch(`/api/teams/${encodeURIComponent(name)}`, { method: 'DELETE' });
 }
+
+// ─── POSTS (업무 게시판 / 자료실) ─────────────────────────────────────────────
+export async function fetchPosts() {
+  return apiFetch('/api/posts');
+}
+
+export async function createPostApi(data) {
+  return apiFetch('/api/posts', { method: 'POST', body: JSON.stringify(data) });
+}
+
+export async function updatePostApi(id, data) {
+  return apiFetch(`/api/posts/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(data) });
+}
+
+export async function deletePostApi(id) {
+  return apiFetch(`/api/posts/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
