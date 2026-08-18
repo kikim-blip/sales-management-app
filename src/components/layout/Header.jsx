@@ -1,16 +1,18 @@
 // src/components/layout/Header.jsx
 import React, { useState, useEffect } from 'react';
-import { LogIn, LogOut, RefreshCw, Database, UserCheck, Users, Calculator } from 'lucide-react';
+import { LogIn, LogOut, RefreshCw, Database, UserCheck, Users, Calculator, StickyNote } from 'lucide-react';
 import { useGoogleAuth } from '../../context/GoogleAuthContext';
 import { useData } from '../../context/DataContext';
 import UserProfileModal from '../common/UserProfileModal';
 import CalculatorWidget from '../common/Calculator';
+import StickyMemoWidget from '../common/StickyMemoWidget';
 
 export default function Header() {
   const { isLoggedIn, user, login, logout } = useGoogleAuth();
   const { loading, refreshData, isUsingSheetsDB, selectedTeamGroup, setSelectedTeamGroup, departments, teams, staffs } = useData();
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showCalc, setShowCalc] = useState(false);
+  const [showMemo, setShowMemo] = useState(false);
 
   const isAdmin = user?.role === '관리자' || user?.email?.toLowerCase() === 'richkikim@gmail.com';
   // 팀장: 본인 팀 전체 조회 가능, 팀원: 본인 팀만
@@ -111,6 +113,14 @@ export default function Header() {
 
           {isLoggedIn && (
             <>
+              {/* 포스트잇 메모 버튼 */}
+              <button
+                onClick={() => setShowMemo(v => !v)}
+                className={`p-1.5 sm:p-2 rounded-xl transition flex-shrink-0 ${showMemo ? 'bg-amber-100 text-amber-700 font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
+                title="포스트잇 메모"
+              >
+                <StickyNote className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              </button>
               {/* 계산기 버튼 */}
               <button
                 onClick={() => setShowCalc(v => !v)}
@@ -156,6 +166,9 @@ export default function Header() {
       )}
       {showCalc && (
         <CalculatorWidget onClose={() => setShowCalc(false)} />
+      )}
+      {showMemo && (
+        <StickyMemoWidget onClose={() => setShowMemo(false)} />
       )}
     </header>
   );

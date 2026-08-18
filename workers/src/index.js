@@ -150,6 +150,18 @@ export default {
         if (method === 'DELETE') return await deletePost(env.DB, id);
       }
 
+      // ── MEMOS (포스트잇 스티키 메모) ───────────────────────────
+      if (path === '/api/memos') {
+        if (method === 'GET') return await getMemos(env.DB);
+        if (method === 'POST') return await createMemo(env.DB, request);
+      }
+      const memoMatch = path.match(/^\/api\/memos\/(.+)$/);
+      if (memoMatch) {
+        const id = decodeURIComponent(memoMatch[1]);
+        if (method === 'PUT') return await updateMemo(env.DB, id, request);
+        if (method === 'DELETE') return await deleteMemo(env.DB, id);
+      }
+
       // ── DEPARTMENTS ────────────────────────────────────────────
       if (path === '/api/departments') {
         if (method === 'GET') return await getDepartments(env.DB);
@@ -594,10 +606,77 @@ async function deletePost(db, id) {
 }
 
 // ════════════════════════════════════════════════════════════════
+// MEMOS (포스트잇 스티키 메모)
+// ════════════════════════════════════════════════════════════════
+async function getMemos(db) {
+  const { results } = await db.prepare(
+    'SELECT * FROM memos ORDER BY is_pinned DESC, updated_at DESC'
+  ).all();
+  return json(results.map(m => ({
+    ...m,
+    is_pinned: m.is_pinned === 1,
+  })));
+}
+
+async function createMemo(db, request) {
+  const body = await request.json();
+  const id = body.id || generateId('MEMO');
+  const now = new Date().toLocaleString('ko-KR');
+
+  await db.prepare(
+    `INSERT INTO memos (id, user_email, content, color, pos_x, pos_y, is_pinned, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(
+    id,
+    body.user_email || '',
+    body.content || '',
+    body.color || 'yellow',
+    Number(body.pos_x) || 100,
+    Number(body.pos_y) || 150,
+    body.is_pinned ? 1 : 0,
+    now,
+    now
+  ).run();
+
+  const row = await db.prepare('SELECT * FROM memos WHERE id = ?').bind(id).first();
+  return json({ ...row, is_pinned: row.is_pinned === 1 }, 201);
+}
+
+async function updateMemo(db, id, request) {
+  const body = await request.json();
+  const existing = await db.prepare('SELECT * FROM memos WHERE id = ?').bind(id).first();
+  if (!existing) return error('Memo not found', 404);
+
+  const now = new Date().toLocaleString('ko-KR');
+  await db.prepare(
+    `UPDATE memos SET
+       content = ?, color = ?, pos_x = ?, pos_y = ?, is_pinned = ?,
+       updated_at = ?
+     WHERE id = ?`
+  ).bind(
+    body.content !== undefined ? body.content : existing.content,
+    body.color !== undefined ? body.color : existing.color,
+    body.pos_x !== undefined ? Number(body.pos_x) : existing.pos_x,
+    body.pos_y !== undefined ? Number(body.pos_y) : existing.pos_y,
+    body.is_pinned !== undefined ? (body.is_pinned ? 1 : 0) : existing.is_pinned,
+    now,
+    id
+  ).run();
+
+  const row = await db.prepare('SELECT * FROM memos WHERE id = ?').bind(id).first();
+  return json({ ...row, is_pinned: row.is_pinned === 1 });
+}
+
+async function deleteMemo(db, id) {
+  await db.prepare('DELETE FROM memos WHERE id = ?').bind(id).run();
+  return json({ success: true });
+}
+
+// ════════════════════════════════════════════════════════════════
 // BATCH FETCH (프론트엔드 초기 로딩 - 1회 요청으로 전체 조회)
 // ════════════════════════════════════════════════════════════════
 async function batchFetch(db) {
-  const [customers, sales, payments, jobOrders, staffsRaw, departments, teams, posts] = await Promise.all([
+  const [customers, sales, payments, jobOrders, staffsRaw, departments, teams, posts, memos] = await Promise.all([
     db.prepare('SELECT * FROM customers ORDER BY name').all(),
     db.prepare('SELECT * FROM sales ORDER BY reg_date DESC').all(),
     db.prepare('SELECT * FROM payments ORDER BY payment_date DESC').all(),
@@ -606,6 +685,7 @@ async function batchFetch(db) {
     db.prepare('SELECT name FROM departments ORDER BY id').all(),
     db.prepare('SELECT name FROM teams ORDER BY id').all(),
     db.prepare('SELECT * FROM posts ORDER BY is_pinned DESC, created_at DESC').all(),
+    db.prepare('SELECT * FROM memos ORDER BY is_pinned DESC, updated_at DESC').all(),
   ]);
 
   return json({
@@ -633,6 +713,10 @@ async function batchFetch(db) {
     posts: posts.results.map(p => ({
       ...p,
       is_pinned: p.is_pinned === 1,
+    })),
+    memos: memos.results.map(m => ({
+      ...m,
+      is_pinned: m.is_pinned === 1,
     })),
   });
 }

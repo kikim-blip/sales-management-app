@@ -130,6 +130,19 @@ CREATE TABLE IF NOT EXISTS teams (
   created_at TEXT DEFAULT (datetime('now', 'localtime'))
 );
 
+-- 8. 포스트잇 스티키 메모
+CREATE TABLE IF NOT EXISTS memos (
+  id TEXT PRIMARY KEY,
+  user_email TEXT DEFAULT '',
+  content TEXT DEFAULT '',
+  color TEXT DEFAULT 'yellow',
+  pos_x INTEGER DEFAULT 100,
+  pos_y INTEGER DEFAULT 150,
+  is_pinned INTEGER DEFAULT 0,
+  created_at TEXT DEFAULT (datetime('now', 'localtime')),
+  updated_at TEXT DEFAULT (datetime('now', 'localtime'))
+);
+
 -- 기본 부서 데이터 삽입
 INSERT OR IGNORE INTO departments (name) VALUES
   ('세종영업본부'),

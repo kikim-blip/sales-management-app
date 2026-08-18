@@ -13,6 +13,7 @@ import {
   createDepartmentApi, updateDepartmentApi, deleteDepartmentApi,
   createTeamApi, updateTeamApi, deleteTeamApi,
   createPostApi, updatePostApi, deletePostApi,
+  createMemoApi, updateMemoApi, deleteMemoApi,
 } from '../services/d1Api';
 
 const DataContext = createContext();
@@ -38,6 +39,7 @@ export function DataProvider({ children }) {
   const [staffs, setStaffs] = useState(() => loadCache('staffs', []));
   const [jobOrders, setJobOrders] = useState(() => loadCache('jobOrders', []));
   const [posts, setPosts] = useState(() => loadCache('posts', []));
+  const [memos, setMemos] = useState(() => loadCache('memos', []));
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -107,6 +109,10 @@ export function DataProvider({ children }) {
       if (Array.isArray(data.posts)) {
         setPosts(data.posts);
         saveCache('posts', data.posts);
+      }
+      if (Array.isArray(data.memos)) {
+        setMemos(data.memos);
+        saveCache('memos', data.memos);
       }
     } catch (err) {
       console.warn('D1 API 데이터 로드 오류:', err.message);
@@ -504,6 +510,48 @@ export function DataProvider({ children }) {
     try { await deletePostApi(id); } catch (e) { console.error('Post delete error:', e); }
   };
 
+  // ════════════════════════════════════════════════════════════════
+  // MEMOS (포스트잇 스티키 메모) CRUD
+  // ════════════════════════════════════════════════════════════════
+  const addMemo = async (newMemo) => {
+    const tempId = `MEMO-${Date.now()}`;
+    const item = {
+      id: tempId,
+      user_email: user?.email || '',
+      content: '',
+      color: 'yellow',
+      pos_x: 80 + (memos.length % 5) * 30,
+      pos_y: 120 + (memos.length % 5) * 30,
+      is_pinned: false,
+      created_at: new Date().toLocaleString('ko-KR'),
+      updated_at: new Date().toLocaleString('ko-KR'),
+      ...newMemo,
+    };
+    setMemos(prev => { const next = [item, ...prev]; saveCache('memos', next); return next; });
+    try {
+      const created = await createMemoApi(item);
+      if (created?.id) {
+        setMemos(prev => { const next = prev.map(m => m.id === tempId ? created : m); saveCache('memos', next); return next; });
+      }
+    } catch (e) { console.error('Memo add error:', e); }
+  };
+
+  const updateMemo = async (id, updatedData) => {
+    setMemos(prev => {
+      const next = prev.map(m => m.id === id ? { ...m, ...updatedData, updated_at: new Date().toLocaleString('ko-KR') } : m);
+      saveCache('memos', next);
+      return next;
+    });
+    try {
+      await updateMemoApi(id, updatedData);
+    } catch (e) { console.error('Memo update error:', e); }
+  };
+
+  const deleteMemo = async (id) => {
+    setMemos(prev => { const next = prev.filter(m => m.id !== id); saveCache('memos', next); return next; });
+    try { await deleteMemoApi(id); } catch (e) { console.error('Memo delete error:', e); }
+  };
+
   return (
     <DataContext.Provider
       value={{
@@ -513,6 +561,7 @@ export function DataProvider({ children }) {
         staffs,
         jobOrders,
         posts,
+        memos,
         departments,
         teams,
         addDepartment,
@@ -543,6 +592,9 @@ export function DataProvider({ children }) {
         addPost,
         updatePost,
         deletePost,
+        addMemo,
+        updateMemo,
+        deleteMemo,
         isUsingSheetsDB: false, // D1으로 전환 완료
       }}
     >

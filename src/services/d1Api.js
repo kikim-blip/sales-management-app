@@ -160,3 +160,20 @@ export async function updatePostApi(id, data) {
 export async function deletePostApi(id) {
   return apiFetch(`/api/posts/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }
+
+// ─── MEMOS (포스트잇 스티키 메모) ─────────────────────────────────────────────
+export async function fetchMemos() {
+  return apiFetch('/api/memos');
+}
+
+export async function createMemoApi(data) {
+  return apiFetch('/api/memos', { method: 'POST', body: JSON.stringify(data) });
+}
+
+export async function updateMemoApi(id, data) {
+  return apiFetch(`/api/memos/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(data) });
+}
+
+export async function deleteMemoApi(id) {
+  return apiFetch(`/api/memos/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
