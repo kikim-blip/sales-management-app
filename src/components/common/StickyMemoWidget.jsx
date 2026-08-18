@@ -333,53 +333,52 @@ export default function StickyMemoWidget({ onClose }) {
         />
       ))}
 
-      {/* 우측 하단 컨트롤 플로팅 바 (새 메모 생성, 목록 관리함, 화면 숨기기) */}
+      {/* 우측 하단 컨트롤 플로팅 바 (2줄 컴팩트 레이아웃) */}
       <div
-        style={{ position: 'fixed', right: '24px', bottom: '80px', zIndex: 9998 }}
-        className="flex items-center space-x-2 bg-slate-900/95 backdrop-blur-md text-white px-3 py-2 rounded-2xl shadow-2xl border border-slate-700 select-none"
+        style={{ position: 'fixed', right: '20px', bottom: '75px', zIndex: 9998 }}
+        className="flex flex-col gap-1.5 bg-slate-900/95 backdrop-blur-md text-white p-2 rounded-2xl shadow-2xl border border-slate-700 select-none min-w-[210px]"
       >
-        <button
-          onClick={() => setShowManagerModal(true)}
-          className="text-xs font-black flex items-center space-x-1.5 text-amber-300 hover:text-amber-200 transition py-1 px-1.5 rounded-xl hover:bg-slate-800"
-          title="저장된 전체 메모 목록 관리함 열기"
-        >
-          <FolderOpen className="w-4 h-4" />
-          <span>메모함 ({activeMemos.length}개 띄움 / {myAllMemos.length}개 보관)</span>
-        </button>
+        {/* 1줄: 메모함 열기 + 색상별 새 메모 추가 버튼 */}
+        <div className="flex items-center justify-between gap-2">
+          <button
+            onClick={() => setShowManagerModal(true)}
+            className="text-xs font-black flex items-center space-x-1.5 text-amber-300 hover:text-amber-200 transition py-1 px-2 rounded-xl hover:bg-slate-800"
+            title="저장된 전체 메모 목록 관리함 열기"
+          >
+            <FolderOpen className="w-3.5 h-3.5" />
+            <span>메모함 ({activeMemos.length}/{myAllMemos.length})</span>
+          </button>
 
-        <div className="h-4 w-px bg-slate-700 mx-0.5"></div>
-
-        {/* 색상별 빠른 추가 버튼 */}
-        <div className="flex items-center space-x-1">
-          <button
-            onClick={() => handleAddNewMemo('yellow')}
-            className="w-6 h-6 rounded-lg bg-amber-400 hover:bg-amber-300 text-amber-950 flex items-center justify-center font-bold transition active:scale-90"
-            title="노란 메모 추가"
-          >
-            <Plus className="w-3.5 h-3.5" />
-          </button>
-          <button
-            onClick={() => handleAddNewMemo('pink')}
-            className="w-6 h-6 rounded-lg bg-rose-400 hover:bg-rose-300 text-rose-950 flex items-center justify-center font-bold transition active:scale-90"
-            title="분홍 메모 추가"
-          >
-            <Plus className="w-3.5 h-3.5" />
-          </button>
-          <button
-            onClick={() => handleAddNewMemo('green')}
-            className="w-6 h-6 rounded-lg bg-emerald-400 hover:bg-emerald-300 text-emerald-950 flex items-center justify-center font-bold transition active:scale-90"
-            title="연두 메모 추가"
-          >
-            <Plus className="w-3.5 h-3.5" />
-          </button>
+          {/* 색상별 빠른 추가 버튼 */}
+          <div className="flex items-center space-x-1">
+            <button
+              onClick={() => handleAddNewMemo('yellow')}
+              className="w-5 h-5 rounded-md bg-amber-400 hover:bg-amber-300 text-amber-950 flex items-center justify-center font-bold transition active:scale-90"
+              title="노란 메모 추가"
+            >
+              <Plus className="w-3 h-3" />
+            </button>
+            <button
+              onClick={() => handleAddNewMemo('pink')}
+              className="w-5 h-5 rounded-md bg-rose-400 hover:bg-rose-300 text-rose-950 flex items-center justify-center font-bold transition active:scale-90"
+              title="분홍 메모 추가"
+            >
+              <Plus className="w-3 h-3" />
+            </button>
+            <button
+              onClick={() => handleAddNewMemo('green')}
+              className="w-5 h-5 rounded-md bg-emerald-400 hover:bg-emerald-300 text-emerald-950 flex items-center justify-center font-bold transition active:scale-90"
+              title="연두 메모 추가"
+            >
+              <Plus className="w-3 h-3" />
+            </button>
+          </div>
         </div>
 
-        <div className="h-4 w-px bg-slate-700 mx-0.5"></div>
-
-        {/* 전체 위젯 숨기기 */}
+        {/* 2줄: 전체 숨기기 버튼 */}
         <button
           onClick={onClose}
-          className="flex items-center space-x-1 px-2 py-1 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition text-xs font-semibold"
+          className="w-full flex items-center justify-center space-x-1 py-1 px-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition text-xs font-semibold"
           title="화면에서 메모 위젯 숨기기 (상단 [📝 메모] 버튼으로 언제든 다시 열기)"
         >
           <EyeOff className="w-3.5 h-3.5" />
