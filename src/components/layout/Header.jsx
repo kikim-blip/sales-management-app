@@ -9,9 +9,8 @@ import StickyMemoWidget from '../common/StickyMemoWidget';
 
 export default function Header() {
   const { isLoggedIn, user, login, logout } = useGoogleAuth();
-  const { loading, refreshData, isUsingSheetsDB, selectedTeamGroup, setSelectedTeamGroup, departments, teams, staffs } = useData();
+  const { loading, refreshData, isUsingSheetsDB, selectedTeamGroup, setSelectedTeamGroup, departments, teams, staffs, showCalc, toggleCalc } = useData();
   const [showProfileModal, setShowProfileModal] = useState(false);
-  const [showCalc, setShowCalc] = useState(false);
   const [showMemo, setShowMemo] = useState(() => {
     try { return localStorage.getItem('ui_show_memo') === 'true'; } catch { return false; }
   });
@@ -133,8 +132,8 @@ export default function Header() {
               </button>
               {/* 계산기 버튼 */}
               <button
-                onClick={() => setShowCalc(v => !v)}
-                className={`p-1.5 sm:p-2 rounded-xl transition flex-shrink-0 ${showCalc ? 'bg-blue-100 text-blue-600' : 'text-slate-600 hover:bg-slate-100'}`}
+                onClick={toggleCalc}
+                className={`p-1.5 sm:p-2 rounded-xl transition flex-shrink-0 ${showCalc ? 'bg-blue-100 text-blue-600 font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
                 title="계산기"
               >
                 <Calculator className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -173,9 +172,6 @@ export default function Header() {
 
       {showProfileModal && (
         <UserProfileModal onClose={() => setShowProfileModal(false)} />
-      )}
-      {showCalc && (
-        <CalculatorWidget onClose={() => setShowCalc(false)} />
       )}
       {showMemo && (
         <StickyMemoWidget onClose={() => {

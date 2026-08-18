@@ -40,6 +40,8 @@ export function DataProvider({ children }) {
   const [jobOrders, setJobOrders] = useState(() => loadCache('jobOrders', []));
   const [posts, setPosts] = useState(() => loadCache('posts', []));
   const [memos, setMemos] = useState(() => loadCache('memos', []));
+  const [showCalc, setShowCalc] = useState(false);
+  const toggleCalc = useCallback(() => setShowCalc(v => !v), []);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -615,6 +617,9 @@ export function DataProvider({ children }) {
         addMemo,
         updateMemo,
         deleteMemo,
+        showCalc,
+        setShowCalc,
+        toggleCalc,
         isUsingSheetsDB: false, // D1으로 전환 완료
       }}
     >

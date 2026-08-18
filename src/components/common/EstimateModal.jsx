@@ -2,8 +2,10 @@
 import React, { useState } from 'react';
 import { X, Plus, Trash2, Calculator, Printer, Save, FileText, CheckCircle2, Layers, BookOpen, Package } from 'lucide-react';
 import { getLocalDateStr } from '../../utils/dateUtils';
+import { useData } from '../../context/DataContext';
 
 export default function EstimateModal({ sale, customer, onClose, onSave, onPrint }) {
+  const { toggleCalc, showCalc } = useData();
   if (!sale) return null;
 
   const todayStr = getLocalDateStr();
@@ -191,12 +193,28 @@ export default function EstimateModal({ sale, customer, onClose, onSave, onPrint
             </div>
           </div>
 
-          <button
-            onClick={onClose}
-            className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-700/50 transition"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center space-x-2">
+            <button
+              type="button"
+              onClick={toggleCalc}
+              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition shadow-sm ${
+                showCalc
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-slate-700/80 hover:bg-slate-700 text-slate-200 hover:text-white'
+              }`}
+              title="팝업 계산기 열기/닫기"
+            >
+              <Calculator className="w-3.5 h-3.5" />
+              <span>계산기</span>
+            </button>
+
+            <button
+              onClick={onClose}
+              className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-700/50 transition"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* 모달 본문 영역 */}

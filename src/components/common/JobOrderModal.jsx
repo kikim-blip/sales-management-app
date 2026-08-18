@@ -1,13 +1,12 @@
-// src/components/common/JobOrderModal.jsx
 import React, { useState } from 'react';
-import { X, CheckCircle2, UserCheck, Hash, Save, AlertTriangle } from 'lucide-react';
+import { X, CheckCircle2, UserCheck, Hash, Save, AlertTriangle, Calculator } from 'lucide-react';
 import { useGoogleAuth } from '../../context/GoogleAuthContext';
 import { useData } from '../../context/DataContext';
 import { getLocalDateStr } from '../../utils/dateUtils';
 
 export default function JobOrderModal({ customers = [], initialData = null, onSave, onClose }) {
   const { user } = useGoogleAuth();
-  const { addCustomer } = useData();
+  const { addCustomer, showCalc, toggleCalc } = useData();
 
   const isEditMode = !!initialData;
   const today = getLocalDateStr();
@@ -225,6 +224,18 @@ export default function JobOrderModal({ customers = [], initialData = null, onSa
           </div>
 
           <div className="flex items-center space-x-2">
+            <button
+              type="button"
+              onClick={toggleCalc}
+              className={`flex items-center space-x-1.5 px-3 py-2 rounded-xl text-xs font-bold transition shadow-sm ${
+                showCalc ? 'bg-blue-600 text-white' : 'bg-slate-200 hover:bg-slate-300 text-slate-700'
+              }`}
+              title="팝업 계산기 열기/닫기"
+            >
+              <Calculator className="w-4 h-4" />
+              <span>계산기</span>
+            </button>
+
             <button
               type="submit"
               disabled={submitting}
