@@ -12,7 +12,17 @@ export default function Header() {
   const { loading, refreshData, isUsingSheetsDB, selectedTeamGroup, setSelectedTeamGroup, departments, teams, staffs } = useData();
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showCalc, setShowCalc] = useState(false);
-  const [showMemo, setShowMemo] = useState(false);
+  const [showMemo, setShowMemo] = useState(() => {
+    try { return localStorage.getItem('ui_show_memo') === 'true'; } catch { return false; }
+  });
+
+  const toggleShowMemo = () => {
+    setShowMemo(prev => {
+      const next = !prev;
+      try { localStorage.setItem('ui_show_memo', String(next)); } catch {}
+      return next;
+    });
+  };
 
   const isAdmin = user?.role === '관리자' || user?.email?.toLowerCase() === 'richkikim@gmail.com';
   // 팀장: 본인 팀 전체 조회 가능, 팀원: 본인 팀만
@@ -115,7 +125,7 @@ export default function Header() {
             <>
               {/* 포스트잇 메모 버튼 */}
               <button
-                onClick={() => setShowMemo(v => !v)}
+                onClick={toggleShowMemo}
                 className={`p-1.5 sm:p-2 rounded-xl transition flex-shrink-0 ${showMemo ? 'bg-amber-100 text-amber-700 font-bold' : 'text-slate-600 hover:bg-slate-100'}`}
                 title="포스트잇 메모"
               >
@@ -168,7 +178,10 @@ export default function Header() {
         <CalculatorWidget onClose={() => setShowCalc(false)} />
       )}
       {showMemo && (
-        <StickyMemoWidget onClose={() => setShowMemo(false)} />
+        <StickyMemoWidget onClose={() => {
+          setShowMemo(false);
+          try { localStorage.setItem('ui_show_memo', 'false'); } catch {}
+        }} />
       )}
     </header>
   );
