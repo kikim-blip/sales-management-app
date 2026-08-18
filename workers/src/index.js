@@ -419,21 +419,51 @@ async function getStaffs(db) {
 
 async function upsertStaff(db, request) {
   const body = await request.json();
-  // email 또는 userCode 기준으로 upsert
-  await db.prepare(
-    `INSERT INTO staffs (user_code, user_name, company_code, email, dept, position, team, role, status, updated_at)
-     VALUES (?,?,?,?,?,?,?,?,?,datetime('now','localtime'))
-     ON CONFLICT(email) DO UPDATE SET
-       user_code=excluded.user_code, user_name=excluded.user_name,
-       company_code=excluded.company_code, dept=excluded.dept,
-       position=excluded.position, team=excluded.team,
-       role=excluded.role, status=excluded.status,
-       updated_at=datetime('now','localtime')`
-  ).bind(
-    body.userCode||'', body.userName||'', body.companyCode||'3',
-    (body.email||'').toLowerCase().trim(), body.dept||'', body.position||'담당자',
-    body.team||body.dept||'', body.role||'일반사원', body.status||'승인완료'
-  ).run();
+  const email = (body.email || '').toLowerCase().trim();
+  const userCode = String(body.userCode || '').trim();
+  const userName = String(body.userName || '').trim();
+  const companyCode = String(body.companyCode || '3').trim();
+  const dept = String(body.dept || '').trim();
+  const position = String(body.position || '담당자').trim();
+  const team = String(body.team || body.dept || '').trim();
+  const role = String(body.role || '일반사원').trim();
+  const status = String(body.status || '승인완료').trim();
+
+  // 1. email 또는 user_code로 기존 사원 레코드 검색
+  let existing = null;
+  if (email) {
+    existing = await db.prepare('SELECT * FROM staffs WHERE email = ?').bind(email).first();
+  }
+  if (!existing && userCode) {
+    existing = await db.prepare('SELECT * FROM staffs WHERE user_code = ?').bind(userCode).first();
+  }
+
+  if (existing) {
+    // 기존 레코드 수정 (PK id 기준 안전 업데이트)
+    await db.prepare(
+      `UPDATE staffs SET
+         user_code = ?, user_name = ?, company_code = ?, email = ?,
+         dept = ?, position = ?, team = ?, role = ?, status = ?,
+         updated_at = datetime('now','localtime')
+       WHERE id = ?`
+    ).bind(
+      userCode || existing.user_code,
+      userName || existing.user_name,
+      companyCode || existing.company_code,
+      email || existing.email,
+      dept, position, team, role, status,
+      existing.id
+    ).run();
+  } else {
+    // 신규 생성
+    await db.prepare(
+      `INSERT INTO staffs (user_code, user_name, company_code, email, dept, position, team, role, status, updated_at)
+       VALUES (?,?,?,?,?,?,?,?,?,datetime('now','localtime'))`
+    ).bind(
+      userCode, userName, companyCode, email, dept, position, team, role, status
+    ).run();
+  }
+
   return json({ success: true }, 201);
 }
 
