@@ -19,8 +19,8 @@ export default function JobOrderModal({ customers = [], initialData = null, onSa
   const dd = String(d.getDate()).padStart(2, '0');
   const dateYYMMDD = `${yy}${mm}${dd}`;
 
-  const userCode = user?.userCode || '44';
-  const userName = user?.userName || '김광일';
+  const userCode = user?.userCode || (user?.email === 'richkikim@gmail.com' ? '44' : '00');
+  const userName = user?.userName || user?.name || (user?.email ? user.email.split('@')[0] : '담당자');
   const companyCode = user?.companyCode || '3';
 
   const getInitialSeq = () => {

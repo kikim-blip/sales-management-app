@@ -1,17 +1,37 @@
 // src/context/GoogleAuthContext.jsx
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 
 const GoogleAuthContext = createContext();
 
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-const SCOPES = 'https://www.googleapis.com/auth/spreadsheets';
+const SCOPES = 'openid email profile https://www.googleapis.com/auth/spreadsheets';
 
-const defaultProfile = {
-  userCode: '44',
-  userName: '김광일',
+// 기본 익명 사용자 프로필 (로그인 전)
+const emptyProfile = {
+  userCode: '',
+  userName: '',
   companyCode: '3',
-  email: 'richkikim@gmail.com',
+  email: '',
+  dept: '',
+  team: '',
+  role: '일반사원',
+  status: '승인완료',
 };
+
+// Google UserInfo API 호출 헬퍼
+async function fetchGoogleUserInfo(token) {
+  try {
+    const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch (err) {
+    console.warn('Google UserInfo fetch failed:', err);
+  }
+  return null;
+}
 
 export function GoogleAuthProvider({ children }) {
   const [tokenClient, setTokenClient] = useState(null);
@@ -19,16 +39,48 @@ export function GoogleAuthProvider({ children }) {
     try { return localStorage.getItem('google_access_token') || null; } catch { return null; }
   });
 
-  // ✅ D1 마이그레이션 후: 세션은 Google 토큰과 독립적으로 유지
-  // 로그인 시 'session_active' 플래그를 설정하고, 명시적 로그아웃 시에만 해제
   const [isSessionActive, setIsSessionActive] = useState(() => {
     try { return localStorage.getItem('session_active') === 'true'; } catch { return false; }
   });
 
   const savedProfile = (() => {
-    try { return JSON.parse(localStorage.getItem('staff_profile_settings')); } catch { return null; }
+    try {
+      const data = localStorage.getItem('staff_profile_settings');
+      return data ? JSON.parse(data) : null;
+    } catch { return null; }
   })();
-  const [user, setUser] = useState(savedProfile ? { ...defaultProfile, ...savedProfile } : defaultProfile);
+
+  const [user, setUser] = useState(savedProfile || emptyProfile);
+
+  // 로그인 성공 시 프로필 처리 함수
+  const handleLoginSuccess = useCallback(async (token) => {
+    setAccessToken(token);
+    localStorage.setItem('google_access_token', token);
+    setIsSessionActive(true);
+    localStorage.setItem('session_active', 'true');
+
+    // Google API를 통해 실제 로그인한 계정의 이메일 및 이름 획득
+    const googleUser = await fetchGoogleUserInfo(token);
+    if (googleUser && googleUser.email) {
+      const email = googleUser.email.toLowerCase().trim();
+      const name = googleUser.name || googleUser.email.split('@')[0];
+      const isAdmin = email === 'richkikim@gmail.com';
+
+      setUser(prev => {
+        const updated = {
+          ...prev,
+          email: email,
+          userName: prev.userName && prev.email === email ? prev.userName : name,
+          name: name,
+          picture: googleUser.picture,
+          role: isAdmin ? '관리자' : (prev.role || '일반사원'),
+          userCode: prev.userCode && prev.email === email ? prev.userCode : (isAdmin ? '44' : ''),
+        };
+        localStorage.setItem('staff_profile_settings', JSON.stringify(updated));
+        return updated;
+      });
+    }
+  }, []);
 
   // Google OAuth 토큰 클라이언트 초기화
   useEffect(() => {
@@ -42,19 +94,7 @@ export function GoogleAuthProvider({ children }) {
         scope: SCOPES,
         callback: (tokenResponse) => {
           if (tokenResponse?.access_token) {
-            const token = tokenResponse.access_token;
-            setAccessToken(token);
-            localStorage.setItem('google_access_token', token);
-
-            // 최초 Google 로그인 시 세션 활성화
-            setIsSessionActive(true);
-            localStorage.setItem('session_active', 'true');
-
-            setUser(prev => {
-              const updated = { ...prev, name: prev.userName || '구글 사용자' };
-              localStorage.setItem('staff_profile_settings', JSON.stringify(updated));
-              return updated;
-            });
+            handleLoginSuccess(tokenResponse.access_token);
           }
         },
       });
@@ -70,9 +110,9 @@ export function GoogleAuthProvider({ children }) {
       return () => { cancelled = true; window.clearInterval(timer); };
     }
     return () => { cancelled = true; };
-  }, []);
+  }, [handleLoginSuccess]);
 
-  // ✅ Google 토큰 만료 시 자동 갱신 시도 (세션은 유지, 강제 로그아웃 없음)
+  // Google 토큰 만료 검사 (세션은 유지)
   useEffect(() => {
     const storedToken = (() => {
       try { return localStorage.getItem('google_access_token'); } catch { return null; }
@@ -82,16 +122,13 @@ export function GoogleAuthProvider({ children }) {
     fetch(`https://www.googleapis.com/oauth2/v1/tokeninfo?access_token=${encodeURIComponent(storedToken)}`)
       .then(response => {
         if (!response.ok) {
-          // 토큰이 만료됐지만 세션은 유지 - 조용히 토큰만 제거
           setAccessToken(null);
           localStorage.removeItem('google_access_token');
-          // ✅ 세션은 유지 (로그아웃 안 함!)
         }
       })
       .catch(() => {
         setAccessToken(null);
         localStorage.removeItem('google_access_token');
-        // ✅ 세션은 유지 (로그아웃 안 함!)
       });
   }, [isSessionActive]);
 
@@ -114,11 +151,7 @@ export function GoogleAuthProvider({ children }) {
           scope: SCOPES,
           callback: (tokenResponse) => {
             if (tokenResponse?.access_token) {
-              const token = tokenResponse.access_token;
-              setAccessToken(token);
-              localStorage.setItem('google_access_token', token);
-              setIsSessionActive(true);
-              localStorage.setItem('session_active', 'true');
+              handleLoginSuccess(tokenResponse.access_token);
             }
           },
         })
@@ -128,18 +161,18 @@ export function GoogleAuthProvider({ children }) {
       alert('Google Identity Services SDK가 아직 로드되지 않았습니다. 잠시 후 다시 시도해 주세요.');
       return;
     }
-    client.requestAccessToken({ prompt: 'consent' });
+    client.requestAccessToken({ prompt: 'select_account' });
   };
 
   const logout = () => {
-    // 명시적 로그아웃 시에만 세션 완전 해제
     setAccessToken(null);
     setIsSessionActive(false);
+    setUser(emptyProfile);
     try {
       localStorage.removeItem('google_access_token');
       localStorage.removeItem('session_active');
+      localStorage.removeItem('staff_profile_settings');
     } catch {}
-    // 💡 사용자 프로필(staff_profile_settings)은 삭제하지 않고 유지
   };
 
   return (
@@ -149,7 +182,6 @@ export function GoogleAuthProvider({ children }) {
       updateUserProfile,
       login,
       logout,
-      // ✅ D1 마이그레이션 후: 세션 활성 여부로 판단 (Google 토큰 만료에 영향 안 받음)
       isLoggedIn: isSessionActive,
     }}>
       {children}

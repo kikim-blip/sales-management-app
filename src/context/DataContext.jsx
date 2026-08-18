@@ -120,6 +120,31 @@ export function DataProvider({ children }) {
     fetchAllData();
   }, [fetchAllData]);
 
+  // 💡 구글 로그인 사용자와 사원(staffs) 목록 동기화
+  useEffect(() => {
+    if (!user?.email || !staffs || staffs.length === 0) return;
+    const userEmail = user.email.toLowerCase().trim();
+    const matched = staffs.find(s => s.email && s.email.toLowerCase().trim() === userEmail);
+    if (matched) {
+      if (
+        user.userCode !== matched.userCode ||
+        user.userName !== matched.userName ||
+        user.dept !== matched.dept ||
+        user.team !== matched.team ||
+        user.role !== matched.role
+      ) {
+        updateUserProfile({
+          userCode: matched.userCode,
+          userName: matched.userName,
+          companyCode: matched.companyCode || '3',
+          dept: matched.dept,
+          team: matched.team,
+          role: matched.role || (userEmail === 'richkikim@gmail.com' ? '관리자' : '일반사원'),
+        });
+      }
+    }
+  }, [user?.email, staffs, updateUserProfile, user?.userCode, user?.userName, user?.dept, user?.team, user?.role]);
+
   // ════════════════════════════════════════════════════════════════
   // JOB ORDERS (작업전표) CRUD
   // ════════════════════════════════════════════════════════════════

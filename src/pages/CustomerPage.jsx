@@ -14,7 +14,7 @@ export default function CustomerPage() {
   const [editingId, setEditingId] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const loggedInUserName = user?.userName || '김광일';
+  const loggedInUserName = user?.userName || user?.name || (user?.email ? user.email.split('@')[0] : '');
 
   const defaultForm = {
     name: '',

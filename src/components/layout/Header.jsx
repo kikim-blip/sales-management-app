@@ -101,8 +101,12 @@ export default function Header() {
             title="계정 정보"
           >
             <UserCheck className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-sky-600" />
-            <span className="font-mono text-sky-900 font-bold hidden xs:inline">{user?.userCode || '44'}</span>
-            <span className="truncate max-w-[45px] sm:max-w-none">{user?.userName || '김광일'}</span>
+            {user?.userCode && (
+              <span className="font-mono text-sky-900 font-bold hidden xs:inline">{user.userCode}</span>
+            )}
+            <span className="truncate max-w-[60px] sm:max-w-none font-bold text-slate-800">
+              {user?.userName || user?.name || (user?.email ? user.email.split('@')[0] : '사용자')}
+            </span>
           </button>
 
           {isLoggedIn && (

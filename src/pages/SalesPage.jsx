@@ -17,7 +17,7 @@ import { getLocalDateStr } from '../utils/dateUtils';
 export default function SalesPage() {
   const { sales, customers, jobOrders, payments, staffs = [], addSales, updateSales, deleteSales, addJobOrder, addPayment, addCustomer, selectedTeamGroup } = useData();
   const { user } = useGoogleAuth();
-  const loggedInUserName = user?.userName || '김광일';
+  const loggedInUserName = user?.userName || user?.name || (user?.email ? user.email.split('@')[0] : '');
 
   const customerDropdownRef = useRef(null);
 

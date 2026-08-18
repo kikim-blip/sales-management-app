@@ -52,7 +52,7 @@ export default function QuotePrintModal({ quote, customer, onClose }) {
   const custContact = customer ? customer.contact_person : (quote.contact_person || '');
   const custPhone = customer ? customer.phone : (quote.phone || '');
 
-  const managerName = quote.sales_manager || quote.manager_name || user?.userName || '김광일';
+  const managerName = quote.sales_manager || quote.manager_name || user?.userName || user?.name || (user?.email ? user.email.split('@')[0] : '담당자');
   const estimateType = quote.estimate_type || 'print'; // 'print' | 'general'
 
   // 품목 목록 파싱

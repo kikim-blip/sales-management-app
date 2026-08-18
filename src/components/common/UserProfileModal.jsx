@@ -19,8 +19,8 @@ export default function UserProfileModal({ onClose }) {
   ]));
 
   const [formData, setFormData] = useState({
-    userCode: user?.userCode || '44',
-    userName: user?.userName || '김광일',
+    userCode: user?.userCode || '',
+    userName: user?.userName || user?.name || '',
     companyCode: user?.companyCode || '3',
     email: user?.email || '',
     dept: user?.dept || (allDepartments[0] || '세종영업본부'),
@@ -30,12 +30,9 @@ export default function UserProfileModal({ onClose }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     updateUserProfile(formData);
+    await saveStaffToSheet(formData).catch(console.error);
 
-    if (isUsingSheetsDB) {
-      await saveStaffToSheet(formData);
-    }
-
-    alert(`사원 프로필 정보가 구글 시트 DB(05_사원관리) 및 브라우저에 연동 저장되었습니다!\n사원번호: ${formData.userCode} | 담당자: ${formData.userName} | 부서: ${formData.dept} | 팀: ${formData.team}`);
+    alert(`사원 프로필 정보가 저장되었습니다!\n사원번호: ${formData.userCode} | 담당자: ${formData.userName} | 부서: ${formData.dept} | 팀: ${formData.team}`);
     onClose();
   };
 

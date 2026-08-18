@@ -253,7 +253,7 @@ export default function EstimateModal({ sale, customer, onClose, onSave, onPrint
             </div>
             <div>
               <span className="text-slate-400 block mb-0.5">영업담당자</span>
-              <strong className="text-rose-600 font-bold">{sale.sales_manager || sale.manager_name || '김광일'}</strong>
+              <strong className="text-rose-600 font-bold">{sale.sales_manager || sale.manager_name || '담당자'}</strong>
             </div>
           </div>
 
