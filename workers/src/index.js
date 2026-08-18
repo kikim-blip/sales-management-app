@@ -420,8 +420,8 @@ async function getStaffs(db) {
 async function upsertStaff(db, request) {
   const body = await request.json();
   const email = (body.email || '').toLowerCase().trim();
-  const userCode = String(body.userCode || '').trim();
   const userName = String(body.userName || '').trim();
+  const userCode = String(body.userCode || '').trim();
   const companyCode = String(body.companyCode || '3').trim();
   const dept = String(body.dept || '').trim();
   const position = String(body.position || '담당자').trim();
@@ -429,17 +429,17 @@ async function upsertStaff(db, request) {
   const role = String(body.role || '일반사원').trim();
   const status = String(body.status || '승인완료').trim();
 
-  // 1. email 또는 user_code로 기존 사원 레코드 검색
+  // 1. 구글 이메일(우선) 또는 성명으로 기존 사원 레코드 검색 (사원번호는 팀 공유 가능)
   let existing = null;
   if (email) {
     existing = await db.prepare('SELECT * FROM staffs WHERE email = ?').bind(email).first();
   }
-  if (!existing && userCode) {
-    existing = await db.prepare('SELECT * FROM staffs WHERE user_code = ?').bind(userCode).first();
+  if (!existing && userName) {
+    existing = await db.prepare('SELECT * FROM staffs WHERE user_name = ?').bind(userName).first();
   }
 
   if (existing) {
-    // 기존 레코드 수정 (PK id 기준 안전 업데이트)
+    // 기존 사원 정보 업데이트
     await db.prepare(
       `UPDATE staffs SET
          user_code = ?, user_name = ?, company_code = ?, email = ?,
@@ -451,11 +451,15 @@ async function upsertStaff(db, request) {
       userName || existing.user_name,
       companyCode || existing.company_code,
       email || existing.email,
-      dept, position, team, role, status,
+      dept || existing.dept,
+      position || existing.position,
+      team || existing.team,
+      role || existing.role,
+      status || existing.status,
       existing.id
     ).run();
   } else {
-    // 신규 생성
+    // 신규 사원 등록 (사원번호 중복 허용)
     await db.prepare(
       `INSERT INTO staffs (user_code, user_name, company_code, email, dept, position, team, role, status, updated_at)
        VALUES (?,?,?,?,?,?,?,?,?,datetime('now','localtime'))`

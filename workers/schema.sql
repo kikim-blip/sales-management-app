@@ -100,10 +100,10 @@ CREATE TABLE IF NOT EXISTS job_orders (
   updated_at TEXT DEFAULT (datetime('now', 'localtime'))
 );
 
--- 5. 사원 관리
+-- 5. 사원 관리 (이메일 및 성명 기준 식별, 사원번호 팀내 공유 가능)
 CREATE TABLE IF NOT EXISTS staffs (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  user_code TEXT UNIQUE,
+  user_code TEXT DEFAULT '',
   user_name TEXT DEFAULT '',
   company_code TEXT DEFAULT '3',
   email TEXT UNIQUE,
