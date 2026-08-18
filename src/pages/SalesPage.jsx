@@ -220,7 +220,8 @@ export default function SalesPage() {
     customer_id: '',
 
     customer_name: '',
-    dept: '',
+    dept: user?.dept || '세종영업본부',
+    team: user?.team || '영업2조',
     contact_person: '',
     phone: '',
     email: '',
@@ -520,6 +521,9 @@ export default function SalesPage() {
         ...formData,
         customer_id: targetCustomerId,
         customer_name: custName,
+        dept: formData.dept || user?.dept || '세종영업본부',
+        team: formData.team || user?.team || '영업2조',
+        sales_manager: formData.sales_manager || loggedInUserName,
       };
 
       if (editingId) {

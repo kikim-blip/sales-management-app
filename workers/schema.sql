@@ -33,6 +33,8 @@ CREATE TABLE IF NOT EXISTS sales (
   calendar_synced INTEGER DEFAULT 0,
   superthread_synced INTEGER DEFAULT 0,
   dept TEXT DEFAULT '',
+  team TEXT DEFAULT '',
+  sales_manager TEXT DEFAULT '',
   created_at TEXT DEFAULT (datetime('now', 'localtime')),
   updated_at TEXT DEFAULT (datetime('now', 'localtime'))
 );

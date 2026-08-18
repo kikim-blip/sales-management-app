@@ -509,7 +509,8 @@ export default function DashboardPage() {
     receipt_date: todayStr,
     customer_id: '',
     customer_name: '',
-    dept: selectedTeamGroup && selectedTeamGroup !== 'ALL' ? selectedTeamGroup : '',
+    dept: user?.dept || (selectedTeamGroup && selectedTeamGroup !== 'ALL' ? selectedTeamGroup : '세종영업본부'),
+    team: user?.team || '영업2조',
     contact_person: '',
     phone: '',
     email: '',
@@ -641,6 +642,9 @@ export default function DashboardPage() {
         ...newSaleFormData,
         customer_id: targetCustomerId,
         customer_name: custName,
+        dept: newSaleFormData.dept || user?.dept || '세종영업본부',
+        team: newSaleFormData.team || user?.team || '영업2조',
+        sales_manager: newSaleFormData.sales_manager || loggedInUserName,
       };
 
       await addSales(salePayload);
