@@ -207,8 +207,8 @@ export function DataProvider({ children }) {
 
     setStaffs(prev => {
       const idx = prev.findIndex(s =>
-        (s.userCode && s.userCode === finalData.userCode) ||
-        (s.email && s.email === finalData.email)
+        (finalData.email && s.email && s.email.toLowerCase() === finalData.email.toLowerCase()) ||
+        (!finalData.email && finalData.userName && s.userName === finalData.userName)
       );
       let next;
       if (idx !== -1) {

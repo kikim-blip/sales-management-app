@@ -114,7 +114,7 @@ export default function StaffManagementPage() {
   };
 
   const handleDeleteClick = async (targetStaff) => {
-    const identifier = targetStaff.userCode || targetStaff.email || targetStaff.userName;
+    const identifier = targetStaff.email || targetStaff.userName || targetStaff.userCode;
     if (!identifier) return;
 
     if (!window.confirm(`정말 사원 [${targetStaff.userName || targetStaff.userCode}] 님의 정보를 DB 시트에서 삭제하시겠습니까?`)) {

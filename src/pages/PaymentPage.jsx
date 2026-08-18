@@ -6,7 +6,7 @@ import SelectJobOrderModal from '../components/common/SelectJobOrderModal';
 import { getLocalDateStr } from '../utils/dateUtils';
 
 export default function PaymentPage() {
-  const { payments, customers, jobOrders, addPayment, updatePayment, deletePayment, selectedTeamGroup } = useData();
+  const { payments, customers, staffs = [], jobOrders, addPayment, updatePayment, deletePayment, selectedTeamGroup } = useData();
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [submitting, setSubmitting] = useState(false);
@@ -19,7 +19,12 @@ export default function PaymentPage() {
     if (!selectedTeamGroup || selectedTeamGroup === 'ALL') return true;
     if (p.dept && p.dept === selectedTeamGroup) return true;
     const cust = customers.find(c => c.id === p.customer_id);
-    if (cust && cust.dept === selectedTeamGroup) return true;
+    if (cust) {
+      if (cust.dept === selectedTeamGroup) return true;
+      if (cust.sales_manager === selectedTeamGroup) return true;
+      const mgrStaff = staffs.find(s => s.userName === cust.sales_manager);
+      if (mgrStaff && (mgrStaff.team === selectedTeamGroup || mgrStaff.dept === selectedTeamGroup)) return true;
+    }
     return false;
   });
   const defaultForm = {

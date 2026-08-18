@@ -121,6 +121,9 @@ export default function CalculatorWidget({ onClose }) {
   // 키보드 지원
   useEffect(() => {
     const handler = (e) => {
+      const tag = e.target?.tagName?.toUpperCase();
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || e.target?.isContentEditable) return;
+
       if (e.key >= '0' && e.key <= '9') handleDigit(e.key);
       else if (e.key === '.') handleDecimal();
       else if (e.key === '+') handleOperator('+');

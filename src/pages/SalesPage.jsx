@@ -196,7 +196,7 @@ export default function SalesPage() {
         s.content || s.note || '',
       ];
     });
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = getLocalDateStr();
     const csv = '\uFEFF' + [headers, ...rows]
       .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
       .join('\n');
@@ -748,7 +748,7 @@ export default function SalesPage() {
 
   // 💡 통합 엑셀 다운로드 (.xlsx)
   const handleExportAnalysisExcel = () => {
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = getLocalDateStr();
     const typeLabel = reportType === 'company' ? '회사별' : reportType === 'dept' ? '과·부서별' : reportType === 'contact' ? '담당자별' : '상세거래원장';
     const periodLabel = analysisPeriodMode === 'month' ? selectedMonth : analysisPeriodMode === 'range' ? `${startDate}~${endDate}` : '전체기간';
 
@@ -1086,7 +1086,7 @@ export default function SalesPage() {
                   setListStartDate(() => {
                     const d = new Date();
                     d.setMonth(d.getMonth() - 1);
-                    return d.toISOString().split('T')[0];
+                    return getLocalDateStr(d);
                   });
                   setListEndDate(today);
                 }}

@@ -263,7 +263,7 @@ export default function DashboardPage() {
 
   // 미수 현황 엑셀 다운로드 기능
   const handleExportReceivablesExcel = () => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getLocalDateStr();
     const modeLabel = receivableGroupBy === 'org' ? '기관별' : receivableGroupBy === 'dept' ? '부서·과별' : '담당자별';
 
     const excelData = [

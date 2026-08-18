@@ -9,7 +9,7 @@ import QuotePrintModal from '../components/common/QuotePrintModal';
 import { getLocalDateStr } from '../utils/dateUtils';
 
 export default function JobOrderPage() {
-  const { jobOrders, customers, addJobOrder, updateJobOrder, deleteJobOrder, selectedTeamGroup } = useData();
+  const { jobOrders, customers, staffs = [], addJobOrder, updateJobOrder, deleteJobOrder, selectedTeamGroup } = useData();
   const [searchTerm, setSearchTerm] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editingOrder, setEditingOrder] = useState(null);
@@ -25,9 +25,16 @@ export default function JobOrderPage() {
   // 💡 팀 그룹 필터링 적용
   const filteredOrders = jobOrders.filter(order => {
     if (selectedTeamGroup && selectedTeamGroup !== 'ALL') {
-      if (order.dept && order.dept !== selectedTeamGroup) {
-        const cust = customers.find(c => c.id === order.customer_id);
-        if (!cust || cust.dept !== selectedTeamGroup) return false;
+      const isDeptMatch = order.dept === selectedTeamGroup;
+      const isMgrDirectMatch = order.manager_name === selectedTeamGroup;
+      const mgrStaff = staffs.find(s => s.userName === order.manager_name);
+      const isMgrTeamMatch = mgrStaff && (mgrStaff.team === selectedTeamGroup || mgrStaff.dept === selectedTeamGroup);
+      const cust = customers.find(c => c.id === order.customer_id);
+      const isCustDeptMatch = cust && cust.dept === selectedTeamGroup;
+      const isCustMgrMatch = cust && (cust.sales_manager === selectedTeamGroup || staffs.some(s => s.userName === cust.sales_manager && (s.team === selectedTeamGroup || s.dept === selectedTeamGroup)));
+
+      if (!isDeptMatch && !isMgrDirectMatch && !isMgrTeamMatch && !isCustDeptMatch && !isCustMgrMatch) {
+        return false;
       }
     }
 

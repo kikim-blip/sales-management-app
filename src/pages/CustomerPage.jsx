@@ -6,7 +6,7 @@ import { Plus, Search, Pencil, Trash2, Download } from 'lucide-react';
 import { getLocalDateStr } from '../utils/dateUtils';
 
 export default function CustomerPage() {
-  const { customers, addCustomer, updateCustomer, deleteCustomer, selectedTeamGroup } = useData();
+  const { customers, staffs = [], addCustomer, updateCustomer, deleteCustomer, selectedTeamGroup } = useData();
   const { user } = useGoogleAuth();
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -115,10 +115,14 @@ export default function CustomerPage() {
       (c.contact_person || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (c.sales_manager || '').toLowerCase().includes(searchTerm.toLowerCase());
 
-    const matchesTeam =
-      !selectedTeamGroup ||
-      selectedTeamGroup === 'ALL' ||
-      c.dept === selectedTeamGroup;
+    const matchesTeam = (() => {
+      if (!selectedTeamGroup || selectedTeamGroup === 'ALL') return true;
+      if (c.dept === selectedTeamGroup) return true;
+      if (c.sales_manager === selectedTeamGroup) return true;
+      const mgrStaff = staffs.find(s => s.userName === c.sales_manager);
+      if (mgrStaff && (mgrStaff.team === selectedTeamGroup || mgrStaff.dept === selectedTeamGroup)) return true;
+      return false;
+    })();
 
     return matchesSearch && matchesTeam;
   });
