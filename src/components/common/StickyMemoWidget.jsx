@@ -1,10 +1,11 @@
 // src/components/common/StickyMemoWidget.jsx
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useData } from '../../context/DataContext';
 import { useGoogleAuth } from '../../context/GoogleAuthContext';
 import {
   Plus, Trash2, Pin, Palette, Minimize2, Maximize2, X, Move, StickyNote,
-  Check, Save, Eye, EyeOff, Sparkles, FolderOpen, AlertCircle
+  Check, Save, Eye, EyeOff, Sparkles, FolderOpen, AlertCircle, RotateCcw,
+  Layers, ExternalLink
 } from 'lucide-react';
 
 const MEMO_COLORS = {
@@ -226,17 +227,13 @@ function SingleStickyNote({ memo, onUpdate, onDelete, onBringToFront, zIndex }) 
             {isMinimized ? <Maximize2 className="w-3.5 h-3.5" /> : <Minimize2 className="w-3.5 h-3.5" />}
           </button>
 
-          {/* 🗑️ 영구 삭제 버튼 (사용자가 명시적으로 원할 때만 삭제) */}
+          {/* ❌ 닫기 버튼: 화면에서 닫기 (메모함에 영구 보관되며 언제든 다시 열기 가능!) */}
           <button
-            onClick={() => {
-              if (window.confirm('정말 이 메모를 완전히 삭제하시겠습니까?\n(작성된 내용은 DB에서도 영구 삭제됩니다)')) {
-                onDelete(memo.id);
-              }
-            }}
-            className="p-1 rounded hover:bg-rose-500 hover:text-white text-slate-600 transition"
-            title="메모 영구 삭제"
+            onClick={() => onUpdate(memo.id, { is_closed: true })}
+            className="p-1 rounded hover:bg-black/15 text-slate-600 hover:text-slate-900 transition"
+            title="화면에서 닫기 (메모함에 안전하게 저장되며 언제든 다시 열 수 있습니다)"
           >
-            <Trash2 className="w-3.5 h-3.5" />
+            <X className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
@@ -248,7 +245,7 @@ function SingleStickyNote({ memo, onUpdate, onDelete, onBringToFront, zIndex }) 
             value={content}
             onChange={handleContentChange}
             onBlur={handleBlur}
-            placeholder="여기에 메모를 입력하세요...&#10;• 입력하는 즉시 클라우드에 자동 저장됩니다.&#10;• 화면을 닫아도 지워지지 않고 보존됩니다."
+            placeholder="여기에 메모를 입력하세요...&#10;• 작성 즉시 클라우드에 자동 저장됩니다.&#10;• 우측 [X]를 눌러 닫아도 메모함에 안전하게 보관됩니다."
             className={`w-full flex-1 resize-none rounded-xl p-2.5 text-sm leading-relaxed outline-none transition border-none font-medium ${theme.text} ${theme.textarea}`}
           />
           <div className="flex items-center justify-between pt-1.5 px-1 text-[10px] text-slate-500 font-mono">
@@ -267,16 +264,21 @@ export default function StickyMemoWidget({ onClose }) {
 
   const userEmail = user?.email?.toLowerCase().trim() || '';
 
-  // 본인의 메모만 필터링 (D1 영구 보존 데이터)
-  const myMemos = memos.filter(m => {
+  // 본인의 전체 메모 목록 (D1 영구 보존)
+  const myAllMemos = memos.filter(m => {
     if (!m.user_email) return true;
     if (!userEmail) return true;
     return m.user_email.toLowerCase().trim() === userEmail;
   });
 
+  // 현재 화면에 열려있는 메모 (is_closed !== true)
+  const activeMemos = myAllMemos.filter(m => !m.is_closed);
+  const closedMemos = myAllMemos.filter(m => !!m.is_closed);
+
   const [topZIndex, setTopZIndex] = useState(9000);
   const [memoZIndexes, setMemoZIndexes] = useState({});
   const [showManagerModal, setShowManagerModal] = useState(false);
+  const [managerTab, setManagerTab] = useState('all'); // 'all' | 'active' | 'closed'
 
   const bringToFront = (id) => {
     setTopZIndex(z => {
@@ -287,7 +289,7 @@ export default function StickyMemoWidget({ onClose }) {
   };
 
   const handleAddNewMemo = (color = 'yellow') => {
-    const randomOffset = (myMemos.length * 30) % 180;
+    const randomOffset = (activeMemos.length * 30) % 180;
     addMemo({
       user_email: userEmail,
       content: '',
@@ -295,37 +297,32 @@ export default function StickyMemoWidget({ onClose }) {
       pos_x: Math.min(window.innerWidth - 300, 120 + randomOffset),
       pos_y: Math.min(window.innerHeight - 350, 140 + randomOffset),
       is_pinned: false,
+      is_closed: false,
     });
   };
 
+  const handleReopenMemo = (memoId) => {
+    updateMemo(memoId, { is_closed: false });
+  };
+
+  const handleReopenAll = () => {
+    closedMemos.forEach(m => updateMemo(m.id, { is_closed: false }));
+  };
+
+  const handleCloseAll = () => {
+    activeMemos.forEach(m => updateMemo(m.id, { is_closed: true }));
+  };
+
+  const filteredManagerMemos = myAllMemos.filter(m => {
+    if (managerTab === 'active') return !m.is_closed;
+    if (managerTab === 'closed') return !!m.is_closed;
+    return true;
+  });
+
   return (
     <>
-      {/* 화면에 포스트잇이 하나도 없을 때 생성 안내 패널 */}
-      {myMemos.length === 0 && (
-        <div
-          style={{ position: 'fixed', right: '24px', bottom: '140px', zIndex: 9000 }}
-          className="bg-white/95 backdrop-blur-md rounded-3xl p-5 shadow-2xl border border-amber-200 w-80 text-center select-none"
-        >
-          <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center mx-auto mb-3 font-bold shadow-sm">
-            <StickyNote className="w-6 h-6" />
-          </div>
-          <h4 className="text-base font-black text-slate-800">포스트잇 메모</h4>
-          <p className="text-xs text-slate-500 mt-1.5 mb-4 leading-relaxed">
-            작성한 모든 메모는 <strong>클라우드 DB에 영구 자동 저장</strong>됩니다.<br />
-            창을 닫거나 새로고침해도 그대로 유지됩니다.
-          </p>
-          <button
-            onClick={() => handleAddNewMemo('yellow')}
-            className="w-full flex items-center justify-center space-x-1.5 py-3 bg-amber-500 hover:bg-amber-600 text-white rounded-2xl text-xs font-bold shadow-sm transition active:scale-95"
-          >
-            <Plus className="w-4 h-4" />
-            <span>새 포스트잇 만들기</span>
-          </button>
-        </div>
-      )}
-
-      {/* 포스트잇 목록 렌더링 */}
-      {myMemos.map((memo) => (
+      {/* 화면에 열려있는 포스트잇 렌더링 */}
+      {activeMemos.map((memo) => (
         <SingleStickyNote
           key={memo.id}
           memo={memo}
@@ -347,7 +344,7 @@ export default function StickyMemoWidget({ onClose }) {
           title="저장된 전체 메모 목록 관리함 열기"
         >
           <FolderOpen className="w-4 h-4" />
-          <span>메모함 ({myMemos.length}개)</span>
+          <span>메모함 ({activeMemos.length}개 띄움 / {myAllMemos.length}개 보관)</span>
         </button>
 
         <div className="h-4 w-px bg-slate-700 mx-0.5"></div>
@@ -379,27 +376,28 @@ export default function StickyMemoWidget({ onClose }) {
 
         <div className="h-4 w-px bg-slate-700 mx-0.5"></div>
 
-        {/* 화면에서 메모 숨기기 (영구 삭제 아님!) */}
+        {/* 전체 위젯 숨기기 */}
         <button
           onClick={onClose}
           className="flex items-center space-x-1 px-2 py-1 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition text-xs font-semibold"
-          title="화면에서 메모 숨기기 (상단 [📝 메모] 버튼으로 언제든 다시 열기)"
+          title="화면에서 메모 위젯 숨기기 (상단 [📝 메모] 버튼으로 언제든 다시 열기)"
         >
           <EyeOff className="w-3.5 h-3.5" />
-          <span>화면 숨기기</span>
+          <span>전체 숨기기</span>
         </button>
       </div>
 
       {/* 📁 저장된 메모 관리함 모달 */}
       {showManagerModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[10000] flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[80vh]">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-xl overflow-hidden flex flex-col max-h-[85vh]">
+            {/* 상단 헤더 */}
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
               <div className="flex items-center space-x-2">
                 <FolderOpen className="w-5 h-5 text-amber-600" />
-                <h3 className="font-bold text-slate-800 text-base">보관된 포스트잇 메모함</h3>
+                <h3 className="font-bold text-slate-800 text-base">포스트잇 메모함</h3>
                 <span className="text-xs bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-full">
-                  총 {myMemos.length}개
+                  총 {myAllMemos.length}개 보관중
                 </span>
               </div>
               <button
@@ -410,70 +408,157 @@ export default function StickyMemoWidget({ onClose }) {
               </button>
             </div>
 
+            {/* 필터 탭 & 일괄 조작 버튼 */}
+            <div className="px-6 py-2.5 border-b border-slate-100 flex items-center justify-between bg-white flex-wrap gap-2 text-xs">
+              <div className="flex bg-slate-100 p-1 rounded-xl font-bold space-x-1">
+                <button
+                  onClick={() => setManagerTab('all')}
+                  className={`px-3 py-1 rounded-lg transition ${managerTab === 'all' ? 'bg-white text-amber-700 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                >
+                  전체 ({myAllMemos.length})
+                </button>
+                <button
+                  onClick={() => setManagerTab('active')}
+                  className={`px-3 py-1 rounded-lg transition ${managerTab === 'active' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                >
+                  화면에 열림 ({activeMemos.length})
+                </button>
+                <button
+                  onClick={() => setManagerTab('closed')}
+                  className={`px-3 py-1 rounded-lg transition ${managerTab === 'closed' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                >
+                  닫힘/보관 ({closedMemos.length})
+                </button>
+              </div>
+
+              <div className="flex items-center space-x-1.5">
+                {closedMemos.length > 0 && (
+                  <button
+                    onClick={handleReopenAll}
+                    className="flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 font-bold hover:bg-emerald-100 transition"
+                    title="닫힌 메모 전체 화면에 띄우기"
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                    <span>전체 열기</span>
+                  </button>
+                )}
+                {activeMemos.length > 0 && (
+                  <button
+                    onClick={handleCloseAll}
+                    className="flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 font-bold hover:bg-slate-200 transition"
+                    title="화면의 메모 전체 닫기 (메모함에 보관)"
+                  >
+                    <EyeOff className="w-3.5 h-3.5" />
+                    <span>전체 닫기</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* 메모 목록 */}
             <div className="flex-1 overflow-y-auto p-6 space-y-3">
-              {myMemos.length === 0 ? (
+              {filteredManagerMemos.length === 0 ? (
                 <div className="text-center py-12 text-slate-400">
                   <StickyNote className="w-10 h-10 mx-auto mb-2 text-slate-300" />
-                  <p className="font-medium">저장된 메모가 없습니다.</p>
+                  <p className="font-medium">해당 상태의 메모가 없습니다.</p>
                 </div>
               ) : (
-                myMemos.map((m) => {
+                filteredManagerMemos.map((m) => {
                   const mTheme = MEMO_COLORS[m.color] || MEMO_COLORS.yellow;
+                  const isClosed = !!m.is_closed;
+
                   return (
                     <div
                       key={m.id}
-                      className={`p-4 rounded-2xl border ${mTheme.border} ${mTheme.bg} flex items-start justify-between gap-3 shadow-sm`}
+                      className={`p-4 rounded-2xl border ${mTheme.border} ${mTheme.bg} flex items-start justify-between gap-3 shadow-sm transition hover:shadow-md`}
                     >
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1.5">
+                        <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                           <span className={`w-2.5 h-2.5 rounded-full ${mTheme.dot}`}></span>
-                          <span className="text-[11px] font-mono text-slate-500">
-                            {m.updated_at || m.created_at || '최근 저장'}
-                          </span>
+                          
+                          {isClosed ? (
+                            <span className="text-[10px] font-bold text-slate-600 bg-black/10 px-2 py-0.5 rounded-md flex items-center gap-1">
+                              <FolderOpen className="w-3 h-3" /> 닫힘 (보관중)
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-bold text-emerald-800 bg-emerald-200/80 px-2 py-0.5 rounded-md flex items-center gap-1">
+                              <Eye className="w-3 h-3" /> 화면에 표시중
+                            </span>
+                          )}
+
                           {m.is_pinned && (
-                            <span className="text-[10px] font-bold text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded-md">
+                            <span className="text-[10px] font-bold text-blue-700 bg-blue-200/80 px-1.5 py-0.5 rounded-md">
                               📌 고정
                             </span>
                           )}
+
+                          <span className="text-[11px] font-mono text-slate-500 ml-auto">
+                            {m.updated_at || m.created_at || '최근 저장'}
+                          </span>
                         </div>
+
                         <p className={`text-sm font-medium whitespace-pre-wrap line-clamp-3 ${mTheme.text}`}>
-                          {m.content || '(빈 메모)'}
+                          {m.content?.trim() || '(내용 없음)'}
                         </p>
                       </div>
 
-                      <button
-                        onClick={() => {
-                          if (window.confirm('이 메모를 완전히 삭제하시겠습니까?')) {
-                            deleteMemo(m.id);
-                          }
-                        }}
-                        className="p-2 rounded-xl text-rose-500 hover:bg-rose-100 transition flex-shrink-0"
-                        title="메모 영구 삭제"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      {/* 액션 버튼 */}
+                      <div className="flex items-center space-x-1 flex-shrink-0">
+                        {isClosed ? (
+                          <button
+                            onClick={() => handleReopenMemo(m.id)}
+                            className="flex items-center space-x-1 px-3 py-1.5 bg-white hover:bg-slate-50 text-emerald-700 border border-emerald-300 rounded-xl text-xs font-bold shadow-sm transition"
+                            title="화면에 다시 띄우기"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            <span>다시 열기</span>
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => updateMemo(m.id, { is_closed: true })}
+                            className="flex items-center space-x-1 px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-600 border border-slate-300 rounded-xl text-xs font-bold shadow-sm transition"
+                            title="화면에서 닫기"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                            <span>닫기</span>
+                          </button>
+                        )}
+
+                        <button
+                          onClick={() => {
+                            if (window.confirm('정말 이 메모를 완전히 삭제하시겠습니까?\n(작성된 내용은 복구되지 않습니다)')) {
+                              deleteMemo(m.id);
+                            }
+                          }}
+                          className="p-1.5 rounded-xl text-rose-500 hover:bg-rose-100 transition"
+                          title="메모 영구 삭제"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
                   );
                 })
               )}
             </div>
 
+            {/* 하단 바 */}
             <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex items-center justify-between">
               <button
                 onClick={() => {
                   handleAddNewMemo('yellow');
                   setShowManagerModal(false);
                 }}
-                className="flex items-center space-x-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold transition"
+                className="flex items-center space-x-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold transition shadow-sm"
               >
                 <Plus className="w-4 h-4" />
-                <span>새 메모 작성</span>
+                <span>새 포스트잇 만들기</span>
               </button>
               <button
                 onClick={() => setShowManagerModal(false)}
                 className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 bg-slate-200 hover:bg-slate-300 transition"
               >
-                닫기
+                확인
               </button>
             </div>
           </div>

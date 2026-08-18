@@ -615,6 +615,7 @@ async function getMemos(db) {
   return json(results.map(m => ({
     ...m,
     is_pinned: m.is_pinned === 1,
+    is_closed: m.is_closed === 1,
   })));
 }
 
@@ -624,8 +625,8 @@ async function createMemo(db, request) {
   const now = new Date().toLocaleString('ko-KR');
 
   await db.prepare(
-    `INSERT INTO memos (id, user_email, content, color, pos_x, pos_y, is_pinned, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO memos (id, user_email, content, color, pos_x, pos_y, is_pinned, is_closed, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).bind(
     id,
     body.user_email || '',
@@ -634,12 +635,13 @@ async function createMemo(db, request) {
     Number(body.pos_x) || 100,
     Number(body.pos_y) || 150,
     body.is_pinned ? 1 : 0,
+    body.is_closed ? 1 : 0,
     now,
     now
   ).run();
 
   const row = await db.prepare('SELECT * FROM memos WHERE id = ?').bind(id).first();
-  return json({ ...row, is_pinned: row.is_pinned === 1 }, 201);
+  return json({ ...row, is_pinned: row.is_pinned === 1, is_closed: row.is_closed === 1 }, 201);
 }
 
 async function updateMemo(db, id, request) {
@@ -650,7 +652,7 @@ async function updateMemo(db, id, request) {
   const now = new Date().toLocaleString('ko-KR');
   await db.prepare(
     `UPDATE memos SET
-       content = ?, color = ?, pos_x = ?, pos_y = ?, is_pinned = ?,
+       content = ?, color = ?, pos_x = ?, pos_y = ?, is_pinned = ?, is_closed = ?,
        updated_at = ?
      WHERE id = ?`
   ).bind(
@@ -659,12 +661,13 @@ async function updateMemo(db, id, request) {
     body.pos_x !== undefined ? Number(body.pos_x) : existing.pos_x,
     body.pos_y !== undefined ? Number(body.pos_y) : existing.pos_y,
     body.is_pinned !== undefined ? (body.is_pinned ? 1 : 0) : existing.is_pinned,
+    body.is_closed !== undefined ? (body.is_closed ? 1 : 0) : existing.is_closed,
     now,
     id
   ).run();
 
   const row = await db.prepare('SELECT * FROM memos WHERE id = ?').bind(id).first();
-  return json({ ...row, is_pinned: row.is_pinned === 1 });
+  return json({ ...row, is_pinned: row.is_pinned === 1, is_closed: row.is_closed === 1 });
 }
 
 async function deleteMemo(db, id) {
@@ -717,6 +720,7 @@ async function batchFetch(db) {
     memos: memos.results.map(m => ({
       ...m,
       is_pinned: m.is_pinned === 1,
+      is_closed: m.is_closed === 1,
     })),
   });
 }
