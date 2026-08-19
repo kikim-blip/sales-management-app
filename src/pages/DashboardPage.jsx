@@ -630,20 +630,27 @@ export default function DashboardPage() {
     try {
       setSubmittingSale(true);
       let targetCustomerId = '';
-      // 1. 기존 고객 목록에서 동일한 고객사명 + 부서 + 담당자 성명이 모두 일치하는지 확인
-
+      // 1. 기존 고객 목록 스마트 매칭 (이메일/연락처/성명 일치 시 동일 고객사로 자동 인식)
       const inputName = custName.toLowerCase();
       const inputDept = (newSaleFormData.dept || '').trim().toLowerCase();
       const inputContact = (newSaleFormData.contact_person || '').trim().toLowerCase();
+      const inputEmail = (newSaleFormData.email || '').trim().toLowerCase();
+      const inputPhone = (newSaleFormData.phone || '').trim();
 
       const matchedCust = customers.find(c => {
         const cName = (c.name || '').trim().toLowerCase();
-        const cDept = (c.dept || '').trim().toLowerCase();
         const cContact = (c.contact_person || '').trim().toLowerCase();
-        return cName === inputName && cDept === inputDept && cContact === inputContact;
+        const cEmail = (c.email || '').trim().toLowerCase();
+        const cPhone = (c.phone || '').trim();
+
+        if (inputEmail && cEmail && inputEmail === cEmail && cName === inputName) return true;
+        if (inputPhone && cPhone && inputPhone === cPhone && cName === inputName) return true;
+        if (cName === inputName && inputContact && cContact && (cContact.includes(inputContact) || inputContact.includes(cContact))) return true;
+        const cDept = (c.dept || '').trim().toLowerCase();
+        return cName === inputName && (!inputDept || !cDept || cDept === inputDept) && (!inputContact || !cContact || cContact === inputContact);
       });
 
-      // 2. 담당자가 다르거나 미등록 고객인 경우 신규 고객으로 자동 등록
+      // 2. 미등록 고객인 경우만 신규 고객으로 자동 등록
       if (!matchedCust) {
         const newCustData = {
           name: custName,
@@ -657,6 +664,9 @@ export default function DashboardPage() {
         targetCustomerId = savedCust?.id || `CUST-${Date.now()}`;
       } else {
         targetCustomerId = matchedCust.id;
+        if (newSaleFormData.dept && !matchedCust.dept) {
+          updateCustomer(matchedCust.id, { dept: newSaleFormData.dept });
+        }
       }
 
 
