@@ -348,13 +348,23 @@ export default function DashboardPage() {
     });
 
 
-  const urgentDeliveryList = [...jobItems, ...saleItems]
-    .sort((a, b) => {
+  // 💡 중복 키 제거 헬퍼 적용 (동일 SALE-162 등의 카드 2번 중복 노출 원천 방지)
+  const urgentDeliveryList = useMemo(() => {
+    const combined = [...jobItems, ...saleItems];
+    const map = new Map();
+    combined.forEach(item => {
+      const key = `${item.itemType}-${item.id || item.code_number}`;
+      if (!map.has(key)) {
+        map.set(key, item);
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => {
       if (a.dday.diffDays !== b.dday.diffDays) {
         return a.dday.diffDays - b.dday.diffDays;
       }
       return (a.delivery_time || '23:59').localeCompare(b.delivery_time || '23:59');
     });
+  }, [jobItems, saleItems]);
 
   // 💡 구글 캘린더 건별 선택 등록 연동 헬퍼
   const handleAddToGoogleCalendar = (order) => {

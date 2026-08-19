@@ -31,6 +31,33 @@ const loadCache = (key, fallback) => {
   } catch (e) { return fallback; }
 };
 
+// 💡 고유 ID 기준 중복 아이템 제거 헬퍼 (동일 항목 2번 중복 노출 원천 차단)
+const deduplicateById = (arr) => {
+  if (!Array.isArray(arr)) return [];
+  const map = new Map();
+  arr.forEach(item => {
+    if (item) {
+      const key = item.id || item.code_number || JSON.stringify(item);
+      map.set(key, item);
+    }
+  });
+  return Array.from(map.values());
+};
+
+// 💡 기존 목록 중 최고 번호를 감지하여 고유 ID 생성 (번호 중복 충돌 방지)
+const generateUniqueId = (arr, prefix = 'SALE', start = 101) => {
+  const numbers = (arr || [])
+    .map(item => {
+      const raw = String(item?.id || item?.code_number || '');
+      const num = parseInt(raw.replace(/[^0-9]/g, ''), 10);
+      return isNaN(num) ? null : num;
+    })
+    .filter(n => n !== null);
+
+  const maxNum = numbers.length > 0 ? Math.max(...numbers) : start - 1;
+  return `${prefix}-${String(maxNum + 1).padStart(3, '0')}`;
+};
+
 export function DataProvider({ children }) {
   const { isLoggedIn, user, updateUserProfile } = useGoogleAuth();
 
@@ -100,23 +127,27 @@ export function DataProvider({ children }) {
       lastFetchRef.current = Date.now();
 
       if (data.customers) {
-        setCustomers(data.customers);
-        saveCache('customers', data.customers);
+        const cleanCust = deduplicateById(data.customers);
+        setCustomers(cleanCust);
+        saveCache('customers', cleanCust);
       }
       if (data.sales) {
-        setSales(data.sales);
-        saveCache('sales', data.sales);
+        const cleanSales = deduplicateById(data.sales);
+        setSales(cleanSales);
+        saveCache('sales', cleanSales);
       }
       if (data.payments) {
-        setPayments(data.payments);
-        saveCache('payments', data.payments);
+        const cleanPay = deduplicateById(data.payments);
+        setPayments(cleanPay);
+        saveCache('payments', cleanPay);
       }
       if (Array.isArray(data.jobOrders)) {
-        if (data.jobOrders.length > 0) {
+        const cleanJobs = deduplicateById(data.jobOrders);
+        if (cleanJobs.length > 0) {
           localStorage.removeItem('d1_cache_jobOrders');
         }
-        setJobOrders(data.jobOrders);
-        saveCache('jobOrders', data.jobOrders);
+        setJobOrders(cleanJobs);
+        saveCache('jobOrders', cleanJobs);
       }
       if (data.staffs) {
         setStaffs(data.staffs);
@@ -395,11 +426,11 @@ export function DataProvider({ children }) {
   // SALES (매출/견적) CRUD
   // ════════════════════════════════════════════════════════════════
   const addSales = async (newSale) => {
-    const saleId = `SALE-${String(sales.length + 101).padStart(3, '0')}`;
+    const saleId = generateUniqueId(sales, 'SALE', 101);
     const payload = { id: saleId, ...newSale };
 
     setSales(prev => {
-      const next = [...prev, payload];
+      const next = deduplicateById([...prev, payload]);
       saveCache('sales', next);
       return next;
     });
@@ -408,7 +439,7 @@ export function DataProvider({ children }) {
     try {
       const saved = await createSaleApi(payload);
       setSales(prev => {
-        const next = prev.map(s => s.id === saleId ? saved : s);
+        const next = deduplicateById(prev.map(s => s.id === saleId ? saved : s));
         saveCache('sales', next);
         return next;
       });
