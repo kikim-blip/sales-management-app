@@ -177,3 +177,16 @@ export async function updateMemoApi(id, data) {
 export async function deleteMemoApi(id) {
   return apiFetch(`/api/memos/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }
+
+// ─── AUDIT LOGS (시스템 조작 로그) ──────────────────────────────────────────
+export async function fetchLogs() {
+  return apiFetch('/api/logs');
+}
+
+export async function createLogApi(data) {
+  return apiFetch('/api/logs', { method: 'POST', body: JSON.stringify(data) });
+}
+
+export async function clearLogsApi() {
+  return apiFetch('/api/logs', { method: 'DELETE' });
+}

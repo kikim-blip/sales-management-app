@@ -186,6 +186,13 @@ export default {
         if (method === 'DELETE') return await deleteTeam(env.DB, name);
       }
 
+      // ── AUDIT LOGS (작업 및 조작 변경 로그) ────────────────────
+      if (path === '/api/logs') {
+        if (method === 'GET') return await getLogs(env.DB, url);
+        if (method === 'POST') return await createLog(env.DB, request);
+        if (method === 'DELETE') return await clearLogs(env.DB);
+      }
+
       // ── BATCH FETCH (전체 데이터 1회 조회) ─────────────────────
       if (path === '/api/batch' && method === 'GET') {
         return await batchFetch(env.DB);
@@ -715,7 +722,7 @@ async function deleteMemo(db, id) {
 // BATCH FETCH (프론트엔드 초기 로딩 - 1회 요청으로 전체 조회)
 // ════════════════════════════════════════════════════════════════
 async function batchFetch(db) {
-  const [customers, sales, payments, jobOrders, staffsRaw, departments, teams, posts, memos] = await Promise.all([
+  const [customers, sales, payments, jobOrders, staffsRaw, departments, teams, posts, memos, logs] = await Promise.all([
     db.prepare('SELECT * FROM customers ORDER BY name').all(),
     db.prepare('SELECT * FROM sales ORDER BY reg_date DESC').all(),
     db.prepare('SELECT * FROM payments ORDER BY payment_date DESC').all(),
@@ -725,6 +732,7 @@ async function batchFetch(db) {
     db.prepare('SELECT name FROM teams ORDER BY id').all(),
     db.prepare('SELECT * FROM posts ORDER BY is_pinned DESC, created_at DESC').all(),
     db.prepare('SELECT * FROM memos ORDER BY is_pinned DESC, updated_at DESC').all(),
+    db.prepare('SELECT * FROM audit_logs ORDER BY id DESC LIMIT 200').all(),
   ]);
 
   return json({
@@ -759,6 +767,43 @@ async function batchFetch(db) {
       is_pinned: m.is_pinned === 1,
       is_closed: m.is_closed === 1,
     })),
+    logs: logs ? logs.results : [],
   });
+}
+
+// ════════════════════════════════════════════════════════════════
+// AUDIT LOGS (작업 로깅)
+// ════════════════════════════════════════════════════════════════
+async function getLogs(db, url) {
+  const limit = Number(url.searchParams.get('limit')) || 200;
+  const { results } = await db.prepare(
+    'SELECT * FROM audit_logs ORDER BY id DESC LIMIT ?'
+  ).bind(limit).all();
+  return json(results);
+}
+
+async function createLog(db, request) {
+  const body = await request.json();
+  const now = new Date().toLocaleString('ko-KR');
+  await db.prepare(
+    `INSERT INTO audit_logs (user_name, user_email, action, category, details, target_id, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`
+  ).bind(
+    body.user_name || body.userName || '시스템',
+    body.user_email || body.userEmail || '',
+    body.action || '작업',
+    body.category || '기타',
+    body.details || '',
+    body.target_id || body.targetId || '',
+    now
+  ).run();
+
+  const row = await db.prepare('SELECT * FROM audit_logs ORDER BY id DESC LIMIT 1').first();
+  return json(row, 201);
+}
+
+async function clearLogs(db) {
+  await db.prepare('DELETE FROM audit_logs').run();
+  return json({ success: true });
 }
 

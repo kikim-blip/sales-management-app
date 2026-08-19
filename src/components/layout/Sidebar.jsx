@@ -1,7 +1,7 @@
 // src/components/layout/Sidebar.jsx
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Users, ClipboardList, FileSpreadsheet, CreditCard, Shield, Megaphone } from 'lucide-react';
+import { LayoutDashboard, Users, ClipboardList, FileSpreadsheet, CreditCard, Shield, Megaphone, FileText } from 'lucide-react';
 import { useGoogleAuth } from '../../context/GoogleAuthContext';
 
 const navItems = [
@@ -12,6 +12,7 @@ const navItems = [
   { name: '고객관리', path: '/customers', icon: Users },
   { name: '게시판', path: '/board', icon: Megaphone },
   { name: '사용자', path: '/staffs', icon: Shield },
+  { name: '로그 기록', path: '/logs', icon: FileText },
 ];
 
 
@@ -22,7 +23,7 @@ export default function Sidebar() {
   const isAdmin = user?.role === '관리자' || user?.email?.toLowerCase() === 'richkikim@gmail.com';
 
   const visibleNavItems = navItems.filter(item => {
-    if (item.path === '/staffs') return isAdmin;
+    if (item.path === '/staffs' || item.path === '/logs') return isAdmin;
     return true;
   });
 

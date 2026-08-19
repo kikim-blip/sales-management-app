@@ -15,6 +15,7 @@ import SalesPage from './pages/SalesPage';
 import PaymentPage from './pages/PaymentPage';
 import StaffManagementPage from './pages/StaffManagementPage';
 import BoardPage from './pages/BoardPage';
+import LogPage from './pages/LogPage';
 import LoginPage from './pages/LoginPage';
 
 export default function App() {
@@ -47,6 +48,7 @@ export default function App() {
             <Route path="/payments" element={<PaymentPage />} />
             <Route path="/staffs" element={isAdmin ? <StaffManagementPage /> : <div className="text-center py-20 font-bold text-slate-400">관리자 전용 메뉴입니다.</div>} />
             <Route path="/board" element={<BoardPage />} />
+            <Route path="/logs" element={isAdmin ? <LogPage /> : <div className="text-center py-20 font-bold text-slate-400">관리자 전용 메뉴입니다.</div>} />
           </Routes>
         </main>
       </div>

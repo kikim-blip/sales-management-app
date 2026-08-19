@@ -14,6 +14,7 @@ import {
   createTeamApi, updateTeamApi, deleteTeamApi,
   createPostApi, updatePostApi, deletePostApi,
   createMemoApi, updateMemoApi, deleteMemoApi,
+  createLogApi, clearLogsApi,
 } from '../services/d1Api';
 
 const DataContext = createContext();
@@ -40,8 +41,44 @@ export function DataProvider({ children }) {
   const [jobOrders, setJobOrders] = useState(() => loadCache('jobOrders', []));
   const [posts, setPosts] = useState(() => loadCache('posts', []));
   const [memos, setMemos] = useState(() => loadCache('memos', []));
+  const [logs, setLogs] = useState(() => loadCache('logs', []));
   const [showCalc, setShowCalc] = useState(false);
   const toggleCalc = useCallback(() => setShowCalc(v => !v), []);
+
+  const addLog = useCallback(async (action, category, details, targetId = '') => {
+    const userName = user?.userName || user?.name || (user?.email ? user.email.split('@')[0] : '시스템');
+    const userEmail = user?.email || '';
+    const now = new Date().toLocaleString('ko-KR');
+
+    const newLog = {
+      id: Date.now(),
+      user_name: userName,
+      user_email: userEmail,
+      action,
+      category,
+      details,
+      target_id: String(targetId || ''),
+      created_at: now,
+    };
+
+    setLogs(prev => {
+      const next = [newLog, ...prev].slice(0, 300);
+      saveCache('logs', next);
+      return next;
+    });
+
+    try {
+      await createLogApi(newLog);
+    } catch (e) {
+      console.warn('로그 DB 저장 에러:', e);
+    }
+  }, [user]);
+
+  const clearLogs = async () => {
+    setLogs([]);
+    saveCache('logs', []);
+    try { await clearLogsApi(); } catch (e) { console.error(e); }
+  };
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -174,6 +211,7 @@ export function DataProvider({ children }) {
         saveCache('jobOrders', next);
         return next;
       });
+      addLog('등록', '작업전표', `작업전표 [${saved.title || newOrder.title}] 신규 발행 완료`, saved.code_number || saved.id);
     } catch (err) {
       console.error('작업전표 D1 저장 에러:', err);
       throw err;
@@ -200,6 +238,7 @@ export function DataProvider({ children }) {
     // 2. D1에 저장
     try {
       await updateJobOrderApi(codeNo, fullMergedOrder);
+      addLog('수정', '작업전표', `작업전표 [${fullMergedOrder.title || codeNo}] 내용 수정`, codeNo);
     } catch (err) {
       console.error('작업전표 D1 수정 에러:', err);
       throw err;
@@ -208,6 +247,7 @@ export function DataProvider({ children }) {
 
 
   const deleteJobOrder = async (codeNo) => {
+    const target = jobOrders.find(o => o.code_number === codeNo || o.id === codeNo);
     setJobOrders(prev => {
       const next = prev.filter(o => o.code_number !== codeNo && o.id !== codeNo);
       saveCache('jobOrders', next);
@@ -215,6 +255,7 @@ export function DataProvider({ children }) {
     });
     try {
       await deleteJobOrderApi(codeNo);
+      addLog('삭제', '작업전표', `작업전표 [${target ? target.title : codeNo}] 삭제 처리`, codeNo);
     } catch (err) {
       console.error('작업전표 D1 삭제 에러:', err);
     }
@@ -257,6 +298,8 @@ export function DataProvider({ children }) {
         return next;
       });
 
+      addLog('수정', '사원관리', `사원 [${savedItem.userName} (${savedItem.email})] 권한 및 회원 정보 저장/승인`, savedItem.id || savedItem.userCode);
+
       // 만약 수정한 사원이 현재 로그인한 본인이라면 세션 프로필도 업데이트
       if (user?.email && savedItem.email && user.email.toLowerCase().trim() === savedItem.email.toLowerCase().trim()) {
         updateUserProfile({
@@ -287,6 +330,7 @@ export function DataProvider({ children }) {
     });
     try {
       await deleteStaffApi(targetUserCodeOrEmail);
+      addLog('삭제', '사원관리', `사원 계정 [${targetUserCodeOrEmail}] 삭제`, targetUserCodeOrEmail);
     } catch (err) {
       console.error('사원 D1 삭제 에러:', err);
     }
@@ -313,6 +357,7 @@ export function DataProvider({ children }) {
         saveCache('customers', next);
         return next;
       });
+      addLog('등록', '고객', `신규 고객사 [${payload.name}] (담당: ${payload.sales_manager}) 등록`, custId);
       return saved;
     } catch (err) {
       console.error('고객 D1 저장 에러:', err);
@@ -332,15 +377,18 @@ export function DataProvider({ children }) {
     });
     lastFetchRef.current = Date.now();
     await updateCustomerApi(id, fullMergedCust);
+    addLog('수정', '고객', `고객사 [${fullMergedCust.name || id}] 상세 정보 수정`, id);
   };
 
   const deleteCustomer = async (id) => {
+    const target = customers.find(c => c.id === id);
     setCustomers(prev => {
       const next = prev.filter(c => c.id !== id);
       saveCache('customers', next);
       return next;
     });
     await deleteCustomerApi(id);
+    addLog('삭제', '고객', `고객사 [${target ? target.name : id}] 삭제 처리`, id);
   };
 
   // ════════════════════════════════════════════════════════════════
@@ -366,6 +414,7 @@ export function DataProvider({ children }) {
       });
       const custObj = customers.find(c => c.id === newSale.customer_id);
       sendWebhookEvent({ ...saved, customer_name: custObj ? `${custObj.name} (${custObj.dept})` : '미지정' });
+      addLog('등록', '매출/견적', `[${payload.title}] ${payload.type || '매출'} 항목 등록 (공급가: ${Number(payload.supply_price || 0).toLocaleString()}원)`, saleId);
     } catch (err) {
       console.error('매출 D1 저장 에러:', err);
       throw err;
@@ -388,6 +437,7 @@ export function DataProvider({ children }) {
       await updateSaleApi(id, fullMergedSale);
       const custObj = customers.find(c => c.id === fullMergedSale.customer_id);
       sendWebhookEvent({ ...fullMergedSale, id, customer_name: custObj ? `${custObj.name} (${custObj.dept})` : '미지정' });
+      addLog('수정', '매출/견적', `[${fullMergedSale.title || id}] 매출/견적 정보 수정`, id);
     } catch (err) {
       console.error('매출 D1 수정 에러:', err);
       throw err;
@@ -395,12 +445,20 @@ export function DataProvider({ children }) {
   };
 
   const deleteSales = async (id) => {
+    const target = sales.find(s => s.id === id);
     setSales(prev => {
       const next = prev.filter(s => s.id !== id);
       saveCache('sales', next);
       return next;
     });
-    await deleteSaleApi(id);
+    lastFetchRef.current = Date.now();
+    try {
+      await deleteSaleApi(id);
+      addLog('삭제', '매출/견적', `매출 항목 [${target ? target.title : id}] 삭제 처리`, id);
+    } catch (err) {
+      console.error('매출 D1 삭제 에러:', err);
+      throw err;
+    }
   };
 
   // ════════════════════════════════════════════════════════════════
@@ -617,6 +675,9 @@ export function DataProvider({ children }) {
         addMemo,
         updateMemo,
         deleteMemo,
+        logs,
+        addLog,
+        clearLogs,
         showCalc,
         setShowCalc,
         toggleCalc,

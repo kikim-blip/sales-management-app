@@ -183,5 +183,17 @@ VALUES ('SALE-103', '2026-08-05', '2026-08-05', '2026-08-12', '17:00', 'CUST-003
 
 INSERT OR IGNORE INTO payments (id, payment_date, customer_id, amount, method, dept, updated_at)
 VALUES ('PAY-201', '2026-08-07', 'CUST-001', 2000000, '계좌이체', '영업본부', datetime('now', 'localtime'));
+
+-- 7. Audit Logs (시스템 작업 및 조작 변경 로그)
+CREATE TABLE IF NOT EXISTS audit_logs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_name TEXT DEFAULT '',
+  user_email TEXT DEFAULT '',
+  action TEXT DEFAULT '',
+  category TEXT DEFAULT '',
+  details TEXT DEFAULT '',
+  target_id TEXT DEFAULT '',
+  created_at TEXT DEFAULT (datetime('now', 'localtime'))
+);
 INSERT OR IGNORE INTO payments (id, payment_date, customer_id, amount, method, dept, updated_at)
 VALUES ('PAY-202', '2026-08-09', 'CUST-003', 1500000, '카드결제', '영업본부', datetime('now', 'localtime'));
