@@ -60,24 +60,36 @@ export default function DashboardPage() {
   // 💡 팀/부서 필터링 매칭 헬퍼 (영업담당자, 사원 소속팀, 부서, 고객사 매핑 포괄)
   const isTeamMatch = (item, custId) => {
     if (!selectedTeamGroup || selectedTeamGroup === 'ALL') return true;
+
+    // 0) 로그인한 사원 본인이 작성/등록한 건이면 어떤 명의("대원 강", "강대원" 등)이든 본인 화면에 100% 무조건 노출!
+    const mgrRaw = item?.sales_manager || item?.manager_name || '';
+    const normMgr = normalizeStaffName(mgrRaw, staffs);
+    const normUser = normalizeStaffName(user?.userName || user?.name || '', staffs);
+
+    if (normUser && normMgr && (normMgr === normUser || mgrRaw.includes(user?.email?.split('@')[0]))) {
+      return true;
+    }
     
     // 1) 항목 자체의 부서 또는 팀이 일치
     if (item?.dept === selectedTeamGroup || item?.team === selectedTeamGroup) return true;
 
     // 2) 항목의 담당 영업(sales_manager / manager_name)이 해당 팀에 소속되어 있거나 일치
-    const mgr = item?.sales_manager || item?.manager_name;
-    if (mgr) {
-      if (mgr === selectedTeamGroup) return true;
-      if (teamStaffNames.includes(mgr)) return true;
+    if (normMgr) {
+      if (normMgr === selectedTeamGroup) return true;
+      if (teamStaffNames.some(tn => normalizeStaffName(tn, staffs) === normMgr)) return true;
     }
 
     // 3) 연결된 고객사(Customer) 매칭
     const foundCust = custId ? customers.find(c => c.id === custId) : null;
     if (foundCust) {
+      const custMgr = normalizeStaffName(foundCust.sales_manager, staffs);
       if (foundCust.dept === selectedTeamGroup || foundCust.team === selectedTeamGroup) return true;
-      if (foundCust.sales_manager === selectedTeamGroup) return true;
-      if (foundCust.sales_manager && teamStaffNames.includes(foundCust.sales_manager)) return true;
+      if (custMgr === selectedTeamGroup) return true;
+      if (custMgr && teamStaffNames.some(tn => normalizeStaffName(tn, staffs) === custMgr)) return true;
     }
+
+    // 4) 신규 미분류 등록 건 포용
+    if (!item?.dept && !item?.team && !mgrRaw) return true;
 
     return false;
   };

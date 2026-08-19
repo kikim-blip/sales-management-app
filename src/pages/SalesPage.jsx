@@ -106,20 +106,32 @@ export default function SalesPage() {
   // 💡 팀/부서 필터링 매칭 헬퍼
   const isTeamMatch = (item, custId) => {
     if (!selectedTeamGroup || selectedTeamGroup === 'ALL') return true;
+
+    // 0) 본인이 작성/등록한 건이면 어떤 이름 명의든 100% 무조건 노출
+    const mgrRaw = item?.sales_manager || item?.manager_name || '';
+    const normMgr = normalizeStaffName(mgrRaw, staffs);
+    const normUser = normalizeStaffName(user?.userName || user?.name || '', staffs);
+
+    if (normUser && normMgr && (normMgr === normUser || mgrRaw.includes(user?.email?.split('@')[0]))) {
+      return true;
+    }
+    
     if (item?.dept === selectedTeamGroup || item?.team === selectedTeamGroup) return true;
 
-    const mgr = item?.sales_manager || item?.manager_name;
-    if (mgr) {
-      if (mgr === selectedTeamGroup) return true;
-      if (teamStaffNames.includes(mgr)) return true;
+    if (normMgr) {
+      if (normMgr === selectedTeamGroup) return true;
+      if (teamStaffNames.some(tn => normalizeStaffName(tn, staffs) === normMgr)) return true;
     }
 
     const cust = custId ? customers.find(c => c.id === custId) : null;
     if (cust) {
+      const custMgr = normalizeStaffName(cust.sales_manager, staffs);
       if (cust.dept === selectedTeamGroup || cust.team === selectedTeamGroup) return true;
-      if (cust.sales_manager === selectedTeamGroup) return true;
-      if (cust.sales_manager && teamStaffNames.includes(cust.sales_manager)) return true;
+      if (custMgr === selectedTeamGroup) return true;
+      if (custMgr && teamStaffNames.some(tn => normalizeStaffName(tn, staffs) === custMgr)) return true;
     }
+
+    if (!item?.dept && !item?.team && !mgrRaw) return true;
 
     return false;
   };

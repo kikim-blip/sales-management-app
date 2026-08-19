@@ -1,5 +1,6 @@
 // src/context/GoogleAuthContext.jsx
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { normalizeStaffName } from '../utils/nameUtils';
 
 const GoogleAuthContext = createContext();
 
@@ -63,15 +64,16 @@ export function GoogleAuthProvider({ children }) {
     const googleUser = await fetchGoogleUserInfo(token);
     if (googleUser && googleUser.email) {
       const email = googleUser.email.toLowerCase().trim();
-      const name = googleUser.name || googleUser.email.split('@')[0];
+      const rawName = googleUser.name || googleUser.email.split('@')[0];
+      const normName = normalizeStaffName(rawName);
       const isAdmin = email === 'richkikim@gmail.com';
 
       setUser(prev => {
         const updated = {
           ...prev,
           email: email,
-          userName: prev.userName && prev.email === email ? prev.userName : name,
-          name: name,
+          userName: normName || (prev.userName && prev.email === email ? prev.userName : rawName),
+          name: normName || rawName,
           picture: googleUser.picture,
           role: isAdmin ? '관리자' : (prev.role || '일반사원'),
           userCode: prev.userCode && prev.email === email ? prev.userCode : (isAdmin ? '44' : ''),
