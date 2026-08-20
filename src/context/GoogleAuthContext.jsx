@@ -40,16 +40,20 @@ export function GoogleAuthProvider({ children }) {
     try { return localStorage.getItem('google_access_token') || null; } catch { return null; }
   });
 
-  const [isSessionActive, setIsSessionActive] = useState(() => {
-    try { return localStorage.getItem('session_active') === 'true'; } catch { return false; }
-  });
-
   const savedProfile = (() => {
     try {
       const data = localStorage.getItem('staff_profile_settings');
-      return data ? JSON.parse(data) : null;
+      const parsed = data ? JSON.parse(data) : null;
+      return parsed && parsed.email ? parsed : null;
     } catch { return null; }
   })();
+
+  const [isSessionActive, setIsSessionActive] = useState(() => {
+    try {
+      const active = localStorage.getItem('session_active') === 'true';
+      return Boolean(active && savedProfile?.email);
+    } catch { return false; }
+  });
 
   const [user, setUser] = useState(savedProfile || emptyProfile);
 
@@ -188,7 +192,7 @@ export function GoogleAuthProvider({ children }) {
       updateUserProfile,
       login,
       logout,
-      isLoggedIn: isSessionActive,
+      isLoggedIn: Boolean(isSessionActive && user?.email),
     }}>
       {children}
     </GoogleAuthContext.Provider>

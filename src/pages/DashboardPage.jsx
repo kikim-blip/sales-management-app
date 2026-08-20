@@ -62,11 +62,12 @@ export default function DashboardPage() {
     if (!selectedTeamGroup || selectedTeamGroup === 'ALL') return true;
 
     // 0) 로그인한 사원 본인이 작성/등록한 건이면 어떤 명의("대원 강", "강대원" 등)이든 본인 화면에 100% 무조건 노출!
-    const mgrRaw = item?.sales_manager || item?.manager_name || '';
+    const mgrRaw = String(item?.sales_manager || item?.manager_name || '');
     const normMgr = normalizeStaffName(mgrRaw, staffs);
     const normUser = normalizeStaffName(user?.userName || user?.name || '', staffs);
+    const userEmailPrefix = user?.email ? user.email.split('@')[0] : '';
 
-    if (normUser && normMgr && (normMgr === normUser || mgrRaw.includes(user?.email?.split('@')[0]))) {
+    if (normUser && normMgr && (normMgr === normUser || (userEmailPrefix && mgrRaw.includes(userEmailPrefix)))) {
       return true;
     }
     
