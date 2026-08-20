@@ -11,6 +11,7 @@ import JobOrderModal from '../components/common/JobOrderModal';
 import EstimateModal from '../components/common/EstimateModal';
 import QuotePrintModal from '../components/common/QuotePrintModal';
 import { getLocalDateStr, calculateDDay } from '../utils/dateUtils';
+import { normalizeStaffName } from '../utils/nameUtils';
 
 export default function DashboardPage() {
   const { customers, sales, payments, jobOrders, staffs = [], loading, error, selectedTeamGroup, updateJobOrder, updateSales, addSales, addCustomer } = useData();
