@@ -67,16 +67,20 @@ export function GoogleAuthProvider({ children }) {
       const rawName = googleUser.name || googleUser.email.split('@')[0];
       const normName = normalizeStaffName(rawName);
       const isAdmin = email === 'richkikim@gmail.com';
+      const isKdw = email === 'kdwksm@gmail.com';
 
       setUser(prev => {
         const updated = {
           ...prev,
           email: email,
-          userName: normName || (prev.userName && prev.email === email ? prev.userName : rawName),
-          name: normName || rawName,
+          userName: isKdw ? '강대원' : (normName || (prev.userName && prev.email === email ? prev.userName : rawName)),
+          name: isKdw ? '강대원' : (normName || rawName),
           picture: googleUser.picture,
           role: isAdmin ? '관리자' : (prev.role || '일반사원'),
-          userCode: prev.userCode && prev.email === email ? prev.userCode : (isAdmin ? '44' : ''),
+          userCode: isKdw ? '101' : (prev.userCode && prev.email === email ? prev.userCode : (isAdmin ? '44' : '')),
+          dept: isKdw ? '세종영업본부' : (prev.dept || '세종영업본부'),
+          team: isKdw ? '영업2조' : (prev.team || '영업2조'),
+          status: '승인완료',
         };
         localStorage.setItem('staff_profile_settings', JSON.stringify(updated));
         return updated;

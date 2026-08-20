@@ -155,15 +155,18 @@ export function DataProvider({ children }) {
 
         // 현재 로그인 사용자의 프로필을 사원 DB에서 자동 매칭
         if (user?.email && data.staffs.length > 0) {
-          const matched = data.staffs.find(s => s.email === user.email.toLowerCase());
+          const userEmailNorm = user.email.toLowerCase().trim();
+          const matched = data.staffs.find(s => s.email && s.email.toLowerCase().trim() === userEmailNorm);
           if (matched) {
             updateUserProfile({
+              id: matched.id,
               userCode: matched.userCode,
               userName: matched.userName,
               companyCode: matched.companyCode,
               dept: matched.dept,
               team: matched.team,
               role: matched.role,
+              status: matched.status || '승인완료',
             });
           }
         }
