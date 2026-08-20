@@ -404,18 +404,15 @@ export default function LogPage() {
 
                       {/* 수행 사용자 */}
                       <td className="py-3.5 px-4">
-                        <div className="flex items-center space-x-1.5">
-                          <div className={`w-6 h-6 rounded-full font-bold flex items-center justify-center text-[10px] flex-shrink-0 ${
+                        <div className="flex items-center space-x-2" title={log.user_email || ''}>
+                          <div className={`w-6 h-6 rounded-full font-bold flex items-center justify-center text-[11px] flex-shrink-0 ${
                             isDelivery ? 'bg-emerald-200 text-emerald-800' : isPayment ? 'bg-indigo-200 text-indigo-800' : 'bg-slate-200 text-slate-700'
                           }`}>
                             {(log.user_name || '시').slice(0, 1)}
                           </div>
-                          <div className="min-w-0">
-                            <p className="font-bold text-slate-800 text-xs truncate">{log.user_name || '시스템'}</p>
-                            {log.user_email && (
-                              <p className="text-[10px] text-slate-400 truncate">{log.user_email}</p>
-                            )}
-                          </div>
+                          <span className="font-bold text-slate-800 text-xs whitespace-nowrap">
+                            {log.user_name || '시스템'}
+                          </span>
                         </div>
                       </td>
 
