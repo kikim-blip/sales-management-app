@@ -1,5 +1,3 @@
-// src/pages/LogPage.jsx
-// 시스템 작업 및 조작 로그 (Audit Trail) 확인 페이지
 import React, { useState, useMemo } from 'react';
 import { useData } from '../context/DataContext';
 import { useGoogleAuth } from '../context/GoogleAuthContext';
@@ -17,6 +15,9 @@ import {
   AlertCircle,
   ShieldCheck,
   RefreshCw,
+  Truck,
+  Zap,
+  CreditCard,
 } from 'lucide-react';
 
 export default function LogPage() {
@@ -76,10 +77,12 @@ export default function LogPage() {
     const total = logs.length;
     const todayStr = new Date().toDateString();
     const todayCount = logs.filter(l => new Date(l.created_at || Date.now()).toDateString() === todayStr).length;
+    const deliveryCount = logs.filter(l => l.action === '납품완료' || l.action === '상태변경').length;
+    const paymentCount = logs.filter(l => l.category === '수금').length;
     const createCount = logs.filter(l => l.action === '등록').length;
     const updateCount = logs.filter(l => l.action === '수정').length;
     const deleteCount = logs.filter(l => l.action === '삭제').length;
-    return { total, todayCount, createCount, updateCount, deleteCount };
+    return { total, todayCount, deliveryCount, paymentCount, createCount, updateCount, deleteCount };
   }, [logs]);
 
   // 💡 CSV 엑셀 다운로드
@@ -125,10 +128,24 @@ export default function LogPage() {
   // 작업 유형별 아이콘 및 뱃지 스타일 헬퍼
   const getActionBadge = (action) => {
     switch (action) {
+      case '납품완료':
+        return (
+          <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-sm">
+            <Truck className="w-3 h-3 text-emerald-700" />
+            <span>납품완료</span>
+          </span>
+        );
+      case '상태변경':
+        return (
+          <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-100 text-purple-800 border border-purple-300 shadow-sm">
+            <Zap className="w-3 h-3 text-purple-700" />
+            <span>상태변경</span>
+          </span>
+        );
       case '등록':
         return (
-          <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-            <PlusCircle className="w-3 h-3 text-emerald-600" />
+          <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-teal-50 text-teal-700 border border-teal-200">
+            <PlusCircle className="w-3 h-3 text-teal-600" />
             <span>등록</span>
           </span>
         );
@@ -168,7 +185,7 @@ export default function LogPage() {
           <div>
             <h1 className="text-xl font-black text-slate-800 tracking-tight">시스템 작업 &amp; 조작 로그</h1>
             <p className="text-xs text-slate-500 font-semibold mt-0.5">
-              사용자들이 언제 무엇을 등록, 수정, 삭제하였는지 실시간으로 모니터링합니다.
+              사용자들이 언제 무엇을 등록, 납품완료, 수금, 수정, 삭제하였는지 실시간으로 모니터링합니다.
             </p>
           </div>
         </div>
@@ -228,23 +245,21 @@ export default function LogPage() {
 
         <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
-            <p className="text-xs font-bold text-slate-400">신규 등록 건수</p>
-            <p className="text-xl font-black text-emerald-600 font-mono mt-1">{stats.createCount.toLocaleString()}건</p>
+            <p className="text-xs font-bold text-slate-400">납품완료 / 상태변경</p>
+            <p className="text-xl font-black text-emerald-600 font-mono mt-1">{stats.deliveryCount.toLocaleString()}건</p>
           </div>
           <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl">
-            <PlusCircle className="w-5 h-5" />
+            <Truck className="w-5 h-5" />
           </div>
         </div>
 
         <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
-            <p className="text-xs font-bold text-slate-400">수정 / 삭제 건수</p>
-            <p className="text-xl font-black text-amber-600 font-mono mt-1">
-              {(stats.updateCount + stats.deleteCount).toLocaleString()}건
-            </p>
+            <p className="text-xs font-bold text-slate-400">수금 처리 기록</p>
+            <p className="text-xl font-black text-indigo-600 font-mono mt-1">{stats.paymentCount.toLocaleString()}건</p>
           </div>
-          <div className="p-2.5 bg-amber-50 text-amber-600 rounded-xl">
-            <Edit className="w-5 h-5" />
+          <div className="p-2.5 bg-indigo-50 text-indigo-600 rounded-xl">
+            <CreditCard className="w-5 h-5" />
           </div>
         </div>
       </div>
@@ -275,9 +290,9 @@ export default function LogPage() {
             >
               <option value="ALL">전체 메뉴 (카테고리)</option>
               <option value="매출/견적">매출 / 견적관리</option>
-              <option value="고객">고객(거래처) 관리</option>
-              <option value="작업전표">작업전표</option>
               <option value="수금">수금 관리</option>
+              <option value="작업전표">작업전표</option>
+              <option value="고객">고객(거래처) 관리</option>
               <option value="사원관리">사원/사용자 관리</option>
               <option value="게시판">업무 게시판</option>
             </select>
@@ -292,6 +307,8 @@ export default function LogPage() {
               className="bg-transparent text-xs font-bold text-slate-700 w-full focus:outline-none cursor-pointer"
             >
               <option value="ALL">전체 작업 구분</option>
+              <option value="납품완료">🚚 납품완료 처리만</option>
+              <option value="상태변경">⚡ 상태변경만</option>
               <option value="등록">🟢 신규 등록만</option>
               <option value="수정">🔵 내용 수정만</option>
               <option value="삭제">🔴 항목 삭제만</option>
@@ -357,56 +374,81 @@ export default function LogPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-xs text-slate-700 font-medium">
-                {filteredLogs.map((log, index) => (
-                  <tr key={log.id || index} className="hover:bg-sky-50/40 transition">
-                    {/* NO */}
-                    <td className="py-3.5 px-4 text-center text-slate-400 font-mono text-[11px]">
-                      {filteredLogs.length - index}
-                    </td>
+                {filteredLogs.map((log, index) => {
+                  const isDelivery = log.action === '납품완료';
+                  const isStatus = log.action === '상태변경';
+                  const isPayment = log.category === '수금';
 
-                    {/* 일시 */}
-                    <td className="py-3.5 px-4 text-slate-600 font-mono text-[11px] whitespace-nowrap">
-                      {log.created_at}
-                    </td>
+                  return (
+                    <tr
+                      key={log.id || index}
+                      className={`transition ${
+                        isDelivery
+                          ? 'bg-emerald-50/40 hover:bg-emerald-50/70 font-semibold'
+                          : isPayment
+                          ? 'bg-indigo-50/30 hover:bg-indigo-50/60'
+                          : isStatus
+                          ? 'bg-purple-50/30 hover:bg-purple-50/60'
+                          : 'hover:bg-sky-50/40'
+                      }`}
+                    >
+                      {/* NO */}
+                      <td className="py-3.5 px-4 text-center text-slate-400 font-mono text-[11px]">
+                        {filteredLogs.length - index}
+                      </td>
 
-                    {/* 수행 사용자 */}
-                    <td className="py-3.5 px-4">
-                      <div className="flex items-center space-x-1.5">
-                        <div className="w-6 h-6 rounded-full bg-slate-200 text-slate-700 font-bold flex items-center justify-center text-[10px] flex-shrink-0">
-                          {(log.user_name || '시').slice(0, 1)}
+                      {/* 일시 */}
+                      <td className="py-3.5 px-4 text-slate-600 font-mono text-[11px] whitespace-nowrap">
+                        {log.created_at}
+                      </td>
+
+                      {/* 수행 사용자 */}
+                      <td className="py-3.5 px-4">
+                        <div className="flex items-center space-x-1.5">
+                          <div className={`w-6 h-6 rounded-full font-bold flex items-center justify-center text-[10px] flex-shrink-0 ${
+                            isDelivery ? 'bg-emerald-200 text-emerald-800' : isPayment ? 'bg-indigo-200 text-indigo-800' : 'bg-slate-200 text-slate-700'
+                          }`}>
+                            {(log.user_name || '시').slice(0, 1)}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-bold text-slate-800 text-xs truncate">{log.user_name || '시스템'}</p>
+                            {log.user_email && (
+                              <p className="text-[10px] text-slate-400 truncate">{log.user_email}</p>
+                            )}
+                          </div>
                         </div>
-                        <div className="min-w-0">
-                          <p className="font-bold text-slate-800 text-xs truncate">{log.user_name || '시스템'}</p>
-                          {log.user_email && (
-                            <p className="text-[10px] text-slate-400 truncate">{log.user_email}</p>
-                          )}
-                        </div>
-                      </div>
-                    </td>
+                      </td>
 
-                    {/* 구분 (뱃지) */}
-                    <td className="py-3.5 px-4 text-center whitespace-nowrap">
-                      {getActionBadge(log.action)}
-                    </td>
+                      {/* 구분 (뱃지) */}
+                      <td className="py-3.5 px-4 text-center whitespace-nowrap">
+                        {getActionBadge(log.action)}
+                      </td>
 
-                    {/* 메뉴 (카테고리) */}
-                    <td className="py-3.5 px-4 text-center whitespace-nowrap">
-                      <span className="px-2 py-0.5 bg-slate-100 text-slate-700 border border-slate-200 rounded-md text-[11px] font-bold">
-                        {log.category || '일반'}
-                      </span>
-                    </td>
+                      {/* 메뉴 (카테고리) */}
+                      <td className="py-3.5 px-4 text-center whitespace-nowrap">
+                        <span className={`px-2 py-0.5 border rounded-md text-[11px] font-bold ${
+                          isPayment
+                            ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                            : isDelivery
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            : 'bg-slate-100 text-slate-700 border-slate-200'
+                        }`}>
+                          {log.category || '일반'}
+                        </span>
+                      </td>
 
-                    {/* 상세 조작 내용 */}
-                    <td className="py-3.5 px-4 font-semibold text-slate-800">
-                      {log.details}
-                    </td>
+                      {/* 상세 조작 내용 */}
+                      <td className="py-3.5 px-4 font-semibold text-slate-800">
+                        {log.details}
+                      </td>
 
-                    {/* 대상 ID */}
-                    <td className="py-3.5 px-4 text-slate-500 font-mono text-[11px]">
-                      {log.target_id || '-'}
-                    </td>
-                  </tr>
-                ))}
+                      {/* 대상 ID */}
+                      <td className="py-3.5 px-4 text-slate-500 font-mono text-[11px]">
+                        {log.target_id || '-'}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

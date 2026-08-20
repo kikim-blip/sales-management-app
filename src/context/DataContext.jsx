@@ -15,20 +15,19 @@ import {
   createPostApi, updatePostApi, deletePostApi,
   createMemoApi, updateMemoApi, deleteMemoApi,
   createLogApi, clearLogsApi,
+  getCacheEntry,
+  setCacheEntry,
 } from '../services/d1Api';
 
 const DataContext = createContext();
 
 // 로컬 스토리지 캐시 관리 헬퍼 (오프라인 폴백용)
-const saveCache = (key, val) => {
-  try { localStorage.setItem(`d1_cache_${key}`, JSON.stringify(val)); } catch (e) { console.error(e); }
+const saveCache = (key, val, ttlMs = 5 * 60 * 1000) => {
+  setCacheEntry(key, val, ttlMs);
 };
 
-const loadCache = (key, fallback) => {
-  try {
-    const saved = localStorage.getItem(`d1_cache_${key}`);
-    return saved ? JSON.parse(saved) : fallback;
-  } catch (e) { return fallback; }
+const loadCache = (key, fallback, ttlMs = 5 * 60 * 1000) => {
+  return getCacheEntry(key, fallback, ttlMs);
 };
 
 // 💡 고유 ID 기준 중복 아이템 제거 헬퍼 (동일 항목 2번 중복 노출 원천 차단)
@@ -60,6 +59,7 @@ const generateUniqueId = (arr, prefix = 'SALE', start = 101) => {
 
 export function DataProvider({ children }) {
   const { isLoggedIn, user, updateUserProfile } = useGoogleAuth();
+  const isFetchingRef = useRef(false);
 
   const [customers, setCustomers] = useState(() => loadCache('customers', []));
   const [sales, setSales] = useState(() => loadCache('sales', []));
@@ -114,9 +114,13 @@ export function DataProvider({ children }) {
 
   // ─── 전체 데이터 D1에서 일괄 조회 (초기 로딩 + 수동 새로고침) ─────────────
   const fetchAllData = useCallback(async (force = false) => {
+    if (!isLoggedIn) return;
+
     const now = Date.now();
     // 30초 이내 재호출 시 생략 (D1도 과도한 호출 방지)
-    if (!force && now - lastFetchRef.current < 30000) return;
+    if (!force && (isFetchingRef.current || now - lastFetchRef.current < 30000)) return;
+
+    isFetchingRef.current = true;
 
     try {
       setLoading(true);
@@ -192,12 +196,14 @@ export function DataProvider({ children }) {
       setError(err.message);
     } finally {
       setLoading(false);
+      isFetchingRef.current = false;
     }
-  }, [user?.email, updateUserProfile]);
+  }, [user?.email, updateUserProfile, isLoggedIn]);
 
   useEffect(() => {
+    if (!isLoggedIn) return;
     fetchAllData();
-  }, [fetchAllData]);
+  }, [isLoggedIn, fetchAllData]);
 
   // 💡 구글 로그인 사용자와 사원(staffs) 목록 동기화
   useEffect(() => {
@@ -258,7 +264,7 @@ export function DataProvider({ children }) {
     // 1. 로컬 즉시 반영 (optimistic update)
     setJobOrders(prev => {
       const existing = prev.find(o => o.code_number === codeNo || o.id === codeNo);
-      fullMergedOrder = { ...existing, ...updatedOrder, _localUpdated: Date.now() };
+      fullMergedOrder = { ...existing, ...updatedOrder, code_number: codeNo, _localUpdated: Date.now() };
       const next = prev.map(o =>
         (o.code_number === codeNo || o.id === codeNo)
           ? fullMergedOrder
@@ -272,7 +278,17 @@ export function DataProvider({ children }) {
     // 2. D1에 저장
     try {
       await updateJobOrderApi(codeNo, fullMergedOrder);
-      addLog('수정', '작업전표', `작업전표 [${fullMergedOrder.title || codeNo}] 내용 수정`, codeNo);
+      if (updatedOrder.status && updatedOrder.status !== fullMergedOrder.previousStatus) {
+        if (updatedOrder.status === '납품완료' || updatedOrder.status === '완료') {
+          addLog('납품완료', '작업전표', `[${fullMergedOrder.title || codeNo}] 상태를 [${updatedOrder.status}]로 변경 처리`, codeNo);
+        } else {
+          addLog('상태변경', '작업전표', `[${fullMergedOrder.title || codeNo}] 상태를 [${updatedOrder.status}]로 변경`, codeNo);
+        }
+      } else {
+        const qtyStr = fullMergedOrder.quantity ? ` / 수량: ${fullMergedOrder.quantity}부` : '';
+        const dDateStr = fullMergedOrder.delivery_date ? ` / 납품일: ${fullMergedOrder.delivery_date}` : '';
+        addLog('수정', '작업전표', `[${fullMergedOrder.title || codeNo}] 전표 정보 수정 (상태: ${fullMergedOrder.status || '진행중'}${dDateStr}${qtyStr})`, codeNo);
+      }
     } catch (err) {
       console.error('작업전표 D1 수정 에러:', err);
       throw err;
@@ -391,7 +407,7 @@ export function DataProvider({ children }) {
         saveCache('customers', next);
         return next;
       });
-      addLog('등록', '고객', `신규 고객사 [${payload.name}] (담당: ${payload.sales_manager}) 등록`, custId);
+      addLog('등록', '고객', `신규 고객사 [${payload.name}] (담당: ${payload.sales_manager || '미지정'}) 등록`, custId);
       return saved;
     } catch (err) {
       console.error('고객 D1 저장 에러:', err);
@@ -411,7 +427,7 @@ export function DataProvider({ children }) {
     });
     lastFetchRef.current = Date.now();
     await updateCustomerApi(id, fullMergedCust);
-    addLog('수정', '고객', `고객사 [${fullMergedCust.name || id}] 상세 정보 수정`, id);
+    addLog('수정', '고객', `고객사 [${fullMergedCust.name || id}] 상세 정보 수정 (부서: ${fullMergedCust.dept || '-'}, 연락처: ${fullMergedCust.phone || '-'})`, id);
   };
 
   const deleteCustomer = async (id) => {
@@ -448,7 +464,7 @@ export function DataProvider({ children }) {
       });
       const custObj = customers.find(c => c.id === newSale.customer_id);
       sendWebhookEvent({ ...saved, customer_name: custObj ? `${custObj.name} (${custObj.dept})` : '미지정' });
-      addLog('등록', '매출/견적', `[${payload.title}] ${payload.type || '매출'} 항목 등록 (공급가: ${Number(payload.supply_price || 0).toLocaleString()}원)`, saleId);
+      addLog('등록', '매출/견적', `[${payload.title}] ${payload.type || '매출'} 항목 등록 (공급가: ₩${Number(payload.supply_price || 0).toLocaleString()}원, 담당: ${payload.sales_manager || user?.userName || '미지정'})`, saleId);
     } catch (err) {
       console.error('매출 D1 저장 에러:', err);
       throw err;
@@ -471,7 +487,19 @@ export function DataProvider({ children }) {
       await updateSaleApi(id, fullMergedSale);
       const custObj = customers.find(c => c.id === fullMergedSale.customer_id);
       sendWebhookEvent({ ...fullMergedSale, id, customer_name: custObj ? `${custObj.name} (${custObj.dept})` : '미지정' });
-      addLog('수정', '매출/견적', `[${fullMergedSale.title || id}] 매출/견적 정보 수정`, id);
+
+      // 상태 변경과 일반 수정을 구분하여 명확히 로깅
+      if (updatedSale.billing_schedule) {
+        if (updatedSale.billing_schedule === '납품완료') {
+          addLog('납품완료', '매출/견적', `[${fullMergedSale.title || id}] 상태를 [납품완료]로 변경 처리`, id);
+        } else if (updatedSale.billing_schedule === '청구완료' || updatedSale.billing_schedule === '수금완료') {
+          addLog('상태변경', '매출/견적', `[${fullMergedSale.title || id}] 상태를 [${updatedSale.billing_schedule}]로 변경 처리`, id);
+        } else {
+          addLog('수정', '매출/견적', `[${fullMergedSale.title || id}] 매출 정보 수정 (총액: ₩${Number(fullMergedSale.total_price || 0).toLocaleString()}원, 상태: ${fullMergedSale.billing_schedule})`, id);
+        }
+      } else {
+        addLog('수정', '매출/견적', `[${fullMergedSale.title || id}] 매출 정보 수정 (총액: ₩${Number(fullMergedSale.total_price || 0).toLocaleString()}원, 납품일: ${fullMergedSale.delivery_date || '-'})`, id);
+      }
     } catch (err) {
       console.error('매출 D1 수정 에러:', err);
       throw err;
@@ -496,7 +524,7 @@ export function DataProvider({ children }) {
   };
 
   // ════════════════════════════════════════════════════════════════
-  // PAYMENTS (수금) CRUD
+  // PAYMENTS (수금) CRUD - 정밀 로깅 추가
   // ════════════════════════════════════════════════════════════════
   const addPayment = async (newPay) => {
     const payId = `PAY-${String(payments.length + 201).padStart(3, '0')}`;

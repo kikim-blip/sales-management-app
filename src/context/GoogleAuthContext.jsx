@@ -142,13 +142,13 @@ export function GoogleAuthProvider({ children }) {
       });
   }, [isSessionActive]);
 
-  const updateUserProfile = (newProfile) => {
+  const updateUserProfile = useCallback((newProfile) => {
     setUser(prev => {
       const updated = { ...prev, ...newProfile };
       localStorage.setItem('staff_profile_settings', JSON.stringify(updated));
       return updated;
     });
-  };
+  }, []);
 
   const login = () => {
     if (!CLIENT_ID) {

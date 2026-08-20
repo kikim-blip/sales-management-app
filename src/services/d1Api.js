@@ -3,18 +3,120 @@
 // Google Sheets API를 완전 대체합니다
 
 // Workers API 엔드포인트 (배포 후 실제 URL로 자동 설정)
-const API_BASE = import.meta.env.VITE_WORKERS_API_URL || 'https://sales-management-api.richkikim.workers.dev';
+const viteEnv = typeof import.meta !== 'undefined' && import.meta && import.meta.env ? import.meta.env : {};
+const API_BASE = viteEnv.VITE_WORKERS_API_URL || 'https://sales-management-api.richkikim.workers.dev';
+const DEFAULT_CACHE_TTL_MS = 5 * 60 * 1000;
+const DEFAULT_TIMEOUT_MS = 20000;
+const MAX_RETRIES = 2;
+
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+export function normalizeApiError(error) {
+  const message = (error && (error.message || String(error))) || '';
+
+  if (!message) {
+    return '서버 응답이 올바르지 않습니다. 잠시 후 다시 시도해 주세요.';
+  }
+
+  if (/fetch.*failed|network|Failed to fetch|load failed/i.test(message)) {
+    return '네트워크 연결에 실패했습니다. 잠시 후 다시 시도해 주세요.';
+  }
+
+  if (/API Error|status|response/i.test(message) || /500|502|503|504/.test(message)) {
+    return '서버 응답이 올바르지 않습니다. 잠시 후 다시 시도해 주세요.';
+  }
+
+  return message;
+}
+
+export function setCacheEntry(key, value, ttlMs = DEFAULT_CACHE_TTL_MS) {
+  try {
+    const payload = {
+      value,
+      savedAt: Date.now(),
+      expiresAt: Date.now() + ttlMs,
+    };
+    localStorage.setItem(`d1_cache_${key}`, JSON.stringify(payload));
+    return payload;
+  } catch (e) {
+    console.warn(`캐시 저장 실패: ${key}`, e);
+    return null;
+  }
+}
+
+export function getCacheEntry(key, fallback = null, ttlMs = DEFAULT_CACHE_TTL_MS) {
+  try {
+    const raw = localStorage.getItem(`d1_cache_${key}`);
+    if (!raw) return fallback;
+
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return fallback;
+
+    const now = Date.now();
+    const isExpired = typeof parsed.expiresAt === 'number' ? now > parsed.expiresAt : now - (parsed.savedAt || now) > ttlMs;
+
+    if (isExpired) {
+      localStorage.removeItem(`d1_cache_${key}`);
+      return fallback;
+    }
+
+    return parsed.value ?? fallback;
+  } catch (e) {
+    console.warn(`캐시 로드 실패: ${key}`, e);
+    return fallback;
+  }
+}
 
 async function apiFetch(path, options = {}) {
-  const res = await fetch(`${API_BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...options.headers },
-    ...options,
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(err.error || `API Error ${res.status}`);
+  const url = `${API_BASE}${path}`;
+  const timeoutMs = options.timeout ?? DEFAULT_TIMEOUT_MS;
+  const retries = options.retries ?? MAX_RETRIES;
+
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const response = await fetch(url, {
+        headers: { 'Content-Type': 'application/json', ...options.headers },
+        signal: controller.signal,
+        ...options,
+      });
+
+      if (!response.ok) {
+        let payload = null;
+        try {
+          payload = await response.json();
+        } catch {
+          payload = null;
+        }
+        const msg = payload?.error || payload?.message || response.statusText || `API Error ${response.status}`;
+        throw new Error(msg);
+      }
+
+      const text = await response.text();
+      if (!text) return null;
+      try {
+        return JSON.parse(text);
+      } catch {
+        return text;
+      }
+    } catch (error) {
+      const message = normalizeApiError(error);
+      const shouldRetry = attempt < retries && /네트워크|fetch|timeout|abort|API Error|500|502|503|504/i.test(message);
+
+      if (shouldRetry) {
+        await sleep(400 * (attempt + 1));
+        continue;
+      }
+
+      throw new Error(message);
+    } finally {
+      clearTimeout(timeoutId);
+    }
   }
-  return res.json();
+
+  throw new Error('서버 응답이 올바르지 않습니다. 잠시 후 다시 시도해 주세요.');
 }
 
 // ─── 배치 전체 조회 (초기 로딩 1회 API 호출) ─────────────────────────────

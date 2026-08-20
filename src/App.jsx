@@ -1,5 +1,5 @@
 // src/App.jsx
-import React, { Component } from 'react';
+import React, { Component, Suspense, lazy } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import Header from './components/layout/Header';
 import Sidebar from './components/layout/Sidebar';
@@ -9,15 +9,15 @@ import { useData } from './context/DataContext';
 import CalculatorWidget from './components/common/Calculator';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 
-import DashboardPage from './pages/DashboardPage';
-import CustomerPage from './pages/CustomerPage';
-import JobOrderPage from './pages/JobOrderPage';
-import SalesPage from './pages/SalesPage';
-import PaymentPage from './pages/PaymentPage';
-import StaffManagementPage from './pages/StaffManagementPage';
-import BoardPage from './pages/BoardPage';
-import LogPage from './pages/LogPage';
-import LoginPage from './pages/LoginPage';
+const DashboardPage = lazy(() => import('./pages/DashboardPage'));
+const CustomerPage = lazy(() => import('./pages/CustomerPage'));
+const JobOrderPage = lazy(() => import('./pages/JobOrderPage'));
+const SalesPage = lazy(() => import('./pages/SalesPage'));
+const PaymentPage = lazy(() => import('./pages/PaymentPage'));
+const StaffManagementPage = lazy(() => import('./pages/StaffManagementPage'));
+const BoardPage = lazy(() => import('./pages/BoardPage'));
+const LogPage = lazy(() => import('./pages/LogPage'));
+const LoginPage = lazy(() => import('./pages/LoginPage'));
 
 class ErrorBoundary extends Component {
   constructor(props) {
@@ -74,7 +74,11 @@ export default function App() {
 
   // 💡 최초 접속 시 로그인되지 않은 사용자는 메인 화면을 숨기고 로그인 & 회원가입 신청 게이트만 표시!
   if (!isLoggedIn) {
-    return <LoginPage />;
+    return (
+      <Suspense fallback={<div className="min-h-screen bg-slate-50 flex items-center justify-center text-sm font-bold text-slate-500">로그인 화면 로딩 중...</div>}>
+        <LoginPage />
+      </Suspense>
+    );
   }
 
   const isAdmin = user?.role === '관리자' || user?.email?.toLowerCase() === 'richkikim@gmail.com';
@@ -91,16 +95,18 @@ export default function App() {
 
           {/* 본문 콘텐츠 영역 */}
           <main className="flex-1 p-4 sm:p-6 pb-20 md:pb-6 overflow-y-auto">
-            <Routes>
-              <Route path="/" element={<DashboardPage />} />
-              <Route path="/customers" element={<CustomerPage />} />
-              <Route path="/job-orders" element={<JobOrderPage />} />
-              <Route path="/sales" element={<SalesPage />} />
-              <Route path="/payments" element={<PaymentPage />} />
-              <Route path="/staffs" element={isAdmin ? <StaffManagementPage /> : <div className="text-center py-20 font-bold text-slate-400">관리자 전용 메뉴입니다.</div>} />
-              <Route path="/board" element={<BoardPage />} />
-              <Route path="/logs" element={isAdmin ? <LogPage /> : <div className="text-center py-20 font-bold text-slate-400">관리자 전용 메뉴입니다.</div>} />
-            </Routes>
+            <Suspense fallback={<div className="flex items-center justify-center min-h-[200px] text-sm font-bold text-slate-500">페이지 로딩 중...</div>}>
+              <Routes>
+                <Route path="/" element={<DashboardPage />} />
+                <Route path="/customers" element={<CustomerPage />} />
+                <Route path="/job-orders" element={<JobOrderPage />} />
+                <Route path="/sales" element={<SalesPage />} />
+                <Route path="/payments" element={<PaymentPage />} />
+                <Route path="/staffs" element={isAdmin ? <StaffManagementPage /> : <div className="text-center py-20 font-bold text-slate-400">관리자 전용 메뉴입니다.</div>} />
+                <Route path="/board" element={<BoardPage />} />
+                <Route path="/logs" element={isAdmin ? <LogPage /> : <div className="text-center py-20 font-bold text-slate-400">관리자 전용 메뉴입니다.</div>} />
+              </Routes>
+            </Suspense>
           </main>
         </div>
 
