@@ -77,6 +77,14 @@ export default function CustomerPage() {
         await updateCustomer(editingId, formData);
         alert('고객 정보가 수정되었습니다!');
       } else {
+        // Prevent duplicate creation manually
+        const existing = customers.find(
+          c => (c.name || '').trim() === formData.name.trim() && (c.dept || '').trim() === (formData.dept || '').trim()
+        );
+        if (existing) {
+          alert('이미 동일한 이름과 부서/과를 가진 고객이 존재합니다. 담당자를 추가하시려면 해당 고객사의 "담당자 추가" 버튼을 이용해주세요.');
+          return;
+        }
         await addCustomer(formData);
         alert('신규 고객이 등록되었습니다!');
       }
