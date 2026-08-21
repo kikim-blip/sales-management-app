@@ -325,13 +325,15 @@ export default function DashboardPage() {
     .map(order => {
       const dday = getDDayInfo(order.delivery_date);
       const cust = customers.find(c => c.id === order.customer_id);
+      const finalDept = order.dept || cust?.dept || '';
+      const finalOrg = cust?.name || order.customer_name || order.customer_id || '미지정';
       return {
         ...order,
         itemType: 'jobOrder', // 작업전표
         displayCode: order.code_number || order.id,
         displayTitle: order.title || '제목 없음',
         dday,
-        customerNameDisplay: cust ? `${cust.name}${cust.dept ? ` (${cust.dept})` : ''}` : (order.customer_name || order.customer_id || '미지정'),
+        customerNameDisplay: finalDept ? `${finalOrg} (${finalDept})` : finalOrg,
         detailsText: `사양: ${order.spec || '-'} | 수량: ${order.quantity ? `${order.quantity}부` : '-'} | 제본: ${order.binding || '-'}`,
       };
     });
@@ -350,13 +352,15 @@ export default function DashboardPage() {
       const dday = getDDayInfo(sale.delivery_date);
       const cust = customers.find(c => c.id === sale.customer_id);
       const contentDesc = sale.content || sale.note || '';
+      const finalDept = sale.dept || cust?.dept || '';
+      const finalOrg = cust?.name || sale.customer_name || sale.customer_id || '미지정';
       return {
         ...sale,
         itemType: 'sale', // 매출/견적 수동 등록 건
         displayCode: sale.id || '매출건',
         displayTitle: sale.title || '제목 없음',
         dday,
-        customerNameDisplay: cust ? `${cust.name}${cust.dept ? ` (${cust.dept})` : (sale.dept ? ` (${sale.dept})` : '')}` : (sale.customer_name || sale.customer_id || '미지정'),
+        customerNameDisplay: finalDept ? `${finalOrg} (${finalDept})` : finalOrg,
         detailsText: `구분: [${sale.type || '매출'}] ${sale.billing_schedule || '진행중'} | 내용: ${contentDesc || '세부내용 없음'}${sale.total_price ? ` | 금액: ₩${Number(sale.total_price).toLocaleString()}원` : ''}`,
       };
     });
@@ -632,27 +636,17 @@ export default function DashboardPage() {
     try {
       setSubmittingSale(true);
       let targetCustomerId = '';
-      // 1. 기존 고객 목록 스마트 매칭 (이메일/연락처/성명 일치 시 동일 고객사로 자동 인식)
+      // 1. 고객 매칭: [기관명 + 부서명] 완전 일치 매칭
       const inputName = custName.toLowerCase();
       const inputDept = (newSaleFormData.dept || '').trim().toLowerCase();
-      const inputContact = (newSaleFormData.contact_person || '').trim().toLowerCase();
-      const inputEmail = (newSaleFormData.email || '').trim().toLowerCase();
-      const inputPhone = (newSaleFormData.phone || '').trim();
 
       const matchedCust = customers.find(c => {
         const cName = (c.name || '').trim().toLowerCase();
-        const cContact = (c.contact_person || '').trim().toLowerCase();
-        const cEmail = (c.email || '').trim().toLowerCase();
-        const cPhone = (c.phone || '').trim();
-
-        if (inputEmail && cEmail && inputEmail === cEmail && cName === inputName) return true;
-        if (inputPhone && cPhone && inputPhone === cPhone && cName === inputName) return true;
-        if (cName === inputName && inputContact && cContact && (cContact.includes(inputContact) || inputContact.includes(cContact))) return true;
         const cDept = (c.dept || '').trim().toLowerCase();
-        return cName === inputName && (!inputDept || !cDept || cDept === inputDept) && (!inputContact || !cContact || cContact === inputContact);
+        return cName === inputName && cDept === inputDept;
       });
 
-      // 2. 미등록 고객인 경우만 신규 고객으로 자동 등록
+      // 2. 미등록 고객이거나 부서가 다른 경우 독립된 신규 고객으로 등록
       if (!matchedCust) {
         const newCustData = {
           name: custName,
@@ -666,17 +660,16 @@ export default function DashboardPage() {
         targetCustomerId = savedCust?.id || `CUST-${Date.now()}`;
       } else {
         targetCustomerId = matchedCust.id;
-        if (newSaleFormData.dept && !matchedCust.dept) {
-          updateCustomer(matchedCust.id, { dept: newSaleFormData.dept });
-        }
       }
-
 
       const salePayload = {
         ...newSaleFormData,
         customer_id: targetCustomerId,
         customer_name: custName,
-        dept: newSaleFormData.dept || user?.dept || '세종영업본부',
+        dept: newSaleFormData.dept || '',
+        contact_person: newSaleFormData.contact_person || '',
+        phone: newSaleFormData.phone || '',
+        email: newSaleFormData.email || '',
         team: newSaleFormData.team || user?.team || '영업2조',
         sales_manager: newSaleFormData.sales_manager || loggedInUserName,
       };
@@ -786,10 +779,10 @@ export default function DashboardPage() {
                         </span>
                         {(() => {
                           const cust = customers.find(c => c.id === item.customer_id);
-                          const contactPerson = cust?.contact_person || item.client_contact_person || item.contact_person || '';
-                          const phone = cust?.phone || item.client_phone || item.phone || '';
-                          const email = cust?.email || item.client_email || item.email || '';
-                          const manager = item.manager_name || item.sales_manager || cust?.sales_manager || '';
+                          const contactPerson = item.contact_person || item.client_contact_person || cust?.contact_person || '';
+                          const phone = item.phone || item.client_phone || cust?.phone || '';
+                          const email = item.email || item.client_email || cust?.email || '';
+                          const manager = item.sales_manager || item.manager_name || cust?.sales_manager || '';
                           if (!contactPerson && !phone && !email && !manager) return null;
                           return (
                             <span className="flex flex-wrap items-center gap-x-2 text-[11px] text-slate-500 font-medium">
