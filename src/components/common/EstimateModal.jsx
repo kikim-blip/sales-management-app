@@ -57,9 +57,9 @@ export default function EstimateModal({ sale, customer, onClose, onSave, onPrint
   const [items, setItems] = useState(getInitialItems());
   const [includeVat, setIncludeVat] = useState(true);
   const [estimateDate, setEstimateDate] = useState(sale.estimate_date || sale.reg_date || todayStr);
-  const [validDays, setValidDays] = useState(sale.valid_days || '견적 후 30일간');
-  const [paymentTerms, setPaymentTerms] = useState(sale.payment_terms || '납품 후 100% 현금/계좌이체');
-  const [estimateNote, setEstimateNote] = useState(sale.estimate_note || sale.content || '');
+  const [validDays, setValidDays] = useState(sale.valid_days || '');
+  const [paymentTerms, setPaymentTerms] = useState(sale.payment_terms || '');
+  const [estimateNote, setEstimateNote] = useState(sale.estimate_note || '');
   const [saving, setSaving] = useState(false);
 
   // 품목 항목 수정

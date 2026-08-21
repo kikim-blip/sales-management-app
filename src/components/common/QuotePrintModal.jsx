@@ -41,6 +41,25 @@ export default function QuotePrintModal({ quote, customer, onClose }) {
   const { user } = useGoogleAuth();
   const printRef = useRef();
   const [isComparative, setIsComparative] = useState(false);
+  const [stampImage, setStampImage] = useState(() => localStorage.getItem('company_stamp_image') || null);
+
+  const handleStampUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const base64 = ev.target.result;
+        setStampImage(base64);
+        localStorage.setItem('company_stamp_image', base64);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const clearStamp = () => {
+    setStampImage(null);
+    localStorage.removeItem('company_stamp_image');
+  };
 
   if (!quote) return null;
 
@@ -205,6 +224,29 @@ export default function QuotePrintModal({ quote, customer, onClose }) {
           </div>
 
           <div className="flex items-center space-x-2">
+            <div className="hidden sm:flex items-center gap-1.5 mr-2">
+              <input
+                type="file"
+                accept="image/*"
+                id="stamp-upload"
+                className="hidden"
+                onChange={handleStampUpload}
+              />
+              <label
+                htmlFor="stamp-upload"
+                className="cursor-pointer text-[11px] px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded font-medium border border-slate-200"
+              >
+                도장 이미지 등록
+              </label>
+              {stampImage && (
+                <button
+                  onClick={clearStamp}
+                  className="text-[11px] px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded font-medium border border-rose-200"
+                >
+                  도장 초기화
+                </button>
+              )}
+            </div>
             <button
               onClick={handleExportExcel}
               className="flex items-center space-x-1 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-xl text-xs font-bold shadow-sm transition"
@@ -244,6 +286,9 @@ export default function QuotePrintModal({ quote, customer, onClose }) {
                 {/* 좌측: 수신처 (공급받는 자) */}
                 <div className="col-span-12 sm:col-span-5 border-b-2 sm:border-b-0 sm:border-r-2 border-slate-900 flex flex-col justify-between p-3 bg-white">
                   <div className="space-y-1.5 text-center my-auto py-2">
+                    <h2 className="text-lg font-black text-slate-900 tracking-widest mb-3">
+                      거 래 처
+                    </h2>
                     <h2 className="text-base sm:text-lg font-black text-slate-900 leading-tight">
                       {custName}
                     </h2>
@@ -292,12 +337,16 @@ export default function QuotePrintModal({ quote, customer, onClose }) {
                   </div>
 
                   {/* 🔴 공식 직인 도장 (대표자 명 옆 오버레이) */}
-                  <div className="absolute right-3 top-7 w-14 h-14 rounded-full border-2 border-rose-600/90 text-rose-600 flex items-center justify-center font-black text-[10px] transform rotate-6 opacity-85 select-none pointer-events-none bg-rose-50/20">
-                    <div className="text-center leading-tight">
-                      <Stamp className="w-3.5 h-3.5 mx-auto mb-0.5" />
-                      <span>경성문화<br/>직인</span>
+                  {stampImage ? (
+                    <img src={stampImage} alt="직인" className="absolute right-3 top-5 w-16 h-16 object-contain mix-blend-multiply pointer-events-none" />
+                  ) : (
+                    <div className="absolute right-3 top-7 w-14 h-14 rounded-full border-2 border-rose-600/90 text-rose-600 flex items-center justify-center font-black text-[10px] transform rotate-6 opacity-85 select-none pointer-events-none bg-rose-50/20">
+                      <div className="text-center leading-tight">
+                        <Stamp className="w-3.5 h-3.5 mx-auto mb-0.5" />
+                        <span>경성문화<br/>직인</span>
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
 
               </div>

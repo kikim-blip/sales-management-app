@@ -281,15 +281,19 @@ async function createSale(db, request) {
     `INSERT OR REPLACE INTO sales
      (id, reg_date, receipt_date, delivery_date, delivery_time, customer_id, title, content, note,
       billing_schedule, type, supply_price, tax, total_price, calendar_synced, superthread_synced,
-      dept, team, sales_manager, contact_person, phone, mobile, email, updated_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now','localtime'))`
+      dept, team, sales_manager, contact_person, phone, mobile, email,
+      estimate_type, estimate_date, valid_days, payment_terms, estimate_note, estimate_items,
+      updated_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now','localtime'))`
   ).bind(id, body.reg_date||'', body.receipt_date||'', body.delivery_date||'',
          body.delivery_time||'', body.customer_id||'', body.title||'', body.content||'',
          body.note||'', body.billing_schedule||'진행중', body.type||'매출',
          body.supply_price||0, body.tax||0, body.total_price||0,
          body.calendar_synced?1:0, body.superthread_synced?1:0,
          body.dept||'', body.team||'', body.sales_manager||'',
-         body.contact_person||'', body.phone||'', body.mobile||'', body.email||'').run();
+         body.contact_person||'', body.phone||'', body.mobile||'', body.email||'',
+         body.estimate_type||'', body.estimate_date||'', body.valid_days||'', body.payment_terms||'', body.estimate_note||'', body.estimate_items||'[]'
+  ).run();
   const row = await db.prepare('SELECT * FROM sales WHERE id = ?').bind(id).first();
   return json(row, 201);
 }
@@ -303,13 +307,17 @@ async function updateSale(db, id, request) {
     `UPDATE sales SET reg_date=?, receipt_date=?, delivery_date=?, delivery_time=?, customer_id=?,
      title=?, content=?, note=?, billing_schedule=?, type=?, supply_price=?, tax=?, total_price=?,
      calendar_synced=?, superthread_synced=?, dept=?, team=?, sales_manager=?,
-     contact_person=?, phone=?, mobile=?, email=?, updated_at=datetime('now','localtime') WHERE id=?`
+     contact_person=?, phone=?, mobile=?, email=?,
+     estimate_type=?, estimate_date=?, valid_days=?, payment_terms=?, estimate_note=?, estimate_items=?,
+     updated_at=datetime('now','localtime') WHERE id=?`
   ).bind(merged.reg_date||'', merged.receipt_date||'', merged.delivery_date||'', merged.delivery_time||'',
          merged.customer_id||'', merged.title||'', merged.content||'', merged.note||'',
          merged.billing_schedule||'진행중', merged.type||'매출', merged.supply_price||0,
          merged.tax||0, merged.total_price||0, merged.calendar_synced?1:0,
          merged.superthread_synced?1:0, merged.dept||'', merged.team||'', merged.sales_manager||'',
-         merged.contact_person||'', merged.phone||'', merged.mobile||'', merged.email||'', id).run();
+         merged.contact_person||'', merged.phone||'', merged.mobile||'', merged.email||'',
+         merged.estimate_type||'', merged.estimate_date||'', merged.valid_days||'', merged.payment_terms||'', merged.estimate_note||'', merged.estimate_items||'[]',
+         id).run();
   const row = await db.prepare('SELECT * FROM sales WHERE id = ?').bind(id).first();
   return json(row);
 }
