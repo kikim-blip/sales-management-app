@@ -14,7 +14,7 @@ import { getLocalDateStr, calculateDDay } from '../utils/dateUtils';
 import { normalizeStaffName } from '../utils/nameUtils';
 
 export default function DashboardPage() {
-  const { customers, sales, payments, jobOrders, staffs = [], loading, error, selectedTeamGroup, updateJobOrder, updateSales, addSales, addCustomer } = useData();
+  const { customers, contacts = [], sales, payments, jobOrders, staffs = [], loading, error, selectedTeamGroup, updateJobOrder, updateSales, addSales, addCustomer, addContact } = useData();
   const { user } = useGoogleAuth();
 
   const customerDropdownRef = useRef(null);
@@ -418,9 +418,9 @@ export default function DashboardPage() {
       dates = `${formatYMD(startDate)}/${formatYMD(nextDate)}`;
     }
 
-    // 담당자 및 연락처
-    const contactPerson = cust?.contact_person || order.client_contact_person || order.contact_person || '';
-    const contactPhone = cust?.phone || order.client_phone || order.phone || '';
+    // 담당자 및 연락처 — ✅ 건 자체 필드 최우선 사용 (customers 참조 안 함)
+    const contactPerson = order.contact_person || order.client_contact_person || '';
+    const contactPhone = order.phone || order.client_phone || '';
     const contactStr = contactPerson ? `${contactPerson}${contactPhone ? ` (${contactPhone})` : ''}` : '-';
 
     // 상세 작업내용
@@ -428,7 +428,7 @@ export default function DashboardPage() {
     const deliveryTimeStr = order.delivery_time && order.delivery_time.trim()
       ? `${targetDateStr} ${order.delivery_time}`
       : `${targetDateStr} (종일)`;
-    const managerStr = order.manager_name || order.sales_manager || cust?.sales_manager || '-';
+    const managerStr = order.manager_name || order.sales_manager || '-';
     
     // 2. 본문 내용 포맷
     const detailsContent = [
@@ -651,15 +651,29 @@ export default function DashboardPage() {
         const newCustData = {
           name: custName,
           dept: newSaleFormData.dept || '',
-          contact_person: newSaleFormData.contact_person || '',
-          phone: newSaleFormData.phone || '',
-          email: newSaleFormData.email || '',
-          sales_manager: newSaleFormData.sales_manager || loggedInUserName,
+          // ✅ 고객사(customers)에는 조직정보만 저장 — 담당자/연락처 저장 안 함
         };
         const savedCust = await addCustomer(newCustData);
         targetCustomerId = savedCust?.id || `CUST-${Date.now()}`;
       } else {
         targetCustomerId = matchedCust.id;
+      }
+
+      // 3. 담당자가 입력되었고 contacts DB에 없으면 자동 등록
+      if (newSaleFormData.contact_person && newSaleFormData.contact_person.trim()) {
+        const contactNameLow = newSaleFormData.contact_person.trim().toLowerCase();
+        const existingContact = contacts.find(c =>
+          c.customer_id === targetCustomerId &&
+          (c.name || '').trim().toLowerCase() === contactNameLow
+        );
+        if (!existingContact) {
+          await addContact({
+            customer_id: targetCustomerId,
+            name: newSaleFormData.contact_person.trim(),
+            phone: newSaleFormData.phone || '',
+            email: newSaleFormData.email || '',
+          });
+        }
       }
 
       const salePayload = {

@@ -141,6 +141,24 @@ export async function deleteCustomerApi(id) {
   return apiFetch(`/api/customers/${encodeURIComponent(id)}`, { method: 'DELETE' });
 }
 
+// ─── CONTACTS (담당자 1:N) ────────────────────────────────────────────────────
+export async function fetchContacts(params = {}) {
+  const qs = new URLSearchParams(params).toString();
+  return apiFetch(`/api/contacts${qs ? '?' + qs : ''}`);
+}
+
+export async function createContactApi(data) {
+  return apiFetch('/api/contacts', { method: 'POST', body: JSON.stringify(data) });
+}
+
+export async function updateContactApi(id, data) {
+  return apiFetch(`/api/contacts/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(data) });
+}
+
+export async function deleteContactApi(id) {
+  return apiFetch(`/api/contacts/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
 // ─── SALES ───────────────────────────────────────────────────────────────────
 export async function fetchSales(params = {}) {
   const qs = new URLSearchParams(params).toString();

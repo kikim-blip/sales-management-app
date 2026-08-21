@@ -16,7 +16,7 @@ import { normalizeStaffName } from '../utils/nameUtils';
 
 
 export default function SalesPage() {
-  const { sales, customers, jobOrders, payments, staffs = [], addSales, updateSales, deleteSales, addJobOrder, addPayment, addCustomer, selectedTeamGroup, showCalc, toggleCalc } = useData();
+  const { sales, customers, contacts = [], jobOrders, payments, staffs = [], addSales, updateSales, deleteSales, addJobOrder, addPayment, addCustomer, addContact, selectedTeamGroup, showCalc, toggleCalc } = useData();
   const { user } = useGoogleAuth();
   const loggedInUserName = user?.userName || user?.name || (user?.email ? user.email.split('@')[0] : '');
 
@@ -142,9 +142,9 @@ export default function SalesPage() {
   const filteredSales = sales.filter(s => isTeamMatch(s, s.customer_id)).filter(item => {
     const cust = customers.find(c => c.id === item.customer_id);
     const orgName = cust?.name || item.customer_name || '';
-    const deptName = cust?.dept || item.dept || '';
-    const contactPerson = cust?.contact_person || item.client_contact_person || '';
-    const salesManager = cust?.sales_manager || item.manager_name || '';
+    const deptName = item.dept || cust?.dept || '';
+    const contactPerson = item.contact_person || item.client_contact_person || '';
+    const salesManager = item.sales_manager || item.manager_name || '';
     const title = item.title || '';
     const content = item.content || '';
     const note = item.note || '';
@@ -503,7 +503,7 @@ export default function SalesPage() {
 
       let targetCustomerId = '';
 
-      // 1. 고객 매칭: 드롭다운 선택 우선 or [기관명 + 부서명] 정확 일치 매칭
+      // 1. 고객 매칭: [기관명 + 부서명] 완전 일치 매칭
       const inputName = custName.toLowerCase();
       const inputDept = (formData.dept || '').trim().toLowerCase();
 
@@ -519,15 +519,29 @@ export default function SalesPage() {
         const newCustData = {
           name: custName,
           dept: formData.dept || '',
-          contact_person: formData.contact_person || '',
-          phone: formData.phone || '',
-          email: formData.email || '',
-          sales_manager: formData.sales_manager || loggedInUserName,
+          // ✅ 고객사(customers)에는 조직정보만 저장 — 담당자/연락처 저장 안 함
         };
         const savedCust = await addCustomer(newCustData);
         targetCustomerId = savedCust?.id || `CUST-${Date.now()}`;
       } else {
         targetCustomerId = matchedCust.id;
+      }
+
+      // 3. 담당자가 입력되었고 contacts DB에 없으면 자동 등록
+      if (formData.contact_person && formData.contact_person.trim()) {
+        const contactNameLow = formData.contact_person.trim().toLowerCase();
+        const existingContact = contacts.find(c =>
+          c.customer_id === targetCustomerId &&
+          (c.name || '').trim().toLowerCase() === contactNameLow
+        );
+        if (!existingContact) {
+          await addContact({
+            customer_id: targetCustomerId,
+            name: formData.contact_person.trim(),
+            phone: formData.phone || '',
+            email: formData.email || '',
+          });
+        }
       }
 
       const salePayload = {
@@ -574,7 +588,7 @@ export default function SalesPage() {
     const isMatchedSearch = (item, cust) => {
       if (!analysisSearchText.trim()) return true;
       const q = analysisSearchText.toLowerCase();
-      const text = `${cust?.name || ''} ${cust?.dept || ''} ${cust?.contact_person || ''} ${cust?.sales_manager || ''} ${item.title || ''} ${item.customer_name || ''} ${item.content || ''}`.toLowerCase();
+      const text = `${cust?.name || ''} ${cust?.dept || ''} ${item.contact_person || ''} ${item.sales_manager || ''} ${item.title || ''} ${item.customer_name || ''} ${item.content || ''}`.toLowerCase();
       return text.includes(q);
     };
 
@@ -621,8 +635,12 @@ export default function SalesPage() {
     periodSales.forEach(s => {
       const cust = customers.find(c => c.id === s.customer_id);
       const orgName = cust ? cust.name : (s.customer_name || '미지정 고객');
-      const deptName = cust?.dept || s.dept || '';
-      const contactPerson = cust?.contact_person || s.client_contact_person || '';
+      const deptName = s.dept || cust?.dept || '';
+      // ✅ 담당자/연락처/영업담당은 매출 건 자체 필드 우선 사용 (customers 참조 안 함)
+      const contactPerson = s.contact_person || s.client_contact_person || '';
+      const phone = s.phone || '';
+      const email = s.email || '';
+      const salesManager = s.sales_manager || s.manager_name || '';
       const amount = Number(s.total_price || 0);
       totalSales += amount;
       rawLedger.push({
@@ -632,22 +650,21 @@ export default function SalesPage() {
         orgName,
         deptName,
         contactPerson,
-        phone: cust?.phone || s.phone || '',
-        email: cust?.email || s.email || '',
-        salesManager: cust?.sales_manager || s.manager_name || '',
+        phone,
+        email,
+        salesManager,
         kind: '매출',
         title: s.title || '매출 건',
         sales: amount,
         payment: 0,
-        customerObj: cust || { id: s.customer_id, name: orgName, dept: deptName, contact_person: contactPerson },
+        customerObj: cust || { id: s.customer_id, name: orgName, dept: deptName },
       });
     });
 
     periodPayments.forEach(p => {
       const cust = customers.find(c => c.id === p.customer_id);
       const orgName = cust ? cust.name : (p.customer_name || '미지정 고객');
-      const deptName = cust?.dept || p.dept || '';
-      const contactPerson = cust?.contact_person || '';
+      const deptName = p.dept || cust?.dept || '';
       const amount = Number(p.amount || 0);
       totalPayment += amount;
       rawLedger.push({
@@ -656,15 +673,15 @@ export default function SalesPage() {
         customerKey: `${orgName}___${deptName}`,
         orgName,
         deptName,
-        contactPerson,
-        phone: cust?.phone || '',
-        email: cust?.email || '',
-        salesManager: cust?.sales_manager || '',
+        contactPerson: '',
+        phone: '',
+        email: '',
+        salesManager: '',
         kind: '수금',
         title: `수금 입금 (${p.method || '계좌이체'})`,
         sales: 0,
         payment: amount,
-        customerObj: cust || { id: p.customer_id, name: orgName, dept: deptName, contact_person: contactPerson },
+        customerObj: cust || { id: p.customer_id, name: orgName, dept: deptName },
       });
     });
 
@@ -1156,10 +1173,11 @@ export default function SalesPage() {
 
                       {/* 발주처 밑 담당자 이름, 연락처, 이메일, 영업담당자 */}
                       {(() => {
-                        const contactPerson = cust?.contact_person || item.contact_person || '';
-                        const phone = cust?.phone || item.phone || '';
-                        const email = cust?.email || item.email || '';
-                        const manager = item.sales_manager || cust?.sales_manager || '';
+                        // ✅ 매출 건 자체 필드 최우선 사용 — customers 필드 참조 안 함
+                        const contactPerson = item.contact_person || item.client_contact_person || '';
+                        const phone = item.phone || '';
+                        const email = item.email || '';
+                        const manager = item.sales_manager || '';
                         if (!contactPerson && !phone && !email && !manager) return null;
                         return (
                           <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-slate-600 font-medium">
@@ -1349,10 +1367,11 @@ export default function SalesPage() {
 
                         {/* 발주처 밑 담당자 이름, 연락처, 이메일, 영업담당자 */}
                         {(() => {
-                          const contactPerson = cust?.contact_person || item.contact_person || '';
-                          const phone = cust?.phone || item.phone || '';
-                          const email = cust?.email || item.email || '';
-                          const manager = item.sales_manager || cust?.sales_manager || '';
+                          // ✅ 매출 건 자체 필드 최우선 사용 — customers 필드 참조 안 함
+                          const contactPerson = item.contact_person || item.client_contact_person || '';
+                          const phone = item.phone || '';
+                          const email = item.email || '';
+                          const manager = item.sales_manager || '';
                           if (!contactPerson && !phone && !email && !manager) return null;
                           return (
                             <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-slate-600 font-medium">

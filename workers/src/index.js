@@ -186,6 +186,18 @@ export default {
         if (method === 'DELETE') return await deleteTeam(env.DB, name);
       }
 
+      // ── CONTACTS (담당자 1:N) ────────────────────────────────────
+      if (path === '/api/contacts') {
+        if (method === 'GET') return await getContacts(env.DB, url);
+        if (method === 'POST') return await createContact(env.DB, request);
+      }
+      const contactMatch = path.match(/^\/api\/contacts\/(.+)$/);
+      if (contactMatch) {
+        const id = decodeURIComponent(contactMatch[1]);
+        if (method === 'PUT') return await updateContact(env.DB, id, request);
+        if (method === 'DELETE') return await deleteContact(env.DB, id);
+      }
+
       // ── AUDIT LOGS (작업 및 조작 변경 로그) ────────────────────
       if (path === '/api/logs') {
         if (method === 'GET') return await getLogs(env.DB, url);
@@ -268,14 +280,16 @@ async function createSale(db, request) {
   await db.prepare(
     `INSERT OR REPLACE INTO sales
      (id, reg_date, receipt_date, delivery_date, delivery_time, customer_id, title, content, note,
-      billing_schedule, type, supply_price, tax, total_price, calendar_synced, superthread_synced, dept, team, sales_manager, updated_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now','localtime'))`
+      billing_schedule, type, supply_price, tax, total_price, calendar_synced, superthread_synced,
+      dept, team, sales_manager, contact_person, phone, email, updated_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now','localtime'))`
   ).bind(id, body.reg_date||'', body.receipt_date||'', body.delivery_date||'',
          body.delivery_time||'', body.customer_id||'', body.title||'', body.content||'',
          body.note||'', body.billing_schedule||'진행중', body.type||'매출',
          body.supply_price||0, body.tax||0, body.total_price||0,
          body.calendar_synced?1:0, body.superthread_synced?1:0,
-         body.dept||'', body.team||'', body.sales_manager||'').run();
+         body.dept||'', body.team||'', body.sales_manager||'',
+         body.contact_person||'', body.phone||'', body.email||'').run();
   const row = await db.prepare('SELECT * FROM sales WHERE id = ?').bind(id).first();
   return json(row, 201);
 }
@@ -288,12 +302,14 @@ async function updateSale(db, id, request) {
   await db.prepare(
     `UPDATE sales SET reg_date=?, receipt_date=?, delivery_date=?, delivery_time=?, customer_id=?,
      title=?, content=?, note=?, billing_schedule=?, type=?, supply_price=?, tax=?, total_price=?,
-     calendar_synced=?, superthread_synced=?, dept=?, team=?, sales_manager=?, updated_at=datetime('now','localtime') WHERE id=?`
+     calendar_synced=?, superthread_synced=?, dept=?, team=?, sales_manager=?,
+     contact_person=?, phone=?, email=?, updated_at=datetime('now','localtime') WHERE id=?`
   ).bind(merged.reg_date||'', merged.receipt_date||'', merged.delivery_date||'', merged.delivery_time||'',
          merged.customer_id||'', merged.title||'', merged.content||'', merged.note||'',
          merged.billing_schedule||'진행중', merged.type||'매출', merged.supply_price||0,
          merged.tax||0, merged.total_price||0, merged.calendar_synced?1:0,
-         merged.superthread_synced?1:0, merged.dept||'', merged.team||'', merged.sales_manager||'', id).run();
+         merged.superthread_synced?1:0, merged.dept||'', merged.team||'', merged.sales_manager||'',
+         merged.contact_person||'', merged.phone||'', merged.email||'', id).run();
   const row = await db.prepare('SELECT * FROM sales WHERE id = ?').bind(id).first();
   return json(row);
 }
@@ -719,11 +735,54 @@ async function deleteMemo(db, id) {
 }
 
 // ════════════════════════════════════════════════════════════════
+// CONTACTS (담당자 1:N - customers에 종속)
+// ════════════════════════════════════════════════════════════════
+async function getContacts(db, url) {
+  const customerId = url.searchParams.get('customer_id');
+  let query = 'SELECT * FROM contacts WHERE 1=1';
+  const params = [];
+  if (customerId) { query += ' AND customer_id = ?'; params.push(customerId); }
+  query += ' ORDER BY name';
+  const { results } = await db.prepare(query).bind(...params).all();
+  return json(results);
+}
+
+async function createContact(db, request) {
+  const body = await request.json();
+  const id = body.id || generateId('CONT');
+  await db.prepare(
+    `INSERT OR REPLACE INTO contacts (id, customer_id, name, phone, email, note, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))`
+  ).bind(id, body.customer_id || '', body.name || '', body.phone || '',
+         body.email || '', body.note || '').run();
+  const row = await db.prepare('SELECT * FROM contacts WHERE id = ?').bind(id).first();
+  return json(row, 201);
+}
+
+async function updateContact(db, id, request) {
+  const body = await request.json();
+  const existing = await db.prepare('SELECT * FROM contacts WHERE id = ?').bind(id).first() || {};
+  const merged = { ...existing, ...body };
+  await db.prepare(
+    `UPDATE contacts SET customer_id=?, name=?, phone=?, email=?, note=?, updated_at=datetime('now','localtime') WHERE id=?`
+  ).bind(merged.customer_id || '', merged.name || '', merged.phone || '',
+         merged.email || '', merged.note || '', id).run();
+  const row = await db.prepare('SELECT * FROM contacts WHERE id = ?').bind(id).first();
+  return json(row);
+}
+
+async function deleteContact(db, id) {
+  await db.prepare('DELETE FROM contacts WHERE id = ?').bind(id).run();
+  return json({ success: true });
+}
+
+// ════════════════════════════════════════════════════════════════
 // BATCH FETCH (프론트엔드 초기 로딩 - 1회 요청으로 전체 조회)
 // ════════════════════════════════════════════════════════════════
 async function batchFetch(db) {
-  const [customers, sales, payments, jobOrders, staffsRaw, departments, teams, posts, memos, logs] = await Promise.all([
+  const [customers, contacts, sales, payments, jobOrders, staffsRaw, departments, teams, posts, memos, logs] = await Promise.all([
     db.prepare('SELECT * FROM customers ORDER BY name').all(),
+    db.prepare('SELECT * FROM contacts ORDER BY name').all(),
     db.prepare('SELECT * FROM sales ORDER BY reg_date DESC').all(),
     db.prepare('SELECT * FROM payments ORDER BY payment_date DESC').all(),
     db.prepare('SELECT * FROM job_orders ORDER BY receipt_date DESC').all(),
@@ -737,6 +796,7 @@ async function batchFetch(db) {
 
   return json({
     customers: customers.results,
+    contacts: contacts.results,
     sales: sales.results.map(s => ({
       ...s,
       calendar_synced: s.calendar_synced === 1,

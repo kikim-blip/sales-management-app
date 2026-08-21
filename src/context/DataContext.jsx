@@ -6,6 +6,7 @@ import { sendWebhookEvent } from '../services/webhookService';
 import {
   fetchAllD1Data,
   createCustomer, updateCustomerApi, deleteCustomerApi,
+  createContactApi, updateContactApi, deleteContactApi,
   createSaleApi, updateSaleApi, deleteSaleApi,
   createPaymentApi, updatePaymentApi, deletePaymentApi,
   createJobOrderApi, updateJobOrderApi, deleteJobOrderApi,
@@ -62,6 +63,7 @@ export function DataProvider({ children }) {
   const isFetchingRef = useRef(false);
 
   const [customers, setCustomers] = useState(() => loadCache('customers', []));
+  const [contacts, setContacts] = useState(() => loadCache('contacts', []));
   const [sales, setSales] = useState(() => loadCache('sales', []));
   const [payments, setPayments] = useState(() => loadCache('payments', []));
   const [staffs, setStaffs] = useState(() => loadCache('staffs', []));
@@ -134,6 +136,11 @@ export function DataProvider({ children }) {
         const cleanCust = deduplicateById(data.customers);
         setCustomers(cleanCust);
         saveCache('customers', cleanCust);
+      }
+      if (data.contacts) {
+        const cleanContacts = deduplicateById(data.contacts);
+        setContacts(cleanContacts);
+        saveCache('contacts', cleanContacts);
       }
       if (data.sales) {
         const cleanSales = deduplicateById(data.sales);
@@ -442,6 +449,50 @@ export function DataProvider({ children }) {
   };
 
   // ════════════════════════════════════════════════════════════════
+  // CONTACTS (담당자 1:N) CRUD
+  // ════════════════════════════════════════════════════════════════
+  const addContact = async (newContact) => {
+    const now = Date.now();
+    const contactId = newContact.id || `CONT-${now}`;
+    const payload = { id: contactId, ...newContact };
+    setContacts(prev => {
+      const next = deduplicateById([...prev, payload]);
+      saveCache('contacts', next);
+      return next;
+    });
+    try {
+      const saved = await createContactApi(payload);
+      if (saved?.id) {
+        setContacts(prev => {
+          const next = deduplicateById(prev.map(c => c.id === contactId ? saved : c));
+          saveCache('contacts', next);
+          return next;
+        });
+        return saved;
+      }
+    } catch (e) { console.error('Contact add error:', e); }
+    return payload;
+  };
+
+  const updateContact = async (id, updatedData) => {
+    setContacts(prev => {
+      const next = prev.map(c => c.id === id ? { ...c, ...updatedData } : c);
+      saveCache('contacts', next);
+      return next;
+    });
+    try { await updateContactApi(id, updatedData); } catch (e) { console.error('Contact update error:', e); }
+  };
+
+  const deleteContact = async (id) => {
+    setContacts(prev => {
+      const next = prev.filter(c => c.id !== id);
+      saveCache('contacts', next);
+      return next;
+    });
+    try { await deleteContactApi(id); } catch (e) { console.error('Contact delete error:', e); }
+  };
+
+  // ════════════════════════════════════════════════════════════════
   // SALES (매출/견적) CRUD
   // ════════════════════════════════════════════════════════════════
   const addSales = async (newSale) => {
@@ -698,6 +749,7 @@ export function DataProvider({ children }) {
     <DataContext.Provider
       value={{
         customers,
+        contacts,
         sales,
         payments,
         staffs,
@@ -725,6 +777,9 @@ export function DataProvider({ children }) {
         addCustomer,
         updateCustomer,
         deleteCustomer,
+        addContact,
+        updateContact,
+        deleteContact,
         addSales,
         updateSales,
         deleteSales,
