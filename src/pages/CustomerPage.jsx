@@ -416,16 +416,30 @@ export default function CustomerPage() {
               <User className="w-5 h-5 text-indigo-500" />
               {contactEditingId ? '담당자 정보 수정' : '담당자 신규 등록'}
             </h3>
-            {contactParentId && (() => {
-              const cust = customers.find(c => c.id === contactParentId);
-              return cust ? (
-                <p className="text-xs text-slate-600 bg-slate-50 px-3 py-2 rounded-lg border border-slate-100">
-                  <Building2 className="w-3.5 h-3.5 inline mr-1 text-sky-500" />
-                  <strong>{cust.name}</strong>{cust.dept ? ` / ${cust.dept}` : ''} 소속 담당자
-                </p>
-              ) : null;
-            })()}
+            
             <div className="space-y-3">
+              {/* 소속 부서 선택 (이동 가능) */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">소속 기관/부서</label>
+                <select
+                  value={contactParentId || ''}
+                  onChange={e => setContactParentId(e.target.value)}
+                  className="w-full p-2.5 border border-slate-200 rounded-xl text-sm bg-slate-50 font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="" disabled>소속 기관/부서를 선택하세요</option>
+                  {customers.map(c => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} {c.dept ? `/ ${c.dept}` : ''}
+                    </option>
+                  ))}
+                </select>
+                {contactEditingId && (
+                  <p className="text-[11px] text-emerald-600 mt-1 ml-1 font-medium">
+                    * 소속을 변경하여도 기존 매출 기록은 변하지 않습니다.
+                  </p>
+                )}
+              </div>
+
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1">담당자명 *</label>
                 <input
