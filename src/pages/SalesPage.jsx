@@ -539,6 +539,7 @@ export default function SalesPage() {
             customer_id: targetCustomerId,
             name: formData.contact_person.trim(),
             phone: formData.phone || '',
+            mobile: formData.mobile || '',
             email: formData.email || '',
           });
         }
@@ -551,6 +552,7 @@ export default function SalesPage() {
         dept: formData.dept || '',
         contact_person: formData.contact_person || '',
         phone: formData.phone || '',
+        mobile: formData.mobile || '',
         email: formData.email || '',
         team: formData.team || user?.team || '영업2조',
         sales_manager: formData.sales_manager || loggedInUserName,
@@ -2165,16 +2167,29 @@ export default function SalesPage() {
                     />
                   </div>
 
-                  <div>
-                    <label className="block text-[11px] font-semibold text-slate-500 mb-1">담당자 연락처</label>
-                    <input
-                      type="text"
-                      placeholder="예: 010-1234-5678"
-                      value={formData.phone}
-                      onFocus={() => setShowCustomerDropdown(false)}
-                      onChange={e => setFormData({ ...formData, phone: e.target.value })}
-                      className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs"
-                    />
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-500 mb-1">일반번호</label>
+                      <input
+                        type="text"
+                        placeholder="예: 033-123-4567"
+                        value={formData.phone}
+                        onFocus={() => setShowCustomerDropdown(false)}
+                        onChange={e => setFormData({ ...formData, phone: e.target.value })}
+                        className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-500 mb-1">휴대전화</label>
+                      <input
+                        type="text"
+                        placeholder="예: 010-1234-5678"
+                        value={formData.mobile || ''}
+                        onFocus={() => setShowCustomerDropdown(false)}
+                        onChange={e => setFormData({ ...formData, mobile: e.target.value })}
+                        className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs"
+                      />
+                    </div>
                   </div>
 
                   <div>

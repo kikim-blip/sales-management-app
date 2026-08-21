@@ -671,6 +671,7 @@ export default function DashboardPage() {
             customer_id: targetCustomerId,
             name: newSaleFormData.contact_person.trim(),
             phone: newSaleFormData.phone || '',
+            mobile: newSaleFormData.mobile || '',
             email: newSaleFormData.email || '',
           });
         }
@@ -683,6 +684,7 @@ export default function DashboardPage() {
         dept: newSaleFormData.dept || '',
         contact_person: newSaleFormData.contact_person || '',
         phone: newSaleFormData.phone || '',
+        mobile: newSaleFormData.mobile || '',
         email: newSaleFormData.email || '',
         team: newSaleFormData.team || user?.team || '영업2조',
         sales_manager: newSaleFormData.sales_manager || loggedInUserName,
@@ -1569,16 +1571,29 @@ export default function DashboardPage() {
                     className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-medium"
                   />
                 </div>
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-500 mb-1">담당자 연락처</label>
-                  <input
-                    type="text"
-                    placeholder="010-0000-0000"
-                    value={newSaleFormData.phone}
-                    onFocus={() => setShowCustomerDropdown(false)}
-                    onChange={e => setNewSaleFormData({ ...newSaleFormData, phone: e.target.value })}
-                    className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-medium"
-                  />
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-500 mb-1">일반번호</label>
+                    <input
+                      type="text"
+                      placeholder="02-000-0000"
+                      value={newSaleFormData.phone}
+                      onFocus={() => setShowCustomerDropdown(false)}
+                      onChange={e => setNewSaleFormData({ ...newSaleFormData, phone: e.target.value })}
+                      className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-medium"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-500 mb-1">휴대전화</label>
+                    <input
+                      type="text"
+                      placeholder="010-0000-0000"
+                      value={newSaleFormData.mobile || ''}
+                      onFocus={() => setShowCustomerDropdown(false)}
+                      onChange={e => setNewSaleFormData({ ...newSaleFormData, mobile: e.target.value })}
+                      className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-medium"
+                    />
+                  </div>
                 </div>
 
                 <div>

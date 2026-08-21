@@ -281,15 +281,15 @@ async function createSale(db, request) {
     `INSERT OR REPLACE INTO sales
      (id, reg_date, receipt_date, delivery_date, delivery_time, customer_id, title, content, note,
       billing_schedule, type, supply_price, tax, total_price, calendar_synced, superthread_synced,
-      dept, team, sales_manager, contact_person, phone, email, updated_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now','localtime'))`
+      dept, team, sales_manager, contact_person, phone, mobile, email, updated_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now','localtime'))`
   ).bind(id, body.reg_date||'', body.receipt_date||'', body.delivery_date||'',
          body.delivery_time||'', body.customer_id||'', body.title||'', body.content||'',
          body.note||'', body.billing_schedule||'진행중', body.type||'매출',
          body.supply_price||0, body.tax||0, body.total_price||0,
          body.calendar_synced?1:0, body.superthread_synced?1:0,
          body.dept||'', body.team||'', body.sales_manager||'',
-         body.contact_person||'', body.phone||'', body.email||'').run();
+         body.contact_person||'', body.phone||'', body.mobile||'', body.email||'').run();
   const row = await db.prepare('SELECT * FROM sales WHERE id = ?').bind(id).first();
   return json(row, 201);
 }
@@ -303,13 +303,13 @@ async function updateSale(db, id, request) {
     `UPDATE sales SET reg_date=?, receipt_date=?, delivery_date=?, delivery_time=?, customer_id=?,
      title=?, content=?, note=?, billing_schedule=?, type=?, supply_price=?, tax=?, total_price=?,
      calendar_synced=?, superthread_synced=?, dept=?, team=?, sales_manager=?,
-     contact_person=?, phone=?, email=?, updated_at=datetime('now','localtime') WHERE id=?`
+     contact_person=?, phone=?, mobile=?, email=?, updated_at=datetime('now','localtime') WHERE id=?`
   ).bind(merged.reg_date||'', merged.receipt_date||'', merged.delivery_date||'', merged.delivery_time||'',
          merged.customer_id||'', merged.title||'', merged.content||'', merged.note||'',
          merged.billing_schedule||'진행중', merged.type||'매출', merged.supply_price||0,
          merged.tax||0, merged.total_price||0, merged.calendar_synced?1:0,
          merged.superthread_synced?1:0, merged.dept||'', merged.team||'', merged.sales_manager||'',
-         merged.contact_person||'', merged.phone||'', merged.email||'', id).run();
+         merged.contact_person||'', merged.phone||'', merged.mobile||'', merged.email||'', id).run();
   const row = await db.prepare('SELECT * FROM sales WHERE id = ?').bind(id).first();
   return json(row);
 }
@@ -751,9 +751,9 @@ async function createContact(db, request) {
   const body = await request.json();
   const id = body.id || generateId('CONT');
   await db.prepare(
-    `INSERT OR REPLACE INTO contacts (id, customer_id, name, phone, email, note, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))`
-  ).bind(id, body.customer_id || '', body.name || '', body.phone || '',
+    `INSERT OR REPLACE INTO contacts (id, customer_id, name, phone, mobile, email, note, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))`
+  ).bind(id, body.customer_id || '', body.name || '', body.phone || '', body.mobile || '',
          body.email || '', body.note || '').run();
   const row = await db.prepare('SELECT * FROM contacts WHERE id = ?').bind(id).first();
   return json(row, 201);
@@ -764,8 +764,8 @@ async function updateContact(db, id, request) {
   const existing = await db.prepare('SELECT * FROM contacts WHERE id = ?').bind(id).first() || {};
   const merged = { ...existing, ...body };
   await db.prepare(
-    `UPDATE contacts SET customer_id=?, name=?, phone=?, email=?, note=?, updated_at=datetime('now','localtime') WHERE id=?`
-  ).bind(merged.customer_id || '', merged.name || '', merged.phone || '',
+    `UPDATE contacts SET customer_id=?, name=?, phone=?, mobile=?, email=?, note=?, updated_at=datetime('now','localtime') WHERE id=?`
+  ).bind(merged.customer_id || '', merged.name || '', merged.phone || '', merged.mobile || '',
          merged.email || '', merged.note || '', id).run();
   const row = await db.prepare('SELECT * FROM contacts WHERE id = ?').bind(id).first();
   return json(row);

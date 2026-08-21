@@ -2,8 +2,9 @@
 import React, { useState } from 'react';
 import { useData } from '../context/DataContext';
 import { useGoogleAuth } from '../context/GoogleAuthContext';
-import { Plus, Search, Pencil, Trash2, Download, Users, ChevronDown, ChevronRight, Phone, Mail, User, Building2 } from 'lucide-react';
+import { Plus, Search, Pencil, Trash2, Download, Users, ChevronDown, ChevronRight, Phone, Mail, User, Building2, Upload } from 'lucide-react';
 import { getLocalDateStr } from '../utils/dateUtils';
+import * as XLSX from 'xlsx';
 
 export default function CustomerPage() {
   const { customers, contacts = [], staffs = [], addCustomer, updateCustomer, deleteCustomer, addContact, updateContact, deleteContact, selectedTeamGroup } = useData();
@@ -19,7 +20,7 @@ export default function CustomerPage() {
   const [contactEditingId, setContactEditingId] = useState(null);
   const [contactParentId, setContactParentId] = useState(null); // 어느 고객사에 추가할지
   const [contactSubmitting, setContactSubmitting] = useState(false);
-  const defaultContactForm = { name: '', phone: '', email: '', note: '' };
+  const defaultContactForm = { name: '', phone: '', mobile: '', email: '', note: '' };
   const [contactForm, setContactForm] = useState(defaultContactForm);
 
   // 펼침/접힘 상태
@@ -101,6 +102,7 @@ export default function CustomerPage() {
     setContactForm({
       name: contact.name || '',
       phone: contact.phone || '',
+      mobile: contact.mobile || '',
       email: contact.email || '',
       note: contact.note || '',
     });
@@ -159,7 +161,96 @@ export default function CustomerPage() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    document.body.removeChild(link);
     URL.revokeObjectURL(url);
+  };
+
+  const handleDownloadTemplate = () => {
+    const headers = [['고객사명(필수)', '과/부서명', '담당자명(필수)', '일반번호', '휴대전화', '이메일', '비고']];
+    const ws = XLSX.utils.aoa_to_sheet(headers);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "고객일괄등록양식");
+    XLSX.writeFile(wb, "고객일괄등록양식.xlsx");
+  };
+
+  const fileInputRef = React.useRef(null);
+
+  const handleFileUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    try {
+      setSubmitting(true);
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data, { type: 'array' });
+      const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+      
+      if (rows.length <= 1) throw new Error("데이터가 없습니다.");
+      
+      const headers = rows[0];
+      const nameIdx = headers.findIndex(h => h && h.includes('고객사명'));
+      const deptIdx = headers.findIndex(h => h && h.includes('과/부서명'));
+      const contactIdx = headers.findIndex(h => h && h.includes('담당자명'));
+      const phoneIdx = headers.findIndex(h => h && h.includes('일반번호'));
+      const mobileIdx = headers.findIndex(h => h && h.includes('휴대전화'));
+      const emailIdx = headers.findIndex(h => h && h.includes('이메일'));
+      const noteIdx = headers.findIndex(h => h && h.includes('비고'));
+
+      if (nameIdx === -1 || contactIdx === -1) {
+        throw new Error("필수 헤더('고객사명(필수)', '담당자명(필수)')를 찾을 수 없습니다. 양식을 확인하세요.");
+      }
+
+      let successCount = 0;
+      let existingCustomersMap = new Map();
+      
+      // Load current customers into map to avoid duplicate creations
+      customers.forEach(c => {
+        const key = `${c.name || ''}_${c.dept || ''}`;
+        existingCustomersMap.set(key, c.id);
+      });
+
+      for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        if (!row || !row[nameIdx] || !row[contactIdx]) continue; // Skip empty rows or rows missing required fields
+        
+        const cName = String(row[nameIdx] || '').trim();
+        const cDept = deptIdx !== -1 ? String(row[deptIdx] || '').trim() : '';
+        const ctName = String(row[contactIdx] || '').trim();
+        const ctPhone = phoneIdx !== -1 ? String(row[phoneIdx] || '').trim() : '';
+        const ctMobile = mobileIdx !== -1 ? String(row[mobileIdx] || '').trim() : '';
+        const ctEmail = emailIdx !== -1 ? String(row[emailIdx] || '').trim() : '';
+        const ctNote = noteIdx !== -1 ? String(row[noteIdx] || '').trim() : '';
+
+        const custKey = `${cName}_${cDept}`;
+        let customerId = existingCustomersMap.get(custKey);
+
+        if (!customerId) {
+          // Create new customer
+          const newCust = await addCustomer({ name: cName, dept: cDept });
+          customerId = newCust.id;
+          existingCustomersMap.set(custKey, customerId);
+        }
+
+        // Add contact to this customer
+        await addContact({
+          customer_id: customerId,
+          name: ctName,
+          phone: ctPhone,
+          mobile: ctMobile,
+          email: ctEmail,
+          note: ctNote
+        });
+        successCount++;
+      }
+      
+      alert(`총 ${successCount}건의 담당자 정보를 성공적으로 등록했습니다.`);
+      if (fileInputRef.current) fileInputRef.current.value = ''; // reset
+    } catch (err) {
+      alert(`엑셀 처리 중 오류가 발생했습니다: ${err.message}`);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const filtered = customers.filter(c => {
@@ -193,7 +284,29 @@ export default function CustomerPage() {
             거래처 {filtered.length}개 / 담당자 {totalContacts}명 등록됨. 기관+부서별로 여러 담당자를 관리합니다.
           </p>
         </div>
-        <div className="flex items-center space-x-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            type="file"
+            accept=".xlsx, .xls, .csv"
+            ref={fileInputRef}
+            onChange={handleFileUpload}
+            style={{ display: 'none' }}
+          />
+          <button
+            onClick={handleDownloadTemplate}
+            className="flex items-center justify-center space-x-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 px-3.5 py-2 rounded-xl text-xs font-semibold shadow-sm transition"
+          >
+            <Download className="w-4 h-4" />
+            <span>양식 다운로드</span>
+          </button>
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={submitting}
+            className="flex items-center justify-center space-x-1.5 bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-2 rounded-xl text-xs font-semibold shadow-sm transition disabled:opacity-50"
+          >
+            <Upload className="w-4 h-4" />
+            <span>{submitting ? '처리 중...' : '엑셀 일괄 등록'}</span>
+          </button>
           {filtered.length > 0 && (
             <button
               onClick={handleExportCSV}
@@ -310,8 +423,13 @@ export default function CustomerPage() {
                                 <span className="font-semibold text-slate-800 text-sm">{ct.name}</span>
                                 <div className="flex items-center gap-3 mt-0.5">
                                   {ct.phone && (
-                                    <span className="text-xs text-slate-500 flex items-center gap-0.5">
+                                    <span className="text-xs text-slate-500 flex items-center gap-0.5" title="일반번호">
                                       <Phone className="w-3 h-3" />{ct.phone}
+                                    </span>
+                                  )}
+                                  {ct.mobile && (
+                                    <span className="text-xs text-slate-500 flex items-center gap-0.5" title="휴대전화">
+                                      <Phone className="w-3 h-3 text-sky-500" />{ct.mobile}
                                     </span>
                                   )}
                                   {ct.email && (
@@ -451,15 +569,27 @@ export default function CustomerPage() {
                   className="w-full p-2.5 border border-slate-200 rounded-xl text-sm"
                 />
               </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">연락처</label>
-                <input
-                  type="text"
-                  placeholder="예: 033-760-6094"
-                  value={contactForm.phone}
-                  onChange={e => setContactForm({ ...contactForm, phone: e.target.value })}
-                  className="w-full p-2.5 border border-slate-200 rounded-xl text-sm"
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">일반번호</label>
+                  <input
+                    type="text"
+                    placeholder="예: 033-760-6094"
+                    value={contactForm.phone}
+                    onChange={e => setContactForm({ ...contactForm, phone: e.target.value })}
+                    className="w-full p-2.5 border border-slate-200 rounded-xl text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">휴대전화</label>
+                  <input
+                    type="text"
+                    placeholder="예: 010-1234-5678"
+                    value={contactForm.mobile || ''}
+                    onChange={e => setContactForm({ ...contactForm, mobile: e.target.value })}
+                    className="w-full p-2.5 border border-slate-200 rounded-xl text-sm"
+                  />
+                </div>
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1">이메일</label>
