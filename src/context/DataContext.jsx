@@ -397,29 +397,41 @@ export function DataProvider({ children }) {
   // CUSTOMERS (고객/거래처) CRUD
   // ════════════════════════════════════════════════════════════════
   const addCustomer = async (newCust) => {
-    const custId = `CUST-${String(customers.length + 1).padStart(3, '0')}`;
-    const payload = { id: custId, ...newCust, sales_manager: newCust.sales_manager || user?.userName || '' };
-
-    setCustomers(prev => {
-      const next = [...prev, payload];
-      saveCache('customers', next);
-      return next;
-    });
-    lastFetchRef.current = Date.now();
-
-    try {
-      const saved = await createCustomer(payload);
+    return new Promise((resolve, reject) => {
       setCustomers(prev => {
-        const next = prev.map(c => c.id === custId ? { ...saved } : c);
-        saveCache('customers', next);
-        return next;
+        try {
+          const custId = generateUniqueId(prev, 'CUST', 1);
+          const payload = { id: custId, ...newCust, sales_manager: newCust.sales_manager || user?.userName || '' };
+          
+          const next = [...prev, payload];
+          saveCache('customers', next);
+          
+          lastFetchRef.current = Date.now();
+          
+          // Fire API call asynchronously but don't block the state update
+          createCustomer(payload)
+            .then(saved => {
+              setCustomers(curr => {
+                const updated = curr.map(c => c.id === custId ? { ...saved } : c);
+                saveCache('customers', updated);
+                return updated;
+              });
+              addLog('등록', '고객', `신규 고객사 [${payload.name}] (담당: ${payload.sales_manager || '미지정'}) 등록`, custId);
+            })
+            .catch(err => {
+              console.error('고객 D1 저장 에러:', err);
+              // Handle error if needed
+            });
+            
+          // Resolve immediately with the generated payload so the loop can continue
+          resolve(payload);
+          return next;
+        } catch (error) {
+          reject(error);
+          return prev;
+        }
       });
-      addLog('등록', '고객', `신규 고객사 [${payload.name}] (담당: ${payload.sales_manager || '미지정'}) 등록`, custId);
-      return saved;
-    } catch (err) {
-      console.error('고객 D1 저장 에러:', err);
-      throw err;
-    }
+    });
   };
 
   const updateCustomer = async (id, updatedCust) => {
@@ -452,8 +464,7 @@ export function DataProvider({ children }) {
   // CONTACTS (담당자 1:N) CRUD
   // ════════════════════════════════════════════════════════════════
   const addContact = async (newContact) => {
-    const now = Date.now();
-    const contactId = newContact.id || `CONT-${now}`;
+    const contactId = newContact.id || `CONT-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
     const payload = { id: contactId, ...newContact };
     setContacts(prev => {
       const next = deduplicateById([...prev, payload]);
