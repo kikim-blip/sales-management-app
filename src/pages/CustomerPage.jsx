@@ -115,7 +115,7 @@ export default function CustomerPage() {
     try {
       setContactSubmitting(true);
       if (contactEditingId) {
-        await updateContact(contactEditingId, contactForm);
+        await updateContact(contactEditingId, { ...contactForm, customer_id: contactParentId });
         alert('담당자 정보가 수정되었습니다!');
       } else {
         await addContact({ ...contactForm, customer_id: contactParentId });
