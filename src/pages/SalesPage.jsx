@@ -191,6 +191,9 @@ export default function SalesPage() {
   const unbilledSales = filteredSales.filter(s => s.billing_schedule !== '청구완료');
   const totalUnbilledAmount = unbilledSales.reduce((acc, curr) => acc + (Number(curr.total_price) || 0), 0);
 
+  // 💡 진행중 건 목록 (진행중)
+  const inProgressSales = filteredSales.filter(s => !s.billing_schedule || s.billing_schedule === '진행중');
+
   // 미청구 건 CSV 다운로드
   const handleExportUnbilledCSV = () => {
     if (unbilledSales.length === 0) return alert('다운로드할 미청구 데이터가 없습니다.');
@@ -964,6 +967,20 @@ export default function SalesPage() {
         </button>
 
         <button
+          onClick={() => setReportTab('in_progress')}
+          className={`px-5 py-3 font-extrabold text-xs transition-all border-b-2 flex items-center space-x-1.5 ${
+            reportTab === 'in_progress' ? 'border-amber-500 text-amber-600 bg-white' : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <span>진행중</span>
+          {inProgressSales.length > 0 && (
+            <span className="px-1.5 py-0.5 bg-amber-500 text-white rounded-full text-[10px] font-black">
+              {inProgressSales.length}
+            </span>
+          )}
+        </button>
+
+        <button
           onClick={() => setReportTab('unbilled')}
           className={`px-5 py-3 font-extrabold text-xs transition-all border-b-2 flex items-center space-x-1.5 ${
             reportTab === 'unbilled' ? 'border-rose-600 text-rose-600 bg-white' : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -1142,16 +1159,16 @@ export default function SalesPage() {
       )}
 
 
-      {/* ----------------- 탭 1: 매출 기록 목록 ----------------- */}
+      {/* ----------------- 탭 1 & 1-2: 매출 기록 목록 & 진행중 목록 ----------------- */}
 
-      {reportTab === 'list' && (
+      {(reportTab === 'list' || reportTab === 'in_progress') && (
         <div className="space-y-3">
-          {filteredSales.length === 0 ? (
+          {(reportTab === 'list' ? filteredSales : inProgressSales).length === 0 ? (
             <div className="bg-white text-center py-12 border border-slate-200 rounded-2xl text-slate-400 text-xs font-bold">
-              현재 필터링된 소속 그룹의 매출/견적 내역이 없습니다.
+              {reportTab === 'list' ? '현재 필터링된 소속 그룹의 매출/견적 내역이 없습니다.' : '현재 진행중인 매출/견적 내역이 없습니다.'}
             </div>
           ) : (
-            filteredSales.map((item, idx) => {
+            (reportTab === 'list' ? filteredSales : inProgressSales).map((item, idx) => {
               const cust = customers.find(c => c.id === item.customer_id);
               return (
                 <div key={item.id || idx} className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3 relative group">
