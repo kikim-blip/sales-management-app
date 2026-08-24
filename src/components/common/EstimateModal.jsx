@@ -49,7 +49,7 @@ export default function EstimateModal({ sale, customer, onClose, onSave, onPrint
         unit: '부',
         unit_price: Number(sale.supply_price) || 0,
         amount: Number(sale.supply_price) || 0,
-        note: sale.content || '',
+        note: '',
       }
     ];
   };

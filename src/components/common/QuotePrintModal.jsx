@@ -92,7 +92,7 @@ export default function QuotePrintModal({ quote, customer, onClose }) {
         unit: estimateType === 'print' ? '부' : '식',
         unit_price: quote.supply_price || 0,
         amount: quote.supply_price || 0,
-        note: quote.content || '',
+        note: '',
       }
     ];
   })();
