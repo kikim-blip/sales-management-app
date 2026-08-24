@@ -984,7 +984,7 @@ export default function SalesPage() {
     <div className="space-y-5">
       
       {/* 타이틀 및 버튼 */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 print:hidden">
         <div>
           <h2 className="text-xl font-bold text-slate-800">매출 관리</h2>
           <p className="text-xs text-slate-500 mt-0.5">수주 · 미수 · 기간별 조회</p>
@@ -1021,7 +1021,7 @@ export default function SalesPage() {
       </div>
 
       {/* 탭 네비게이션: [전체 목록] vs [🚨 미청구 관리] vs [📊 분석 및 원장] */}
-      <div className="flex border-b border-slate-200">
+      <div className="flex border-b border-slate-200 print:hidden">
         <button
           onClick={() => setReportTab('list')}
           className={`px-5 py-3 font-extrabold text-xs transition-all border-b-2 ${
@@ -1071,7 +1071,7 @@ export default function SalesPage() {
 
       {/* 목록/미청구 관리 탭 전용 상세 조회 필터: 발주처 / 과 / 담당자 / 작업명 / 기간(전체/월별/직접지정) / 상태 */}
       {reportTab !== 'erp' && (
-        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 space-y-3.5">
+        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 space-y-3.5 print:hidden">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-100">
             <div className="flex items-center gap-2 text-slate-800 font-bold text-sm">
               <Filter className="w-4 h-4 text-sky-600" />
@@ -1244,7 +1244,7 @@ export default function SalesPage() {
       {/* ----------------- 탭 1 & 1-2: 매출 기록 목록 & 진행중 목록 ----------------- */}
 
       {(reportTab === 'list' || reportTab === 'in_progress') && (
-        <div className="space-y-3">
+        <div className="space-y-3 print:hidden">
           {(reportTab === 'list' ? filteredSales : inProgressSales).length === 0 ? (
             <div className="bg-white text-center py-12 border border-slate-200 rounded-2xl text-slate-400 text-xs font-bold">
               {reportTab === 'list' ? '현재 필터링된 소속 그룹의 매출/견적 내역이 없습니다.' : '현재 진행중인 매출/견적 내역이 없습니다.'}
@@ -1399,7 +1399,7 @@ export default function SalesPage() {
 
       {/* ----------------- 탭 2: 🚨 미청구 건 집중 관리 ----------------- */}
       {reportTab === 'unbilled' && (
-        <div className="space-y-4">
+        <div className="space-y-4 print:hidden">
           
           {/* 미청구 핵심 통계 카드 */}
           <div className="bg-white p-5 rounded-2xl border border-rose-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-r from-white to-rose-50/30">
@@ -1588,7 +1588,7 @@ export default function SalesPage() {
       {/* ----------------- 탭 3: 📊 ERP 매출 및 미수 통계 보고서 ----------------- */}
       {reportTab === 'erp' && (
         /* ── 📊 혁신적인 ERP 매출/수금/미수 분석 및 거래원장 통합 뷰 ── */
-        <div className="space-y-4">
+        <div className="space-y-4 print:hidden">
 
           
           {/* 1. 상단 컨트롤 패널: 조회 구분 탭, 기간 설정, 거래처 필터, 검색, 엑셀 다운로드 */}
