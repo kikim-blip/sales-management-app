@@ -705,6 +705,8 @@ export default function SalesPage() {
         kind: '매출',
         title: s.title || '매출 건',
         note: s.note || '',
+        content: s.content || '',
+        billing_schedule: s.billing_schedule || '',
         sales: amount,
         payment: 0,
         customerObj: cust || { id: s.customer_id, name: orgName, dept: deptName },
