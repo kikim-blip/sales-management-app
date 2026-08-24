@@ -63,7 +63,7 @@ export default function QuotePrintModal({ quote, customer, onClose }) {
 
   if (!quote) return null;
 
-  const today = getLocalDateStr();
+  const today = quote.estimate_date || quote.reg_date || getLocalDateStr();
   const todayKorean = `${today.split('-')[0]}년 ${Number(today.split('-')[1])}월 ${Number(today.split('-')[2])}일`;
 
   const custName = customer?.name || quote.customer_name || '거래처';
