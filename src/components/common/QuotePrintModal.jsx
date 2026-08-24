@@ -66,10 +66,10 @@ export default function QuotePrintModal({ quote, customer, onClose }) {
   const today = getLocalDateStr();
   const todayKorean = `${today.split('-')[0]}년 ${Number(today.split('-')[1])}월 ${Number(today.split('-')[2])}일`;
 
-  const custName = customer ? customer.name : (quote.customer_name || '거래처');
-  const custDept = customer ? customer.dept : (quote.dept || '');
-  const custContact = customer ? customer.contact_person : (quote.contact_person || '');
-  const custPhone = customer ? customer.phone : (quote.phone || '');
+  const custName = customer?.name || quote.customer_name || '거래처';
+  const custDept = quote.dept || customer?.dept || '';
+  const custContact = quote.contact_person || customer?.contact_person || '';
+  const custPhone = quote.phone || customer?.phone || '';
 
   const managerName = quote.sales_manager || quote.manager_name || user?.userName || user?.name || (user?.email ? user.email.split('@')[0] : '담당자');
   const estimateType = quote.estimate_type || 'print'; // 'print' | 'general'

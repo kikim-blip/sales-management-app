@@ -165,10 +165,10 @@ export default function EstimateModal({ sale, customer, onClose, onSave, onPrint
     }
   };
 
-  const custName = customer ? customer.name : (sale.customer_name || sale.customer_id || '고객사 미지정');
-  const custDept = customer ? customer.dept : (sale.dept || '');
-  const contactPerson = customer ? customer.contact_person : (sale.contact_person || '');
-  const contactPhone = customer ? customer.phone : (sale.phone || '');
+  const custName = customer?.name || sale.customer_name || sale.customer_id || '고객사 미지정';
+  const custDept = sale.dept || customer?.dept || '';
+  const contactPerson = sale.contact_person || customer?.contact_person || '';
+  const contactPhone = sale.phone || customer?.phone || '';
 
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
