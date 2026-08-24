@@ -452,7 +452,7 @@ export default function DashboardPage() {
   // 💡 슈퍼스레드 업무 채널 건별 선택 발송 연동 헬퍼
   const handleSendToSuperthread = async (order) => {
     const cust = customers.find(c => c.id === order.customer_id);
-    const custName = cust ? cust.name : (order.customer_name || '');
+    const custName = cust ? cust.name : (order.customer_name || order.customer_id || '');
     const code = order.displayCode || order.code_number || order.id;
     
     try {
@@ -913,7 +913,7 @@ export default function DashboardPage() {
                             setShowJobEditModal(true);
                           } else {
                             const cust = customers.find(c => c.id === item.customer_id);
-                            const custName = cust?.name || item.customer_name || '';
+                            const custName = cust ? cust.name : (item.customer_name || item.customer_id || '');
                             setEditingSale(item);
                             setNewSaleFormData({
                               ...item,
