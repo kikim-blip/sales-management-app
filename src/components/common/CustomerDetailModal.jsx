@@ -203,8 +203,8 @@ export default function CustomerDetailModal({ customer, sales = [], payments = [
           </button>
         </div>
 
-        {/* 본문 영역 */}
-        <div ref={printRef} className="p-6 space-y-5 overflow-y-auto flex-1 print:p-0 print:overflow-visible">
+        {/* 본문 영역 (인쇄 대상) */}
+        <div id="printable-ledger-document" ref={printRef} className="p-6 space-y-5 overflow-y-auto flex-1 print:p-0 print:overflow-visible">
           
           {/* 고객 정보 & 잔액 요약 카드 */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
@@ -299,10 +299,10 @@ export default function CustomerDetailModal({ customer, sales = [], payments = [
                           </div>
                         </td>
                         <td className="p-3 text-right font-mono font-bold text-slate-900">
-                          {item.salesAmount > 0 ? `₩ ${item.salesAmount.toLocaleString()}` : '-'}
+                          {item.salesAmount !== 0 ? `₩ ${item.salesAmount.toLocaleString()}` : '-'}
                         </td>
                         <td className="p-3 text-right font-mono font-bold text-emerald-600">
-                          {item.paymentAmount > 0 ? `₩ ${item.paymentAmount.toLocaleString()}` : '-'}
+                          {item.paymentAmount !== 0 ? `₩ ${item.paymentAmount.toLocaleString()}` : '-'}
                         </td>
                         <td className="p-3 text-right font-mono font-black text-rose-600">
                           ₩ {item.runningBalance.toLocaleString()} 원

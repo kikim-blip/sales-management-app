@@ -17,11 +17,14 @@
   #printable-job-order-document,
   #printable-job-order-document *,
   #printable-quote-document,
-  #printable-quote-document * {
+  #printable-quote-document *,
+  #printable-ledger-document,
+  #printable-ledger-document * {
     visibility: visible !important;
   }
   #printable-job-order-document,
-  #printable-quote-document {
+  #printable-quote-document,
+  #printable-ledger-document {
     position: fixed !important;
     left: 0 !important;
     top: 0 !important;
