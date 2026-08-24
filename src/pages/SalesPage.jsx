@@ -143,8 +143,8 @@ export default function SalesPage() {
     const cust = customers.find(c => c.id === item.customer_id);
     const orgName = cust?.name || item.customer_name || '';
     const deptName = item.dept || cust?.dept || '';
-    const contactPerson = item.contact_person || item.client_contact_person || '';
-    const salesManager = item.sales_manager || item.manager_name || '';
+    const contactPerson = item.contact_person || cust?.contact_person || item.client_contact_person || '';
+    const salesManager = item.sales_manager || cust?.sales_manager || item.manager_name || '';
     const title = item.title || '';
     const content = item.content || '';
     const note = item.note || '';
@@ -423,10 +423,10 @@ export default function SalesPage() {
       customer_id: item.customer_id || '',
       customer_name: cName,
       dept: cDept,
-      contact_person: cust ? (cust.contact_person || '') : '',
-      phone: cust ? (cust.phone || '') : '',
-      email: cust ? (cust.email || '') : '',
-      sales_manager: cust ? (cust.sales_manager || loggedInUserName) : loggedInUserName,
+      contact_person: item.contact_person || cust?.contact_person || '',
+      phone: item.phone || cust?.phone || '',
+      email: item.email || cust?.email || '',
+      sales_manager: item.sales_manager || cust?.sales_manager || loggedInUserName,
       title: item.title || '',
       content: item.content || '',
       note: item.note || '',
@@ -1236,11 +1236,11 @@ export default function SalesPage() {
 
                       {/* 발주처 밑 담당자 이름, 연락처, 이메일, 영업담당자 */}
                       {(() => {
-                        // ✅ 매출 건 자체 필드 최우선 사용 — customers 필드 참조 안 함
-                        const contactPerson = item.contact_person || item.client_contact_person || '';
-                        const phone = item.phone || '';
-                        const email = item.email || '';
-                        const manager = item.sales_manager || '';
+                        // ✅ 매출 건 자체 필드 최우선 사용 -> 수정됨
+                        const contactPerson = item.contact_person || cust?.contact_person || item.client_contact_person || '';
+                        const phone = item.phone || cust?.phone || '';
+                        const email = item.email || cust?.email || '';
+                        const manager = item.sales_manager || cust?.sales_manager || '';
                         if (!contactPerson && !phone && !email && !manager) return null;
                         return (
                           <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-slate-600 font-medium">

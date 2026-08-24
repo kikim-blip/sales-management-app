@@ -418,9 +418,9 @@ export default function DashboardPage() {
       dates = `${formatYMD(startDate)}/${formatYMD(nextDate)}`;
     }
 
-    // 담당자 및 연락처 — ✅ 건 자체 필드 최우선 사용 (customers 참조 안 함)
-    const contactPerson = order.contact_person || order.client_contact_person || '';
-    const contactPhone = order.phone || order.client_phone || '';
+    // 담당자 및 연락처 — ✅ 건 자체 필드 최우선 사용 (customers 참조 안 함) -> 수정됨
+    const contactPerson = order.contact_person || cust?.contact_person || order.client_contact_person || '';
+    const contactPhone = order.phone || cust?.phone || order.client_phone || '';
     const contactStr = contactPerson ? `${contactPerson}${contactPhone ? ` (${contactPhone})` : ''}` : '-';
 
     // 상세 작업내용
