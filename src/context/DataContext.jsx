@@ -589,7 +589,7 @@ export function DataProvider({ children }) {
   // PAYMENTS (수금) CRUD - 정밀 로깅 추가
   // ════════════════════════════════════════════════════════════════
   const addPayment = async (newPay) => {
-    const payId = `PAY-${String(payments.length + 201).padStart(3, '0')}`;
+    const payId = generateUniqueId(payments, 'PAY', 201);
     const payload = { id: payId, ...newPay };
 
     setPayments(prev => {

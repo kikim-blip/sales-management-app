@@ -216,12 +216,32 @@ export default function PaymentPage() {
     }
   };
 
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const filteredPaymentsDisplay = filteredPayments.filter(p => {
+    if (!searchTerm.trim()) return true;
+    const term = searchTerm.toLowerCase();
+    const cust = customers.find(c => c.id === p.customer_id);
+    const searchString = `
+      ${p.id || ''} 
+      ${p.payment_date || ''} 
+      ${p.method || ''} 
+      ${p.note || ''} 
+      ${cust?.name || p.customer_id || ''} 
+      ${cust?.dept || ''}
+      ${cust?.contact_person || ''}
+    `.toLowerCase();
+    return searchString.includes(term);
+  });
+
+  const totalAmount = filteredPaymentsDisplay.reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
+
   return (
     <div className="space-y-5">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h2 className="text-xl font-bold text-slate-800">수금 내역 관리</h2>
-          <p className="text-xs text-slate-500 mt-0.5">입금 완료된 수금 내역을 구글 시트에 저장, 수정, 삭제합니다.</p>
+          <p className="text-xs text-slate-500 mt-0.5">총 {filteredPaymentsDisplay.length}건의 수금 내역이 있습니다.</p>
         </div>
         <button
           onClick={openNewModal}
@@ -232,9 +252,26 @@ export default function PaymentPage() {
         </button>
       </div>
 
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <input
+            type="text"
+            placeholder="고객사명, 일자, 비고 등 검색..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition"
+          />
+        </div>
+        <div className="flex items-center space-x-2 text-sm">
+          <span className="text-slate-500 font-medium">합계:</span>
+          <span className="text-lg font-black text-emerald-600">₩ {totalAmount.toLocaleString()} 원</span>
+        </div>
+      </div>
+
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="divide-y divide-slate-100">
-          {filteredPayments.map((p, idx) => {
+          {filteredPaymentsDisplay.map((p, idx) => {
             const cust = customers.find(c => c.id === p.customer_id);
             return (
               <div key={p.id || idx} className="p-4 sm:p-5 flex items-center justify-between hover:bg-slate-50">
@@ -261,7 +298,9 @@ export default function PaymentPage() {
 
                 <div className="flex items-center space-x-4">
                   <div className="text-right">
-                    <span className="text-base font-extrabold text-emerald-600">+{(p.amount || 0).toLocaleString()} 원</span>
+                    <span className={`text-base font-extrabold ${(p.amount || 0) < 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                      {(p.amount || 0) > 0 ? '+' : ''}{(p.amount || 0).toLocaleString()} 원
+                    </span>
                     <p className="text-[11px] font-mono text-slate-400">{p.id}</p>
                   </div>
                   <div className="flex items-center space-x-1">
