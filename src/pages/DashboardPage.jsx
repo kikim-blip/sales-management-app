@@ -530,6 +530,7 @@ export default function DashboardPage() {
   const [showNewSaleModal, setShowNewSaleModal] = useState(false);
   const [submittingSale, setSubmittingSale] = useState(false);
   const [customerNameInput, setCustomerNameInput] = useState('');
+  const [customerSearchInput, setCustomerSearchInput] = useState('');
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
 
   const defaultNewSaleForm = {
@@ -563,6 +564,7 @@ export default function DashboardPage() {
   const openNewSaleModal = () => {
     setNewSaleFormData(defaultNewSaleForm);
     setCustomerNameInput('');
+    setCustomerSearchInput('');
     setShowCustomerDropdown(false);
     setEditingSale(null);
     setShowNewSaleModal(true);
@@ -632,7 +634,7 @@ export default function DashboardPage() {
   // 신규 매출 제출 핸들러
   const handleSubmitNewSale = async (e) => {
     e.preventDefault();
-    const custName = (customerNameInput || newSaleFormData.customer_name || '').trim();
+    const custName = (customerSearchInput || newSaleFormData.customer_name || '').trim();
     if (!custName) return alert('고객사명을 입력하거나 선택해 주세요.');
     if (!newSaleFormData.title) return alert('작업명을 입력해 주세요.');
 
@@ -922,6 +924,7 @@ export default function DashboardPage() {
                             });
                             const custName = cust?.name || item.customer_name || '';
                             setCustomerNameInput(custName);
+                            setCustomerSearchInput('');
                             setShowNewSaleModal(true);
                           }
                         }}
@@ -1535,81 +1538,86 @@ export default function DashboardPage() {
               </div>
 
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {/* 1. 고객사명 실시간 검색 드롭다운 */}
-                <div ref={customerDropdownRef} className="relative">
-                  <label className="block text-xs font-semibold text-slate-600 mb-1">고객사명 *</label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      placeholder="고객사명 검색 또는 직접 입력"
-                      value={customerNameInput}
-                      onChange={e => {
-                        setCustomerNameInput(e.target.value);
-                        setNewSaleFormData({ ...newSaleFormData, customer_name: e.target.value });
-                        setShowCustomerDropdown(true);
+              {/* 검색 필드 추가 */}
+              <div ref={customerDropdownRef} className="relative mb-2">
+                <label className="block text-[11px] font-bold text-sky-700 mb-1">🔍 기존 등록 고객 검색하여 정보 불러오기</label>
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    placeholder="고객사명, 부서명, 담당자명으로 검색..."
+                    value={customerSearchInput}
+                    onChange={e => {
+                      setCustomerSearchInput(e.target.value);
+                      setShowCustomerDropdown(true);
+                    }}
+                    onFocus={() => {
+                      if (customerSearchInput.trim()) setShowCustomerDropdown(true);
+                    }}
+                    className="w-full pl-8 pr-2.5 py-2 bg-white border border-sky-200 rounded-xl text-xs focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                  />
+                  {customerSearchInput && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCustomerSearchInput('');
+                        setShowCustomerDropdown(false);
                       }}
-                      onFocus={() => setShowCustomerDropdown(true)}
-                      onKeyDown={e => {
-                        if (e.key === 'Escape' || e.key === 'Enter') setShowCustomerDropdown(false);
-                      }}
-                      className="w-full p-2.5 pr-7 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
-                    />
-                    {customerNameInput && (
+                      className="absolute right-2 top-2 text-slate-400 hover:text-slate-600 text-xs font-bold"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+
+                {showCustomerDropdown && customerSearchInput.trim() && (
+                  <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-2xl max-h-52 overflow-y-auto divide-y divide-slate-100 text-xs">
+                    <div className="p-2 bg-slate-50 text-[11px] font-semibold text-slate-500 border-b border-slate-100 flex justify-between items-center sticky top-0 bg-white">
+                      <span>검색 결과 ({customerSearchResults.length}건)</span>
                       <button
                         type="button"
-                        onClick={() => {
-                          setCustomerNameInput('');
-                          setNewSaleFormData({
-                            ...newSaleFormData,
-                            customer_id: '',
-                            customer_name: '',
-                            dept: '',
-                            contact_person: '',
-                            phone: '',
-                            email: '',
-                          });
-                          setShowCustomerDropdown(false);
-                        }}
-                        className="absolute right-2 top-2.5 text-slate-400 hover:text-slate-600 text-xs font-bold"
+                        onClick={() => setShowCustomerDropdown(false)}
+                        className="text-slate-500 hover:text-slate-800 font-bold px-1.5 py-0.5 rounded hover:bg-slate-100 text-[11px]"
                       >
-                        ✕
+                        ✕ 닫기
                       </button>
+                    </div>
+                    {customerSearchResults.length > 0 ? (
+                      customerSearchResults.map((c, idx) => (
+                        <div
+                          key={`${c.id}-${c.contact_id || idx}`}
+                          onClick={() => {
+                            handleSelectCustomer(c);
+                            setCustomerSearchInput('');
+                          }}
+                          className="p-2.5 hover:bg-sky-50 cursor-pointer flex flex-col transition"
+                        >
+                          <span className="font-bold text-slate-800">{c.name} {c.dept ? `(${c.dept})` : ''}</span>
+                          <span className="text-[11px] text-slate-400">
+                            {c.contact_person ? `담당: ${c.contact_person}` : ''} {c.phone ? `| ${c.phone}` : ''}
+                          </span>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="p-3 text-center text-slate-500 text-[11px]">
+                        검색 결과가 없습니다. 아래에 직접 기입해 주세요.
+                      </div>
                     )}
                   </div>
+                )}
+              </div>
 
-                  {showCustomerDropdown && customerNameInput.trim() && (
-                    <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-2xl max-h-52 overflow-y-auto divide-y divide-slate-100 text-xs">
-                      <div className="p-2 bg-slate-50 text-[11px] font-semibold text-slate-500 border-b border-slate-100 flex justify-between items-center sticky top-0 bg-white">
-                        <span>등록 고객 검색 결과</span>
-                        <button
-                          type="button"
-                          onClick={() => setShowCustomerDropdown(false)}
-                          className="text-slate-500 hover:text-slate-800 font-bold px-1.5 py-0.5 rounded hover:bg-slate-100 text-[11px]"
-                        >
-                          ✕ 닫기
-                        </button>
-                      </div>
-                      {customerSearchResults.map((c, idx) => (
-                          <div
-                            key={`${c.id}-${c.contact_id || idx}`}
-                            onClick={() => handleSelectCustomer(c)}
-                            className="p-2.5 hover:bg-sky-50 cursor-pointer flex flex-col transition"
-                          >
-                            <span className="font-bold text-slate-800">{c.name} {c.dept ? `(${c.dept})` : ''}</span>
-                            <span className="text-[11px] text-slate-400">
-                              {c.contact_person ? `담당: ${c.contact_person}` : ''} {c.phone ? `| ${c.phone}` : ''}
-                            </span>
-                          </div>
-                        ))}
-                      <div 
-                        onClick={() => setShowCustomerDropdown(false)}
-                        className="p-2.5 text-center text-sky-600 font-bold hover:bg-sky-50 cursor-pointer bg-slate-50/70 text-[11px] border-t border-slate-100"
-                      >
-                        + '{customerNameInput}' 신규 직접 입력 (목록 닫기)
-                      </div>
-                    </div>
-                  )}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-200/50">
+                {/* 1. 고객사명 직접 입력 */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">고객사명 *</label>
+                  <input
+                    type="text"
+                    placeholder="고객사명 직접 입력"
+                    value={newSaleFormData.customer_name}
+                    onChange={e => setNewSaleFormData({ ...newSaleFormData, customer_name: e.target.value, customer_id: '' })}
+                    className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                  />
                 </div>
 
                 <div>
