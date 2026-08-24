@@ -206,7 +206,7 @@ export default function PaymentPage() {
         alert('수금 내역이 수정되었습니다!');
       } else {
         await addPayment(formData);
-        alert('수금 내역이 구글 시트에 기록되었습니다!');
+        alert('수금 내역이 안전하게 저장되었습니다!');
       }
       setShowModal(false);
     } catch (err) {
