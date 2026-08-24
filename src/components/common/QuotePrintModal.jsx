@@ -268,7 +268,7 @@ export default function QuotePrintModal({ quote, customer, onClose }) {
         </div>
 
         {/* ── 양식 서식 본문 (경성문화사 공식 견적서 양식 100% 재현) ── */}
-        <div ref={printRef} className="p-6 sm:p-10 overflow-y-auto flex-1 bg-white text-slate-900 font-sans print:p-0 print:overflow-visible">
+        <div id="printable-quote-document" ref={printRef} className="p-6 sm:p-10 overflow-y-auto flex-1 bg-white text-slate-900 font-sans print:p-0 print:overflow-visible">
           
           {/* 1. 견적서 메인 대제목 */}
           <div className="text-center mb-6">
