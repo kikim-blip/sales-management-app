@@ -1102,42 +1102,64 @@ export default function SalesPage() {
               {/* 기간 모드 프리셋: [전체] / [당월] / [직접지정] */}
               <div className="flex items-center space-x-1.5">
                 <span className="text-xs font-bold text-slate-500 mr-1">기간:</span>
-                <div className="inline-flex p-0.5 bg-slate-100 rounded-xl text-xs font-bold">
-                <button
-                  type="button"
-                  onClick={() => setListPeriodMode('all')}
-                  className={`px-2.5 py-1 rounded-lg transition ${
-                    listPeriodMode === 'all' ? 'bg-white text-sky-700 font-black shadow-sm' : 'text-slate-500 hover:text-slate-800'
-                  }`}
-                >
-                  전체 기간
-                </button>
+                <div className="inline-flex p-0.5 bg-slate-100 rounded-xl text-xs font-bold mr-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setListPeriodMode('all')}
+                    className={`px-2.5 py-1 rounded-lg transition ${
+                      listPeriodMode === 'all' ? 'bg-white text-sky-700 font-black shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    전체 기간
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setListPeriodMode('month');
+                      setListSelectedMonth(today.slice(0, 7));
+                    }}
+                    className={`px-2.5 py-1 rounded-lg transition ${
+                      listPeriodMode === 'month' ? 'bg-white text-sky-700 font-black shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    당월
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setListPeriodMode('range')}
+                    className={`px-2.5 py-1 rounded-lg transition ${
+                      listPeriodMode === 'range' ? 'bg-white text-sky-700 font-black shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    직접지정
+                  </button>
+                </div>
+                
+                {/* 초기화 버튼 */}
                 <button
                   type="button"
                   onClick={() => {
-                    setListPeriodMode('month');
-                    setListSelectedMonth(today.slice(0, 7));
+                    setListSearchText('');
+                    setListCustomerFilter('ALL');
+                    setListStatusFilter('ALL');
+                    setListSortBy('date_desc');
+                    setListPeriodMode('all');
+                    setListStartDate(() => {
+                      const d = new Date();
+                      d.setMonth(d.getMonth() - 1);
+                      return getLocalDateStr(d);
+                    });
+                    setListEndDate(today);
                   }}
-                  className={`px-2.5 py-1 rounded-lg transition ${
-                    listPeriodMode === 'month' ? 'bg-white text-sky-700 font-black shadow-sm' : 'text-slate-500 hover:text-slate-800'
-                  }`}
+                  className="flex items-center justify-center space-x-1 px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold transition"
+                  title="모든 검색 조건을 초기화합니다."
                 >
-                  당월
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setListPeriodMode('range')}
-                  className={`px-2.5 py-1 rounded-lg transition ${
-                    listPeriodMode === 'range' ? 'bg-white text-sky-700 font-black shadow-sm' : 'text-slate-500 hover:text-slate-800'
-                  }`}
-                >
-                  직접지정
+                  <XCircle className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">초기화</span>
                 </button>
               </div>
             </div>
           </div>
-        </div>
-
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-2.5">
             {/* 1. 발주처/과/담당자/작업명 통합 검색 (5열) */}
             <div className="lg:col-span-4 relative">
@@ -1181,7 +1203,7 @@ export default function SalesPage() {
             </div>
 
             {/* 4. 기간 입력창 (2열 또는 3열) */}
-            <div className="lg:col-span-2">
+            <div className="lg:col-span-3">
               {listPeriodMode === 'month' && (
                 <input
                   type="month"
@@ -1212,30 +1234,6 @@ export default function SalesPage() {
                   전체 누적 기간
                 </div>
               )}
-            </div>
-
-            {/* 5. 초기화 버튼 (1열) */}
-            <div className="lg:col-span-1">
-              <button
-                type="button"
-                onClick={() => {
-                  setListSearchText('');
-                  setListCustomerFilter('ALL');
-                  setListStatusFilter('ALL');
-                  setListPeriodMode('all');
-                  setListStartDate(() => {
-                    const d = new Date();
-                    d.setMonth(d.getMonth() - 1);
-                    return getLocalDateStr(d);
-                  });
-                  setListEndDate(today);
-                }}
-                className="w-full flex items-center justify-center gap-1 py-2 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition"
-                title="모든 검색 조건을 초기화합니다."
-              >
-                <XCircle className="w-3.5 h-3.5" />
-                <span>초기화</span>
-              </button>
             </div>
 
           </div>
