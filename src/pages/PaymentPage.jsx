@@ -6,7 +6,7 @@ import SelectJobOrderModal from '../components/common/SelectJobOrderModal';
 import { getLocalDateStr } from '../utils/dateUtils';
 
 export default function PaymentPage() {
-  const { payments, customers, staffs = [], jobOrders, addPayment, updatePayment, deletePayment, selectedTeamGroup } = useData();
+  const { payments, customers, contacts = [], staffs = [], jobOrders, addPayment, updatePayment, deletePayment, selectedTeamGroup } = useData();
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [submitting, setSubmitting] = useState(false);
@@ -109,13 +109,45 @@ export default function PaymentPage() {
     const results = [];
 
     customers.forEach(c => {
-      if (
+      const cMatch = 
         (c.name || '').toLowerCase().includes(q) ||
         (c.dept || '').toLowerCase().includes(q) ||
-        (c.contact_person || '').toLowerCase().includes(q) ||
-        (c.sales_manager || '').toLowerCase().includes(q)
-      ) {
-        results.push(c);
+        (c.sales_manager || '').toLowerCase().includes(q);
+
+      const custContacts = contacts.filter(ct => ct.customer_id === c.id);
+
+      if (cMatch) {
+        if (custContacts.length === 0) {
+          results.push({ ...c }); 
+        } else {
+          custContacts.forEach(ct => {
+            results.push({
+              ...c,
+              contact_person: ct.name,
+              phone: ct.phone,
+              mobile: ct.mobile,
+              email: ct.email,
+              contact_id: ct.id
+            });
+          });
+        }
+      } else {
+        const matchedContacts = custContacts.filter(ct => 
+          (ct.name || '').toLowerCase().includes(q) ||
+          (ct.phone || '').includes(q) ||
+          (ct.mobile || '').includes(q) ||
+          (ct.email || '').toLowerCase().includes(q)
+        );
+        matchedContacts.forEach(ct => {
+          results.push({
+            ...c,
+            contact_person: ct.name,
+            phone: ct.phone,
+            mobile: ct.mobile,
+            email: ct.email,
+            contact_id: ct.id
+          });
+        });
       }
     });
 
