@@ -570,7 +570,8 @@ export default function DashboardPage() {
 
   // 공급가액 입력 시 -> 부가세(10%) 및 총 청구금액 자동 계산
   const handleNewSalePriceChange = (val) => {
-    if (val === '') {
+    const numericStr = String(val).replace(/[^0-9]/g, '');
+    if (!numericStr) {
       setNewSaleFormData(prev => ({
         ...prev,
         supply_price: '',
@@ -579,7 +580,7 @@ export default function DashboardPage() {
       }));
       return;
     }
-    const supply = Number(val) || 0;
+    const supply = Number(numericStr);
     const tax = Math.round(supply * 0.1);
     setNewSaleFormData(prev => ({
       ...prev,
@@ -591,7 +592,8 @@ export default function DashboardPage() {
 
   // 총 청구금액(VAT 포함) 입력 시 -> 공급가액 및 부가세(10%) 자동 역산
   const handleNewSaleTotalPriceChange = (val) => {
-    if (val === '') {
+    const numericStr = String(val).replace(/[^0-9]/g, '');
+    if (!numericStr) {
       setNewSaleFormData(prev => ({
         ...prev,
         total_price: '',
@@ -600,7 +602,7 @@ export default function DashboardPage() {
       }));
       return;
     }
-    const total = Number(val) || 0;
+    const total = Number(numericStr);
     const supply = Math.round(total / 1.1);
     const tax = total - supply;
     setNewSaleFormData(prev => ({
@@ -908,9 +910,17 @@ export default function DashboardPage() {
                             setEditingOrder(item);
                             setShowJobEditModal(true);
                           } else {
+                            const cust = customers.find(c => c.id === item.customer_id);
                             setEditingSale(item);
-                            setNewSaleFormData({ ...item });
-                            const custName = customers.find(c => c.id === item.customer_id)?.name || item.customer_name || '';
+                            setNewSaleFormData({
+                              ...item,
+                              contact_person: item.contact_person || cust?.contact_person || '',
+                              phone: item.phone || cust?.phone || '',
+                              mobile: item.mobile || cust?.mobile || '',
+                              email: item.email || cust?.email || '',
+                              sales_manager: item.sales_manager || cust?.sales_manager || loggedInUserName,
+                            });
+                            const custName = cust?.name || item.customer_name || '';
                             setCustomerNameInput(custName);
                             setShowNewSaleModal(true);
                           }
@@ -1786,9 +1796,9 @@ export default function DashboardPage() {
                   <div>
                     <label className="block text-xs font-semibold text-slate-600 mb-1">공급가액 (원)</label>
                     <input
-                      type="number"
+                      type="text"
                       placeholder="0"
-                      value={newSaleFormData.supply_price}
+                      value={newSaleFormData.supply_price ? Number(newSaleFormData.supply_price).toLocaleString() : ''}
                       onChange={e => handleNewSalePriceChange(e.target.value)}
                       className="w-full p-2.5 border border-slate-200 rounded-xl text-xs font-semibold focus:border-sky-500"
                     />
@@ -1796,9 +1806,9 @@ export default function DashboardPage() {
                   <div>
                     <label className="block text-xs font-semibold text-slate-600 mb-1">총 청구금액 (VAT포함)</label>
                     <input
-                      type="number"
+                      type="text"
                       placeholder="0"
-                      value={newSaleFormData.total_price}
+                      value={newSaleFormData.total_price ? Number(newSaleFormData.total_price).toLocaleString() : ''}
                       onChange={e => handleNewSaleTotalPriceChange(e.target.value)}
                       className="w-full p-2.5 bg-sky-50/40 border border-sky-200 rounded-xl font-bold text-sky-800 text-xs focus:border-sky-500"
                     />

@@ -492,7 +492,8 @@ export default function SalesPage() {
 
   // 💡 공급가액 입력 시 -> 부가세(10%) 및 총 청구금액 자동 계산
   const handlePriceChange = (val) => {
-    if (val === '') {
+    const numericStr = String(val).replace(/[^0-9]/g, '');
+    if (!numericStr) {
       setFormData(prev => ({
         ...prev,
         supply_price: '',
@@ -501,7 +502,7 @@ export default function SalesPage() {
       }));
       return;
     }
-    const supply = Number(val) || 0;
+    const supply = Number(numericStr);
     const tax = Math.round(supply * 0.1);
     setFormData(prev => ({
       ...prev,
@@ -513,7 +514,8 @@ export default function SalesPage() {
 
   // 💡 총 청구금액(VAT 포함) 입력 시 -> 공급가액 및 부가세(10%) 자동 역산
   const handleTotalPriceChange = (val) => {
-    if (val === '') {
+    const numericStr = String(val).replace(/[^0-9]/g, '');
+    if (!numericStr) {
       setFormData(prev => ({
         ...prev,
         total_price: '',
@@ -522,7 +524,7 @@ export default function SalesPage() {
       }));
       return;
     }
-    const total = Number(val) || 0;
+    const total = Number(numericStr);
     const supply = Math.round(total / 1.1);
     const tax = total - supply;
     setFormData(prev => ({
@@ -2387,9 +2389,9 @@ export default function SalesPage() {
                   <div>
                     <label className="block text-xs font-semibold text-slate-600 mb-1">공급가액 (원)</label>
                     <input
-                      type="number"
+                      type="text"
                       placeholder="0"
-                      value={formData.supply_price}
+                      value={formData.supply_price ? Number(formData.supply_price).toLocaleString() : ''}
                       onChange={e => handlePriceChange(e.target.value)}
                       className="w-full p-2.5 border border-slate-200 rounded-xl text-xs font-semibold focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
                     />
@@ -2397,9 +2399,9 @@ export default function SalesPage() {
                   <div>
                     <label className="block text-xs font-semibold text-slate-600 mb-1">총 청구금액 (VAT포함)</label>
                     <input
-                      type="number"
+                      type="text"
                       placeholder="0"
-                      value={formData.total_price}
+                      value={formData.total_price ? Number(formData.total_price).toLocaleString() : ''}
                       onChange={e => handleTotalPriceChange(e.target.value)}
                       className="w-full p-2.5 bg-sky-50/40 border border-sky-200 rounded-xl font-bold text-sky-800 text-xs focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
                     />
