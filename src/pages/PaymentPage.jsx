@@ -420,11 +420,14 @@ export default function PaymentPage() {
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1">수금액 (원) *</label>
                 <input
-                  type="number"
+                  type="text"
                   required
                   placeholder="0"
-                  value={formData.amount}
-                  onChange={e => setFormData({ ...formData, amount: Number(e.target.value) })}
+                  value={formData.amount ? formData.amount.toLocaleString() : ''}
+                  onChange={e => {
+                    const rawValue = e.target.value.replace(/[^0-9-]/g, '').replace(/(?!^)-/g, '');
+                    setFormData({ ...formData, amount: rawValue === '-' ? '-' : (rawValue ? Number(rawValue) : '') });
+                  }}
                   className="w-full p-2.5 border border-slate-200 rounded-xl text-sm font-bold text-emerald-700"
                 />
               </div>
@@ -450,6 +453,7 @@ export default function PaymentPage() {
                   <option value="카드결제">카드결제</option>
                   <option value="현금">현금</option>
                   <option value="어음">어음</option>
+                  <option value="선입금">선입금</option>
                 </select>
               </div>
 
