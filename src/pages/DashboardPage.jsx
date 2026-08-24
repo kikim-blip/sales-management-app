@@ -610,7 +610,6 @@ export default function DashboardPage() {
     }));
   };
 
-  // 고객 선택 핸들러
   const handleSelectCustomer = (cust) => {
     setCustomerNameInput(cust.name);
     setNewSaleFormData(prev => ({
@@ -620,6 +619,7 @@ export default function DashboardPage() {
       dept: cust.dept || prev.dept,
       contact_person: cust.contact_person || '',
       phone: cust.phone || '',
+      mobile: cust.mobile || '',
       email: cust.email || '',
       sales_manager: cust.sales_manager || loggedInUserName,
     }));
@@ -700,8 +700,55 @@ export default function DashboardPage() {
     }
   };
 
+  const customerSearchResults = (() => {
+    if (!customerNameInput.trim()) return [];
+    const q = customerNameInput.trim().toLowerCase();
+    const results = [];
 
+    customers.forEach(c => {
+      const cMatch = 
+        (c.name || '').toLowerCase().includes(q) ||
+        (c.dept || '').toLowerCase().includes(q) ||
+        (c.sales_manager || '').toLowerCase().includes(q);
 
+      const custContacts = contacts.filter(ct => ct.customer_id === c.id);
+
+      if (cMatch) {
+        if (custContacts.length === 0) {
+          results.push({ ...c }); 
+        } else {
+          custContacts.forEach(ct => {
+            results.push({
+              ...c,
+              contact_person: ct.name,
+              phone: ct.phone,
+              mobile: ct.mobile,
+              email: ct.email,
+              contact_id: ct.id
+            });
+          });
+        }
+      } else {
+        const matchedContacts = custContacts.filter(ct => 
+          (ct.name || '').toLowerCase().includes(q) ||
+          (ct.phone || '').includes(q) ||
+          (ct.mobile || '').includes(q) ||
+          (ct.email || '').toLowerCase().includes(q)
+        );
+        matchedContacts.forEach(ct => {
+          results.push({
+            ...c,
+            contact_person: ct.name,
+            phone: ct.phone,
+            mobile: ct.mobile,
+            email: ct.email,
+            contact_id: ct.id
+          });
+        });
+      }
+    });
+    return results;
+  })();
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20 text-slate-500 space-x-2">
@@ -1518,15 +1565,9 @@ export default function DashboardPage() {
                           ✕ 닫기
                         </button>
                       </div>
-                      {customers
-                        .filter(c => 
-                          (c.name || '').toLowerCase().includes(customerNameInput.toLowerCase()) ||
-                          (c.dept || '').toLowerCase().includes(customerNameInput.toLowerCase()) ||
-                          (c.contact_person || '').toLowerCase().includes(customerNameInput.toLowerCase())
-                        )
-                        .map(c => (
+                      {customerSearchResults.map((c, idx) => (
                           <div
-                            key={c.id}
+                            key={`${c.id}-${c.contact_id || idx}`}
                             onClick={() => handleSelectCustomer(c)}
                             className="p-2.5 hover:bg-sky-50 cursor-pointer flex flex-col transition"
                           >

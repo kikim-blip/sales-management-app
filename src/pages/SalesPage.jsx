@@ -259,20 +259,58 @@ export default function SalesPage() {
   const [customerNameInput, setCustomerNameInput] = useState('');
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
 
-  // 실시간 고객 검색 결과 (고객사명, 부서, 담당자명, 연락처, 영업담당자 통합 검색)
-  const customerSearchResults = customers.filter(c => {
-    if (!customerNameInput.trim()) return false;
+  // 실시간 고객 검색 결과 (고객사명, 부서, 담당자명, 연락처, 영업담당자 통합 검색 - 1:N 연락처 대응)
+  const customerSearchResults = (() => {
+    if (!customerNameInput.trim()) return [];
     const q = customerNameInput.trim().toLowerCase();
-    return (
-      (c.name || '').toLowerCase().includes(q) ||
-      (c.dept || '').toLowerCase().includes(q) ||
-      (c.contact_person || '').toLowerCase().includes(q) ||
-      (c.sales_manager || '').toLowerCase().includes(q) ||
-      (c.phone || '').includes(q)
-    );
-  });
+    const results = [];
 
-  // 고객 검색 목록에서 선택 시 일괄 자동 채우기
+    customers.forEach(c => {
+      const cMatch = 
+        (c.name || '').toLowerCase().includes(q) ||
+        (c.dept || '').toLowerCase().includes(q) ||
+        (c.sales_manager || '').toLowerCase().includes(q);
+
+      const custContacts = contacts.filter(ct => ct.customer_id === c.id);
+
+      if (cMatch) {
+        if (custContacts.length === 0) {
+          results.push({ ...c }); // fallback for legacy or no-contact customers
+        } else {
+          custContacts.forEach(ct => {
+            results.push({
+              ...c,
+              contact_person: ct.name,
+              phone: ct.phone,
+              mobile: ct.mobile,
+              email: ct.email,
+              contact_id: ct.id
+            });
+          });
+        }
+      } else {
+        // Customer name didn't match, but maybe a specific contact matched
+        const matchedContacts = custContacts.filter(ct => 
+          (ct.name || '').toLowerCase().includes(q) ||
+          (ct.phone || '').includes(q) ||
+          (ct.mobile || '').includes(q) ||
+          (ct.email || '').toLowerCase().includes(q)
+        );
+        matchedContacts.forEach(ct => {
+          results.push({
+            ...c,
+            contact_person: ct.name,
+            phone: ct.phone,
+            mobile: ct.mobile,
+            email: ct.email,
+            contact_id: ct.id
+          });
+        });
+      }
+    });
+    return results;
+  })();
+
   const handleSelectCustomer = (cust) => {
     setCustomerNameInput(cust.name || '');
     setFormData(prev => ({
@@ -282,6 +320,7 @@ export default function SalesPage() {
       dept: cust.dept || '',
       contact_person: cust.contact_person || '',
       phone: cust.phone || '',
+      mobile: cust.mobile || '',
       email: cust.email || '',
       sales_manager: cust.sales_manager || loggedInUserName,
     }));
@@ -2123,9 +2162,9 @@ export default function SalesPage() {
                             ✕ 닫기
                           </button>
                         </div>
-                        {customerSearchResults.map(c => (
+                        {customerSearchResults.map((c, idx) => (
                           <button
-                            key={c.id}
+                            key={`${c.id}-${c.contact_id || idx}`}
                             type="button"
                             onClick={() => handleSelectCustomer(c)}
                             className="w-full text-left p-2.5 hover:bg-sky-50 transition flex flex-col gap-0.5"
