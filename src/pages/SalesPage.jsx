@@ -66,6 +66,7 @@ export default function SalesPage() {
   const [selectedAnalysisCustomer, setSelectedAnalysisCustomer] = useState(null); // 분석 탭에서 클릭한 고객 상세 모달
 
   const [listSearchText, setListSearchText] = useState('');
+  const [listSortBy, setListSortBy] = useState('date_desc');
   const [listCustomerFilter, setListCustomerFilter] = useState('ALL');
   const [listStatusFilter, setListStatusFilter] = useState('ALL');
   const [listPeriodMode, setListPeriodMode] = useState('all'); // 'all' | 'month' | 'range'
@@ -184,6 +185,21 @@ export default function SalesPage() {
     }
 
     return true;
+  }).sort((a, b) => {
+    if (listSortBy === 'date_desc') {
+      const dateA = a.reg_date || a.receipt_date || a.delivery_date || '';
+      const dateB = b.reg_date || b.receipt_date || b.delivery_date || '';
+      return dateB.localeCompare(dateA);
+    } else if (listSortBy === 'date_asc') {
+      const dateA = a.reg_date || a.receipt_date || a.delivery_date || '';
+      const dateB = b.reg_date || b.receipt_date || b.delivery_date || '';
+      return dateA.localeCompare(dateB);
+    } else if (listSortBy === 'amount_desc') {
+      return (Number(b.total_price) || 0) - (Number(a.total_price) || 0);
+    } else if (listSortBy === 'amount_asc') {
+      return (Number(a.total_price) || 0) - (Number(b.total_price) || 0);
+    }
+    return 0;
   });
 
 
@@ -1065,10 +1081,28 @@ export default function SalesPage() {
               </span>
             </div>
 
-            {/* 기간 모드 프리셋: [전체] / [당월] / [직접지정] */}
-            <div className="flex items-center space-x-1.5">
-              <span className="text-xs font-bold text-slate-500 mr-1">기간:</span>
-              <div className="inline-flex p-0.5 bg-slate-100 rounded-xl text-xs font-bold">
+            {/* 우측 컨트롤 (정렬 및 기간) */}
+            <div className="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-4">
+              
+              {/* 정렬 셀렉트 */}
+              <div className="flex items-center">
+                <span className="text-xs font-bold text-slate-500 mr-2">정렬:</span>
+                <select
+                  value={listSortBy}
+                  onChange={(e) => setListSortBy(e.target.value)}
+                  className="px-2.5 py-1.5 bg-slate-100 border border-slate-200 rounded-lg text-xs font-bold text-slate-600 focus:outline-none focus:ring-1 focus:ring-sky-500 cursor-pointer"
+                >
+                  <option value="date_desc">▼ 접수일자 최신순</option>
+                  <option value="date_asc">▲ 접수일자 과거순</option>
+                  <option value="amount_desc">▼ 금액 높은순</option>
+                  <option value="amount_asc">▲ 금액 낮은순</option>
+                </select>
+              </div>
+
+              {/* 기간 모드 프리셋: [전체] / [당월] / [직접지정] */}
+              <div className="flex items-center space-x-1.5">
+                <span className="text-xs font-bold text-slate-500 mr-1">기간:</span>
+                <div className="inline-flex p-0.5 bg-slate-100 rounded-xl text-xs font-bold">
                 <button
                   type="button"
                   onClick={() => setListPeriodMode('all')}
@@ -1102,8 +1136,9 @@ export default function SalesPage() {
               </div>
             </div>
           </div>
+        </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-2.5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-2.5">
             {/* 1. 발주처/과/담당자/작업명 통합 검색 (5열) */}
             <div className="lg:col-span-4 relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
