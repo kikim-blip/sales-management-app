@@ -497,9 +497,9 @@ export default function PaymentPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">비고 (내역 등 상세 메모)</label>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">작업명 / 비고 <span className="font-normal text-slate-400">(상세 장부에 표기됨)</span></label>
                 <textarea
-                  placeholder="수금 관련 참고사항이나 메모를 자유롭게 기입하세요."
+                  placeholder="장부의 '작업명' 란에 표시될 수금 관련 메모를 자유롭게 기입하세요."
                   value={formData.note}
                   onChange={e => setFormData({ ...formData, note: e.target.value })}
                   className="w-full p-2.5 border border-slate-200 rounded-xl text-xs resize-y min-h-[60px]"

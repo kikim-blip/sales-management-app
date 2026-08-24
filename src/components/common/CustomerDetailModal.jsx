@@ -81,8 +81,8 @@ export default function CustomerDetailModal({ customer, sales = [], payments = [
     const org = p.orgName || p.customer_name || targetOrgName;
     const dept = p.deptName || p.dept || (viewLevel !== 'company' ? targetDeptName : '-');
     const contact = p.contactPerson || p.contact_person || (viewLevel === 'contact' ? targetContact : '-');
-    const titleVal = p.title || p.description || `수금 입금 (${p.method || '계좌이체'})`;
-    const noteVal = p.note || p.content || (p.method ? `결제수단: ${p.method}` : '수금 정산');
+    const titleVal = p.title || p.description || p.note || `수금 입금 (${p.method || '계좌이체'})`;
+    const noteVal = (p.title || p.description) ? p.note : (p.method ? `결제수단: ${p.method}` : '수금 정산');
 
     ledgerItems.push({
       date: dateVal,
