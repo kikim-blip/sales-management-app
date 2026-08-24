@@ -1,7 +1,7 @@
 // src/pages/PaymentPage.jsx
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useData } from '../context/DataContext';
-import { Plus, CreditCard, Calendar, Pencil, Trash2, FileSearch } from 'lucide-react';
+import { Plus, CreditCard, Calendar, Pencil, Trash2, FileSearch, Search } from 'lucide-react';
 import SelectJobOrderModal from '../components/common/SelectJobOrderModal';
 import { getLocalDateStr } from '../utils/dateUtils';
 
@@ -34,10 +34,24 @@ export default function PaymentPage() {
     dept: '',
     amount: '',
     method: '계좌이체',
+    note: '',
   };
 
   const [formData, setFormData] = useState(defaultForm);
   const [customerNameInput, setCustomerNameInput] = useState('');
+  const [customerSearchInput, setCustomerSearchInput] = useState('');
+  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
+  const customerDropdownRef = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (customerDropdownRef.current && !customerDropdownRef.current.contains(event.target)) {
+        setShowCustomerDropdown(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   // 작업전표 불러오기로 수금 폼 자동 채우기
   const handleSelectJobOrder = (order) => {
@@ -89,9 +103,30 @@ export default function PaymentPage() {
     }
   };
 
+  const customerSearchResults = (() => {
+    if (!customerSearchInput.trim()) return [];
+    const q = customerSearchInput.trim().toLowerCase();
+    const results = [];
+
+    customers.forEach(c => {
+      if (
+        (c.name || '').toLowerCase().includes(q) ||
+        (c.dept || '').toLowerCase().includes(q) ||
+        (c.contact_person || '').toLowerCase().includes(q) ||
+        (c.sales_manager || '').toLowerCase().includes(q)
+      ) {
+        results.push(c);
+      }
+    });
+
+    return results.slice(0, 50);
+  })();
+
   const openNewModal = () => {
     setEditingId(null);
     setCustomerNameInput('');
+    setCustomerSearchInput('');
+    setShowCustomerDropdown(false);
     setFormData(defaultForm);
     setShowModal(true);
   };
@@ -103,6 +138,8 @@ export default function PaymentPage() {
     const cDept = cust ? cust.dept : '';
 
     setCustomerNameInput(cName);
+    setCustomerSearchInput('');
+    setShowCustomerDropdown(false);
     setFormData({
       payment_date: p.payment_date || today,
       customer_id: p.customer_id || '',
@@ -110,6 +147,7 @@ export default function PaymentPage() {
       dept: cDept,
       amount: p.amount || '',
       method: p.method || '계좌이체',
+      note: p.note || '',
     });
     setShowModal(true);
   };
@@ -181,6 +219,11 @@ export default function PaymentPage() {
                       <span>수금일: {p.payment_date}</span>
                       <span>• 결제수단: {p.method}</span>
                     </div>
+                    {p.note && (
+                      <div className="text-[11px] text-slate-500 mt-0.5">
+                        비고: {p.note}
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -236,28 +279,98 @@ export default function PaymentPage() {
 
             <div className="space-y-3">
               
-              {/* 고객사명 및 과/부서 분리 검색 입력 */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* 검색 필드 추가 */}
+              <div ref={customerDropdownRef} className="relative mb-2">
+                <label className="block text-[11px] font-bold text-emerald-700 mb-1">🔍 기존 등록 고객 검색하여 정보 불러오기</label>
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    placeholder="고객사명, 부서명, 담당자명으로 검색..."
+                    value={customerSearchInput}
+                    onChange={e => {
+                      setCustomerSearchInput(e.target.value);
+                      setShowCustomerDropdown(true);
+                    }}
+                    onFocus={() => {
+                      if (customerSearchInput.trim()) setShowCustomerDropdown(true);
+                    }}
+                    className="w-full pl-8 pr-2.5 py-2 bg-white border border-emerald-200 rounded-xl text-xs focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                  />
+                  {customerSearchInput && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCustomerSearchInput('');
+                        setShowCustomerDropdown(false);
+                      }}
+                      className="absolute right-2 top-2 text-slate-400 hover:text-slate-600 text-xs font-bold"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+
+                {showCustomerDropdown && customerSearchInput.trim() && (
+                  <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-2xl z-50 max-h-52 overflow-y-auto divide-y divide-slate-100 text-xs">
+                    <div className="p-2 bg-slate-50 text-[11px] font-semibold text-slate-500 border-b border-slate-100 flex justify-between items-center sticky top-0 bg-white">
+                      <span>검색 결과 ({customerSearchResults.length}건)</span>
+                      <button
+                        type="button"
+                        onClick={() => setShowCustomerDropdown(false)}
+                        className="text-slate-500 hover:text-slate-800 font-bold px-1.5 py-0.5 rounded hover:bg-slate-100 text-[11px]"
+                      >
+                        ✕ 닫기
+                      </button>
+                    </div>
+                    {customerSearchResults.length > 0 ? (
+                      customerSearchResults.map((c, idx) => (
+                        <button
+                          key={`${c.id}-${c.contact_id || idx}`}
+                          type="button"
+                          onClick={() => {
+                            setCustomerNameInput(c.name);
+                            setFormData(prev => ({
+                              ...prev,
+                              customer_id: c.id,
+                              customer_name: c.name,
+                              dept: c.dept || prev.dept,
+                            }));
+                            setCustomerSearchInput('');
+                            setShowCustomerDropdown(false);
+                          }}
+                          className="w-full text-left p-2.5 hover:bg-emerald-50 cursor-pointer flex flex-col transition"
+                        >
+                          <span className="font-bold text-slate-800">{c.name} {c.dept ? `(${c.dept})` : ''}</span>
+                          <span className="text-[11px] text-slate-400">
+                            {c.contact_person ? `담당: ${c.contact_person}` : ''} {c.phone ? `| ${c.phone}` : ''}
+                          </span>
+                        </button>
+                      ))
+                    ) : (
+                      <div className="p-3 text-center text-slate-500 text-[11px]">
+                        검색 결과가 없습니다. 아래에 직접 기입해 주세요.
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-200/50">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">고객사명 *</label>
                   <input
                     type="text"
-                    list="payment-customer-list"
                     required
-                    placeholder="고객사명 검색 또는 입력"
-                    value={customerNameInput}
-                    onChange={e => handleCustomerNameChange(e.target.value)}
+                    placeholder="고객사명 직접 입력"
+                    value={formData.customer_name}
+                    onChange={e => {
+                      const val = e.target.value;
+                      setCustomerNameInput(val);
+                      setFormData(prev => ({ ...prev, customer_name: val, customer_id: val }));
+                    }}
                     className="w-full p-2.5 border border-slate-200 rounded-xl text-xs font-semibold focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
                   />
-                  <datalist id="payment-customer-list">
-                    {customers.map(c => (
-                      <React.Fragment key={c.id}>
-                        <option value={c.name} label={`${c.dept ? `[${c.dept}] ` : ''}${c.contact_person ? `담당: ${c.contact_person}` : ''}`} />
-                        {c.contact_person && <option value={c.contact_person} label={`고객사: ${c.name}`} />}
-                        {c.dept && <option value={c.dept} label={`고객사: ${c.name}`} />}
-                      </React.Fragment>
-                    ))}
-                  </datalist>
                 </div>
 
                 <div>
@@ -306,6 +419,16 @@ export default function PaymentPage() {
                   <option value="현금">현금</option>
                   <option value="어음">어음</option>
                 </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">비고 (내역 등 상세 메모)</label>
+                <textarea
+                  placeholder="수금 관련 참고사항이나 메모를 자유롭게 기입하세요."
+                  value={formData.note}
+                  onChange={e => setFormData({ ...formData, note: e.target.value })}
+                  className="w-full p-2.5 border border-slate-200 rounded-xl text-xs resize-y min-h-[60px]"
+                />
               </div>
             </div>
 

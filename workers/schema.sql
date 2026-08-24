@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS payments (
   customer_id TEXT DEFAULT '',
   amount REAL DEFAULT 0,
   method TEXT DEFAULT '계좌이체',
+  note TEXT DEFAULT '',
   dept TEXT DEFAULT '',
   created_at TEXT DEFAULT (datetime('now', 'localtime')),
   updated_at TEXT DEFAULT (datetime('now', 'localtime'))

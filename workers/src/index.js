@@ -346,10 +346,10 @@ async function createPayment(db, request) {
   const body = await request.json();
   const id = body.id || generateId('PAY');
   await db.prepare(
-    `INSERT OR REPLACE INTO payments (id, payment_date, customer_id, amount, method, dept, updated_at)
-     VALUES (?,?,?,?,?,?,datetime('now','localtime'))`
+    `INSERT OR REPLACE INTO payments (id, payment_date, customer_id, amount, method, note, dept, updated_at)
+     VALUES (?,?,?,?,?,?,?,datetime('now','localtime'))`
   ).bind(id, body.payment_date||'', body.customer_id||'', body.amount||0,
-         body.method||'계좌이체', body.dept||'').run();
+         body.method||'계좌이체', body.note||'', body.dept||'').run();
   const row = await db.prepare('SELECT * FROM payments WHERE id = ?').bind(id).first();
   return json(row, 201);
 }
@@ -357,9 +357,9 @@ async function createPayment(db, request) {
 async function updatePayment(db, id, request) {
   const body = await request.json();
   await db.prepare(
-    `UPDATE payments SET payment_date=?, customer_id=?, amount=?, method=?, dept=?, updated_at=datetime('now','localtime') WHERE id=?`
+    `UPDATE payments SET payment_date=?, customer_id=?, amount=?, method=?, note=?, dept=?, updated_at=datetime('now','localtime') WHERE id=?`
   ).bind(body.payment_date||'', body.customer_id||'', body.amount||0,
-         body.method||'계좌이체', body.dept||'', id).run();
+         body.method||'계좌이체', body.note||'', body.dept||'', id).run();
   const row = await db.prepare('SELECT * FROM payments WHERE id = ?').bind(id).first();
   return json(row);
 }
