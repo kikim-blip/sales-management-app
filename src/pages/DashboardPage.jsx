@@ -564,6 +564,7 @@ export default function DashboardPage() {
     setNewSaleFormData(defaultNewSaleForm);
     setCustomerNameInput('');
     setShowCustomerDropdown(false);
+    setEditingSale(null);
     setShowNewSaleModal(true);
   };
 
@@ -690,8 +691,14 @@ export default function DashboardPage() {
         sales_manager: newSaleFormData.sales_manager || loggedInUserName,
       };
 
-      await addSales(salePayload);
-      alert(!matchedCust ? '신규 고객 정보가 함께 저장되고, 매출이 등록되었습니다!' : '신규 매출이 정상 등록되었습니다!');
+      if (editingSale && editingSale.id) {
+        await updateSales(editingSale.id, salePayload);
+        alert('매출/견적 내용이 수정되었습니다!');
+        setEditingSale(null);
+      } else {
+        await addSales(salePayload);
+        alert(!matchedCust ? '신규 고객 정보가 함께 저장되고, 매출이 등록되었습니다!' : '신규 매출이 정상 등록되었습니다!');
+      }
       setShowNewSaleModal(false);
     } catch (err) {
       alert('저장 에러: ' + err.message);
@@ -901,8 +908,11 @@ export default function DashboardPage() {
                             setEditingOrder(item);
                             setShowJobEditModal(true);
                           } else {
-                            setEditingSale({ ...item });
-                            setShowSaleScheduleModal(true);
+                            setEditingSale(item);
+                            setNewSaleFormData({ ...item });
+                            const custName = customers.find(c => c.id === item.customer_id)?.name || item.customer_name || '';
+                            setCustomerNameInput(custName);
+                            setShowNewSaleModal(true);
                           }
                         }}
                         className="p-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-lg transition"
@@ -1438,13 +1448,18 @@ export default function DashboardPage() {
                   <Plus className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-slate-800 text-sm">신규 매출/견적 수동 등록</h3>
-                  <p className="text-[11px] text-slate-400 font-medium">대시보드 빠른 접수</p>
+                  <h3 className="font-bold text-slate-800 text-sm">
+                    {editingSale ? '매출/견적 세부 내역 수정' : '신규 매출/견적 수동 등록'}
+                  </h3>
+                  <p className="text-[11px] text-slate-400 font-medium">대시보드 빠른 접수/수정</p>
                 </div>
               </div>
               <button 
                 type="button" 
-                onClick={() => setShowNewSaleModal(false)} 
+                onClick={() => {
+                  setShowNewSaleModal(false);
+                  setEditingSale(null);
+                }} 
                 className="text-slate-400 hover:text-slate-700"
               >
                 <XCircle className="w-5 h-5" />
