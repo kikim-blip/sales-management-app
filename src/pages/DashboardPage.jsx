@@ -913,16 +913,18 @@ export default function DashboardPage() {
                             setShowJobEditModal(true);
                           } else {
                             const cust = customers.find(c => c.id === item.customer_id);
+                            const custName = cust?.name || item.customer_name || '';
                             setEditingSale(item);
                             setNewSaleFormData({
                               ...item,
+                              customer_name: custName,
+                              dept: item.dept || cust?.dept || '',
                               contact_person: item.contact_person || cust?.contact_person || '',
                               phone: item.phone || cust?.phone || '',
                               mobile: item.mobile || cust?.mobile || '',
                               email: item.email || cust?.email || '',
                               sales_manager: item.sales_manager || cust?.sales_manager || loggedInUserName,
                             });
-                            const custName = cust?.name || item.customer_name || '';
                             setCustomerNameInput(custName);
                             setCustomerSearchInput('');
                             setShowNewSaleModal(true);
