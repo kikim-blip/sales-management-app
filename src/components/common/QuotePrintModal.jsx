@@ -187,7 +187,16 @@ export default function QuotePrintModal({ quote, customer, onClose }) {
   };
 
   const handlePrint = () => {
-    window.print();
+    const yymmdd = today.split('-').map((v, i) => i === 0 ? v.slice(2) : v).join('');
+    const printTitle = `${yymmdd} ${custName} ${quote.title || '품명'} ${isComparative ? '비교견적서' : '견적서'}`;
+    
+    const originalTitle = document.title;
+    document.title = printTitle;
+    
+    setTimeout(() => {
+      window.print();
+      document.title = originalTitle;
+    }, 50);
   };
 
   return (
