@@ -535,7 +535,7 @@ export default function EstimateModal({ sale, customer, onClose, onSave, onPrint
                   supply_price: totalSupplyPrice,
                   tax: totalTax,
                   total_price: totalPrice,
-                });
+                }, customer);
               }
             }}
             className="flex items-center space-x-1.5 px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-xs font-bold transition"
