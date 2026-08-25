@@ -227,6 +227,29 @@ export function DataProvider({ children }) {
     fetchAllData();
   }, [isLoggedIn, fetchAllData]);
 
+  // 💡 자동 갱신: 탭 복귀 시 즉시 새로고침 + 10분 주기 백그라운드 폴링
+  useEffect(() => {
+    if (!isLoggedIn) return;
+
+    // 1️⃣ 탭/창 복귀 감지 (PC를 오래 방치 후 돌아왔을 때 즉시 갱신)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        fetchAllData(true); // force refresh
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // 2️⃣ 10분(600초) 주기 자동 갱신 (탭이 열려 있어도 데이터 최신화)
+    const interval = setInterval(() => {
+      fetchAllData(true);
+    }, 10 * 60 * 1000);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      clearInterval(interval);
+    };
+  }, [isLoggedIn, fetchAllData]);
+
   // 💡 구글 로그인 사용자와 사원(staffs) 목록 동기화
   useEffect(() => {
     if (!user?.email || !staffs || staffs.length === 0) return;
