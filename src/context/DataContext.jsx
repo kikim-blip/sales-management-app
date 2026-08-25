@@ -15,7 +15,7 @@ import {
   createTeamApi, updateTeamApi, deleteTeamApi,
   createPostApi, updatePostApi, deletePostApi,
   createMemoApi, updateMemoApi, deleteMemoApi,
-  createLogApi, clearLogsApi,
+  createLogApi, clearLogsApi, fetchLogs,
   getCacheEntry,
   setCacheEntry,
 } from '../services/d1Api';
@@ -197,6 +197,21 @@ export function DataProvider({ children }) {
       if (Array.isArray(data.memos)) {
         setMemos(data.memos);
         saveCache('memos', data.memos);
+      }
+
+      // 🚨 Fetch logs separately if they are not included in batch data, or if they are included, process them
+      let fetchedLogs = data.logs;
+      if (!fetchedLogs) {
+        try {
+          fetchedLogs = await fetchLogs();
+        } catch (e) {
+          console.warn('로그 로드 실패:', e);
+        }
+      }
+      if (Array.isArray(fetchedLogs)) {
+        const sortedLogs = fetchedLogs.sort((a, b) => new Date(b.created_at || b.id) - new Date(a.created_at || a.id)).slice(0, 500);
+        setLogs(sortedLogs);
+        saveCache('logs', sortedLogs);
       }
     } catch (err) {
       console.warn('D1 API 데이터 로드 오류:', err.message);
