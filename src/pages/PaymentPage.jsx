@@ -112,7 +112,11 @@ export default function PaymentPage() {
       const cMatch = 
         (c.name || '').toLowerCase().includes(q) ||
         (c.dept || '').toLowerCase().includes(q) ||
-        (c.sales_manager || '').toLowerCase().includes(q);
+        (c.sales_manager || '').toLowerCase().includes(q) ||
+        (c.contact_person || '').toLowerCase().includes(q) ||
+        (c.phone || '').includes(q) ||
+        (c.mobile || '').includes(q) ||
+        (c.email || '').toLowerCase().includes(q);
 
       const custContacts = contacts.filter(ct => ct.customer_id === c.id);
 
