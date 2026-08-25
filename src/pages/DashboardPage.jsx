@@ -712,8 +712,8 @@ export default function DashboardPage() {
   };
 
   const customerSearchResults = (() => {
-    if (!customerNameInput.trim()) return [];
-    const q = customerNameInput.trim().toLowerCase();
+    if (!customerSearchInput.trim()) return [];
+    const q = customerSearchInput.trim().toLowerCase();
     const results = [];
 
     customers.forEach(c => {
