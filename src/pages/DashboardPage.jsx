@@ -794,7 +794,7 @@ export default function DashboardPage() {
       </div>
 
       {/* ── 1. 🚚 실시간 납품 일정 급건 순서 리스트 (제일 위) ── */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden print:hidden">
         <div className="px-3.5 py-3 sm:px-5 sm:py-3.5 border-b border-slate-100 flex flex-wrap justify-between items-center bg-slate-900 text-white gap-2">
           <div className="flex items-center space-x-2">
             <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-amber-400 animate-pulse flex-shrink-0" />
@@ -989,7 +989,7 @@ export default function DashboardPage() {
       </div>
 
       {/* ── 2. 📊 매출/수금/미수금 2단 현황 지표 (중간: 1행 누적 총괄 / 2행 당월 실적) ── */}
-      <div className="space-y-2.5 sm:space-y-3">
+      <div className="space-y-2.5 sm:space-y-3 print:hidden">
         {/* 1행: 누적 총괄 현황 */}
         <div>
           <div className="flex items-center justify-between mb-1.5">
@@ -1076,7 +1076,7 @@ export default function DashboardPage() {
 
 
       {/* 2. 고객사별 미수 관리 현황 (테이블 표 형태 + 다차원 분류 탭 + 엑셀 내보내기 + 일자별 상세 모달 연동) */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden print:hidden">
         
         {/* 상단 컨트롤 바: 타이틀, 분류 탭(담당자별/부서·과별/기관별), 검색창, 미수건 필터, 엑셀 다운로드 */}
         <div className="p-4 sm:p-5 border-b border-slate-100 bg-slate-50/50 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
