@@ -532,6 +532,7 @@ export default function DashboardPage() {
   const [customerNameInput, setCustomerNameInput] = useState('');
   const [customerSearchInput, setCustomerSearchInput] = useState('');
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
+  const isComposingRef = useRef(false); // 한글 IME 조합 중 여부 추적
 
   const defaultNewSaleForm = {
     reg_date: todayStr,
@@ -1621,7 +1622,9 @@ export default function DashboardPage() {
                     type="text"
                     placeholder="고객사명 직접 입력"
                     value={newSaleFormData.customer_name}
-                    onChange={e => setNewSaleFormData({ ...newSaleFormData, customer_name: e.target.value, customer_id: '' })}
+                    onCompositionStart={() => { isComposingRef.current = true; }}
+                    onCompositionEnd={e => { isComposingRef.current = false; setNewSaleFormData({ ...newSaleFormData, customer_name: e.target.value, customer_id: '' }); }}
+                    onChange={e => { if (!isComposingRef.current) setNewSaleFormData({ ...newSaleFormData, customer_name: e.target.value, customer_id: '' }); }}
                     className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
                   />
                 </div>
@@ -1633,7 +1636,9 @@ export default function DashboardPage() {
                     placeholder="예: 해상풍력발전위원회"
                     value={newSaleFormData.dept}
                     onFocus={() => setShowCustomerDropdown(false)}
-                    onChange={e => setNewSaleFormData({ ...newSaleFormData, dept: e.target.value })}
+                    onCompositionStart={() => { isComposingRef.current = true; }}
+                    onCompositionEnd={e => { isComposingRef.current = false; setNewSaleFormData({ ...newSaleFormData, dept: e.target.value }); }}
+                    onChange={e => { if (!isComposingRef.current) setNewSaleFormData({ ...newSaleFormData, dept: e.target.value }); }}
                     className="w-full p-2.5 border border-slate-200 rounded-xl text-xs"
                   />
                 </div>
@@ -1647,7 +1652,9 @@ export default function DashboardPage() {
                     placeholder="담당자 이름"
                     value={newSaleFormData.contact_person}
                     onFocus={() => setShowCustomerDropdown(false)}
-                    onChange={e => setNewSaleFormData({ ...newSaleFormData, contact_person: e.target.value })}
+                    onCompositionStart={() => { isComposingRef.current = true; }}
+                    onCompositionEnd={e => { isComposingRef.current = false; setNewSaleFormData({ ...newSaleFormData, contact_person: e.target.value }); }}
+                    onChange={e => { if (!isComposingRef.current) setNewSaleFormData({ ...newSaleFormData, contact_person: e.target.value }); }}
                     className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-medium"
                   />
                 </div>
@@ -1784,7 +1791,9 @@ export default function DashboardPage() {
                     placeholder="작업 제목 입력"
                     value={newSaleFormData.title}
                     onFocus={() => setShowCustomerDropdown(false)}
-                    onChange={e => setNewSaleFormData({ ...newSaleFormData, title: e.target.value })}
+                    onCompositionStart={() => { isComposingRef.current = true; }}
+                    onCompositionEnd={e => { isComposingRef.current = false; setNewSaleFormData({ ...newSaleFormData, title: e.target.value }); }}
+                    onChange={e => { if (!isComposingRef.current) setNewSaleFormData({ ...newSaleFormData, title: e.target.value }); }}
                     className="w-full p-2.5 border border-slate-200 rounded-xl text-xs font-bold"
                   />
                 </div>
@@ -1846,7 +1855,9 @@ export default function DashboardPage() {
                   rows={2}
                   placeholder="작업 상세 내용 입력"
                   value={newSaleFormData.content}
-                  onChange={e => setNewSaleFormData({ ...newSaleFormData, content: e.target.value })}
+                  onCompositionStart={() => { isComposingRef.current = true; }}
+                  onCompositionEnd={e => { isComposingRef.current = false; setNewSaleFormData({ ...newSaleFormData, content: e.target.value }); }}
+                  onChange={e => { if (!isComposingRef.current) setNewSaleFormData({ ...newSaleFormData, content: e.target.value }); }}
                   className="w-full p-2.5 border border-slate-200 rounded-xl text-xs"
                 />
               </div>

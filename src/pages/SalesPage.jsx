@@ -275,6 +275,7 @@ export default function SalesPage() {
   const [customerNameInput, setCustomerNameInput] = useState('');
   const [customerSearchInput, setCustomerSearchInput] = useState('');
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
+  const isComposingRef = useRef(false); // 한글 IME 조합 중 여부 추적
 
   // 실시간 고객 검색 결과 (고객사명, 부서, 담당자명, 연락처, 영업담당자 통합 검색 - 1:N 연락처 대응)
   const customerSearchResults = (() => {
@@ -2395,7 +2396,9 @@ export default function SalesPage() {
                     placeholder="예: 8월 소프트웨어 납품"
                     value={formData.title}
                     onFocus={() => setShowCustomerDropdown(false)}
-                    onChange={e => setFormData({ ...formData, title: e.target.value })}
+                    onCompositionStart={() => { isComposingRef.current = true; }}
+                    onCompositionEnd={e => { isComposingRef.current = false; setFormData({ ...formData, title: e.target.value }); }}
+                    onChange={e => { if (!isComposingRef.current) setFormData({ ...formData, title: e.target.value }); }}
                     className="w-full p-2.5 border border-slate-200 rounded-xl text-xs font-semibold focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
                   />
                 </div>
@@ -2467,7 +2470,9 @@ export default function SalesPage() {
                   rows={2}
                   placeholder="작업 상세 내용 입력"
                   value={formData.content}
-                  onChange={e => setFormData({ ...formData, content: e.target.value })}
+                  onCompositionStart={() => { isComposingRef.current = true; }}
+                  onCompositionEnd={e => { isComposingRef.current = false; setFormData({ ...formData, content: e.target.value }); }}
+                  onChange={e => { if (!isComposingRef.current) setFormData({ ...formData, content: e.target.value }); }}
                   className="w-full p-2.5 border border-slate-200 rounded-xl text-xs"
                 />
               </div>
