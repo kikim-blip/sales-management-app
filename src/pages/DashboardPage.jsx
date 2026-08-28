@@ -1623,8 +1623,9 @@ export default function DashboardPage() {
                     placeholder="고객사명 직접 입력"
                     value={newSaleFormData.customer_name}
                     onCompositionStart={() => { isComposingRef.current = true; }}
-                    onCompositionEnd={e => { isComposingRef.current = false; setNewSaleFormData({ ...newSaleFormData, customer_name: e.target.value, customer_id: '' }); }}
-                    onChange={e => { if (!isComposingRef.current) setNewSaleFormData({ ...newSaleFormData, customer_name: e.target.value, customer_id: '' }); }}
+                    onCompositionEnd={e => { isComposingRef.current = false; setNewSaleFormData(prev => ({ ...prev, customer_name: e.target.value, customer_id: '' })); }}
+                    onChange={e => { setNewSaleFormData(prev => ({ ...prev, customer_name: e.target.value, customer_id: '' })); }}
+                    onBlur={() => { isComposingRef.current = false; }}
                     className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
                   />
                 </div>
@@ -1637,8 +1638,9 @@ export default function DashboardPage() {
                     value={newSaleFormData.dept}
                     onFocus={() => setShowCustomerDropdown(false)}
                     onCompositionStart={() => { isComposingRef.current = true; }}
-                    onCompositionEnd={e => { isComposingRef.current = false; setNewSaleFormData({ ...newSaleFormData, dept: e.target.value }); }}
-                    onChange={e => { if (!isComposingRef.current) setNewSaleFormData({ ...newSaleFormData, dept: e.target.value }); }}
+                    onCompositionEnd={e => { isComposingRef.current = false; setNewSaleFormData(prev => ({ ...prev, dept: e.target.value })); }}
+                    onChange={e => { setNewSaleFormData(prev => ({ ...prev, dept: e.target.value })); }}
+                    onBlur={() => { isComposingRef.current = false; }}
                     className="w-full p-2.5 border border-slate-200 rounded-xl text-xs"
                   />
                 </div>
@@ -1653,8 +1655,9 @@ export default function DashboardPage() {
                     value={newSaleFormData.contact_person}
                     onFocus={() => setShowCustomerDropdown(false)}
                     onCompositionStart={() => { isComposingRef.current = true; }}
-                    onCompositionEnd={e => { isComposingRef.current = false; setNewSaleFormData({ ...newSaleFormData, contact_person: e.target.value }); }}
-                    onChange={e => { if (!isComposingRef.current) setNewSaleFormData({ ...newSaleFormData, contact_person: e.target.value }); }}
+                    onCompositionEnd={e => { isComposingRef.current = false; setNewSaleFormData(prev => ({ ...prev, contact_person: e.target.value })); }}
+                    onChange={e => { setNewSaleFormData(prev => ({ ...prev, contact_person: e.target.value })); }}
+                    onBlur={() => { isComposingRef.current = false; }}
                     className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-medium"
                   />
                 </div>
@@ -1792,8 +1795,9 @@ export default function DashboardPage() {
                     value={newSaleFormData.title}
                     onFocus={() => setShowCustomerDropdown(false)}
                     onCompositionStart={() => { isComposingRef.current = true; }}
-                    onCompositionEnd={e => { isComposingRef.current = false; setNewSaleFormData({ ...newSaleFormData, title: e.target.value }); }}
-                    onChange={e => { if (!isComposingRef.current) setNewSaleFormData({ ...newSaleFormData, title: e.target.value }); }}
+                    onCompositionEnd={e => { isComposingRef.current = false; setNewSaleFormData(prev => ({ ...prev, title: e.target.value })); }}
+                    onChange={e => { setNewSaleFormData(prev => ({ ...prev, title: e.target.value })); }}
+                    onBlur={() => { isComposingRef.current = false; }}
                     className="w-full p-2.5 border border-slate-200 rounded-xl text-xs font-bold"
                   />
                 </div>
@@ -1856,8 +1860,9 @@ export default function DashboardPage() {
                   placeholder="작업 상세 내용 입력"
                   value={newSaleFormData.content}
                   onCompositionStart={() => { isComposingRef.current = true; }}
-                  onCompositionEnd={e => { isComposingRef.current = false; setNewSaleFormData({ ...newSaleFormData, content: e.target.value }); }}
-                  onChange={e => { if (!isComposingRef.current) setNewSaleFormData({ ...newSaleFormData, content: e.target.value }); }}
+                  onCompositionEnd={e => { isComposingRef.current = false; setNewSaleFormData(prev => ({ ...prev, content: e.target.value })); }}
+                  onChange={e => { setNewSaleFormData(prev => ({ ...prev, content: e.target.value })); }}
+                  onBlur={() => { isComposingRef.current = false; }}
                   className="w-full p-2.5 border border-slate-200 rounded-xl text-xs"
                 />
               </div>

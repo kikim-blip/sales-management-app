@@ -2397,8 +2397,9 @@ export default function SalesPage() {
                     value={formData.title}
                     onFocus={() => setShowCustomerDropdown(false)}
                     onCompositionStart={() => { isComposingRef.current = true; }}
-                    onCompositionEnd={e => { isComposingRef.current = false; setFormData({ ...formData, title: e.target.value }); }}
-                    onChange={e => { if (!isComposingRef.current) setFormData({ ...formData, title: e.target.value }); }}
+                    onCompositionEnd={e => { isComposingRef.current = false; setFormData(prev => ({ ...prev, title: e.target.value })); }}
+                    onChange={e => { setFormData(prev => ({ ...prev, title: e.target.value })); }}
+                    onBlur={() => { isComposingRef.current = false; }}
                     className="w-full p-2.5 border border-slate-200 rounded-xl text-xs font-semibold focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
                   />
                 </div>
@@ -2471,8 +2472,9 @@ export default function SalesPage() {
                   placeholder="작업 상세 내용 입력"
                   value={formData.content}
                   onCompositionStart={() => { isComposingRef.current = true; }}
-                  onCompositionEnd={e => { isComposingRef.current = false; setFormData({ ...formData, content: e.target.value }); }}
-                  onChange={e => { if (!isComposingRef.current) setFormData({ ...formData, content: e.target.value }); }}
+                  onCompositionEnd={e => { isComposingRef.current = false; setFormData(prev => ({ ...prev, content: e.target.value })); }}
+                  onChange={e => { setFormData(prev => ({ ...prev, content: e.target.value })); }}
+                  onBlur={() => { isComposingRef.current = false; }}
                   className="w-full p-2.5 border border-slate-200 rounded-xl text-xs"
                 />
               </div>
