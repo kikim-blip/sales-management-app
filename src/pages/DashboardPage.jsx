@@ -1,8 +1,9 @@
 // src/pages/DashboardPage.jsx
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useData } from '../context/DataContext';
 import { useGoogleAuth } from '../context/GoogleAuthContext';
-import { AlertCircle, FileText, RefreshCw, ChevronRight, Clock, Sparkles, AlertTriangle, Calendar, Printer, CheckCircle2, Users, Share2, Zap, Pencil, Truck, XCircle, Plus, Search, Calculator, Download, Building2, User, Phone, Layers, ListFilter, ArrowUpDown } from 'lucide-react';
+import { AlertCircle, FileText, RefreshCw, ChevronRight, Clock, Sparkles, AlertTriangle, Calendar, Printer, CheckCircle2, Users, Share2, Zap, Pencil, Truck, XCircle, Plus, Search, Calculator, Download, Building2, User, Phone, Layers, ListFilter, ArrowUpDown, ExternalLink, X } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 import CustomerDetailModal from '../components/common/CustomerDetailModal';
@@ -15,6 +16,7 @@ import { getLocalDateStr, calculateDDay } from '../utils/dateUtils';
 import { normalizeStaffName } from '../utils/nameUtils';
 
 export default function DashboardPage() {
+  const navigate = useNavigate();
   const { customers, contacts = [], sales, payments, jobOrders, staffs = [], loading, error, selectedTeamGroup, updateJobOrder, updateSales, addSales, addCustomer, addContact } = useData();
   const { user } = useGoogleAuth();
 
@@ -43,6 +45,113 @@ export default function DashboardPage() {
   const [estimatingSale, setEstimatingSale] = useState(null);
   const [printingEstimateQuote, setPrintingEstimateQuote] = useState(null);
   const [isQuickImportOpen, setIsQuickImportOpen] = useState(false);
+  // ── 🔍 상단 빠른 등록 내역 통합 검색 (전표 / 매출 / 고객사) ──
+  const [quickQuery, setQuickQuery] = useState('');
+  const [quickFilter, setQuickFilter] = useState('ALL'); // 'ALL' | 'SALE' | 'JOB' | 'CUST'
+  const [isQuickSearchOpen, setIsQuickSearchOpen] = useState(false);
+  const quickSearchRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutsideQuickSearch = (e) => {
+      if (quickSearchRef.current && !quickSearchRef.current.contains(e.target)) {
+        setIsQuickSearchOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutsideQuickSearch);
+    return () => document.removeEventListener('mousedown', handleClickOutsideQuickSearch);
+  }, []);
+
+  const quickSearchResults = useMemo(() => {
+    const q = quickQuery.trim().toLowerCase();
+    if (!q) return { all: [], sales: [], jobOrders: [], customers: [], total: 0 };
+
+    const cleanQ = q.replace(/[^0-9]/g, '');
+
+    // 1. 매출 검색
+    const matchedSales = (sales || []).filter(s => {
+      const title = (s.title || '').toLowerCase();
+      const custName = (s.customer_name || '').toLowerCase();
+      const code = (s.code_number || s.id || '').toLowerCase();
+      const manager = (s.sales_manager || s.manager_name || '').toLowerCase();
+      const spec = (s.spec || '').toLowerCase();
+      const note = (s.note || '').toLowerCase();
+      const phone = (s.phone || '').replace(/[^0-9]/g, '');
+
+      return title.includes(q) ||
+        custName.includes(q) ||
+        code.includes(q) ||
+        manager.includes(q) ||
+        spec.includes(q) ||
+        note.includes(q) ||
+        (cleanQ.length >= 3 && phone.includes(cleanQ));
+    }).map(s => {
+      const cust = customers.find(c => c.id === s.customer_id) || { name: s.customer_name, dept: s.dept, phone: s.phone };
+      const dday = s.delivery_date ? calculateDDay(s.delivery_date, s.delivery_time) : null;
+      return {
+        ...s,
+        itemType: 'sale',
+        customer: cust,
+        dday,
+      };
+    });
+
+    // 2. 작업전표 검색
+    const matchedJobs = (jobOrders || []).filter(j => {
+      const title = (j.order_title || j.title || '').toLowerCase();
+      const custName = (j.customer_name || '').toLowerCase();
+      const code = (j.code_number || j.id || '').toLowerCase();
+      const manager = (j.sales_manager || j.manager_name || '').toLowerCase();
+      const spec = (j.spec || '').toLowerCase();
+      const content = (j.content || '').toLowerCase();
+      const note = (j.special_requests || j.note || '').toLowerCase();
+      const phone = (j.client_phone || '').replace(/[^0-9]/g, '');
+
+      return title.includes(q) ||
+        custName.includes(q) ||
+        code.includes(q) ||
+        manager.includes(q) ||
+        spec.includes(q) ||
+        content.includes(q) ||
+        note.includes(q) ||
+        (cleanQ.length >= 3 && phone.includes(cleanQ));
+    }).map(j => {
+      const cust = customers.find(c => c.id === j.customer_id) || { name: j.customer_name, dept: j.dept, phone: j.client_phone };
+      const dday = j.delivery_date ? calculateDDay(j.delivery_date, j.delivery_time) : null;
+      return {
+        ...j,
+        itemType: 'jobOrder',
+        customer: cust,
+        dday,
+      };
+    });
+
+    // 3. 고객사 검색
+    const matchedCusts = (customers || []).filter(c => {
+      const name = (c.name || '').toLowerCase();
+      const dept = (c.dept || '').toLowerCase();
+      const contact = (c.contact_person || '').toLowerCase();
+      const phone = (c.phone || '').replace(/[^0-9]/g, '');
+
+      return name.includes(q) ||
+        dept.includes(q) ||
+        contact.includes(q) ||
+        (cleanQ.length >= 3 && phone.includes(cleanQ));
+    });
+
+    const combined = [...matchedSales, ...matchedJobs].sort((a, b) => {
+      const dateA = a.delivery_date || a.reg_date || a.created_at || '';
+      const dateB = b.delivery_date || b.reg_date || b.created_at || '';
+      return dateB.localeCompare(dateA);
+    });
+
+    return {
+      all: combined,
+      sales: matchedSales,
+      jobOrders: matchedJobs,
+      customers: matchedCusts,
+      total: combined.length + matchedCusts.length,
+    };
+  }, [quickQuery, sales, jobOrders, customers]);
 
   // 💡 미수 관리 테이블 상태 (구분: 담당자별 / 부서·과별 / 기관별, 검색어, 미수건만 보기)
   const [receivableGroupBy, setReceivableGroupBy] = useState('contact'); // 'contact' | 'dept' | 'org'
@@ -800,6 +909,295 @@ export default function DashboardPage() {
       <div>
         <h2 className="text-xl font-bold text-slate-800">업무 현황</h2>
         <p className="text-xs text-slate-500 mt-1">납품 및 미수 상태를 확인합니다.</p>
+      </div>
+
+      {/* ── 🔍 상단 빠른 등록 내역 통합 조회창 (전표 / 매출 / 고객사) ── */}
+      <div
+        ref={quickSearchRef}
+        className="bg-white rounded-2xl border-2 border-slate-200 shadow-sm p-3.5 sm:p-4 space-y-3 transition focus-within:border-sky-500 focus-within:ring-4 focus-within:ring-sky-100 print:hidden"
+      >
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex items-center space-x-2">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-sky-500 to-blue-600 text-white flex items-center justify-center font-bold shadow-sm">
+              <Search className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="flex items-center space-x-2">
+                <h3 className="text-sm font-extrabold text-slate-900">
+                  등록 내역 빠른 조회 &amp; 즉시 수정
+                </h3>
+                <span className="text-[10px] bg-sky-100 text-sky-800 font-bold px-2 py-0.5 rounded-full border border-sky-200">
+                  전표 · 매출 · 고객사
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500">
+                문의 전화나 내용 수정 요청 시 매출관리로 이동할 필요 없이 여기서 바로 검색하여 수정·견적서·인쇄를 즉시 실행합니다.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-2 text-[11px] text-slate-400">
+            <span className="hidden md:inline bg-slate-100 px-2.5 py-1 rounded-lg font-mono">
+              매출 {sales.length}건 · 전표 {jobOrders.length}건 수록
+            </span>
+          </div>
+        </div>
+
+        {/* 검색창 인풋 바 */}
+        <div className="relative">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            value={quickQuery}
+            onChange={(e) => {
+              setQuickQuery(e.target.value);
+              setIsQuickSearchOpen(true);
+            }}
+            onFocus={() => setIsQuickSearchOpen(true)}
+            placeholder="거래처명, 건명(작업명), 품목, 담당자, 전표/매출코드(SALE-xxx, 44-xxx) 입력 즉시 실시간 검색..."
+            className="w-full pl-10 pr-24 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 placeholder-slate-400 focus:bg-white focus:border-sky-500 outline-none transition shadow-inner"
+          />
+          {quickQuery && (
+            <button
+              type="button"
+              onClick={() => {
+                setQuickQuery('');
+                setIsQuickSearchOpen(false);
+              }}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-200 text-xs flex items-center space-x-0.5"
+            >
+              <X className="w-3.5 h-3.5" />
+              <span>지우기</span>
+            </button>
+          )}
+        </div>
+
+        {/* ── 실시간 검색 결과 패널 (검색어가 입력되었을 때 펼쳐짐) ── */}
+        {isQuickSearchOpen && quickQuery.trim() && (
+          <div className="pt-2 border-t border-slate-100 space-y-3">
+            {/* 필터 탭 바 */}
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center space-x-1.5 text-xs">
+                {[
+                  { key: 'ALL', label: '전체', count: quickSearchResults.total },
+                  { key: 'SALE', label: '매출 내역', count: quickSearchResults.sales.length },
+                  { key: 'JOB', label: '작업전표', count: quickSearchResults.jobOrders.length },
+                  { key: 'CUST', label: '고객사', count: quickSearchResults.customers.length },
+                ].map((tab) => (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    onClick={() => setQuickFilter(tab.key)}
+                    className={`px-2.5 py-1 rounded-lg font-bold transition text-[11px] flex items-center space-x-1 ${
+                      quickFilter === tab.key
+                        ? 'bg-sky-600 text-white shadow-xs'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    <span>{tab.label}</span>
+                    <span className={`text-[10px] px-1 rounded-full ${quickFilter === tab.key ? 'bg-sky-700 text-sky-100' : 'bg-slate-200 text-slate-600'}`}>
+                      {tab.count}
+                    </span>
+                  </button>
+                ))}
+              </div>
+
+              <div className="text-[11px] text-slate-400">
+                검색 결과 총 <strong className="text-sky-600">{quickSearchResults.total}</strong>건
+              </div>
+            </div>
+
+            {/* 결과 리스트 */}
+            <div className="max-h-[460px] overflow-y-auto divide-y divide-slate-100 border border-slate-100 rounded-xl">
+              {/* 결과 없음 */}
+              {quickSearchResults.total === 0 && (
+                <div className="p-8 text-center text-slate-400 text-xs space-y-1">
+                  <p className="font-semibold text-slate-600">검색어 "{quickQuery}" 와 일치하는 내역이 없습니다.</p>
+                  <p className="text-[11px]">고객사명, 작업명, 담당자명 또는 전표/매출 코드를 다시 확인해 보세요.</p>
+                </div>
+              )}
+
+              {/* 고객사 목록 */}
+              {(quickFilter === 'ALL' || quickFilter === 'CUST') && quickSearchResults.customers.length > 0 && (
+                <div className="p-2.5 bg-slate-50/70">
+                  <div className="text-[11px] font-bold text-slate-600 mb-1.5 flex items-center space-x-1">
+                    <Building2 className="w-3.5 h-3.5 text-slate-600" />
+                    <span>고객사 ({quickSearchResults.customers.length}곳)</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                    {quickSearchResults.customers.map((c) => (
+                      <div
+                        key={`cust-${c.id}`}
+                        onClick={() => setSelectedCustomer(c)}
+                        className="p-2 bg-white rounded-lg border border-slate-200 hover:border-sky-400 hover:shadow-xs transition cursor-pointer flex items-center justify-between"
+                      >
+                        <div className="min-w-0">
+                          <strong className="text-xs text-slate-900 block truncate">{c.name}</strong>
+                          <span className="text-[10px] text-slate-500 truncate block">
+                            {c.dept ? `${c.dept} · ` : ''}{c.contact_person || '-'} {c.phone ? `(${c.phone})` : ''}
+                          </span>
+                        </div>
+                        <span className="text-[10px] text-sky-600 font-bold bg-sky-50 px-1.5 py-0.5 rounded flex-shrink-0">
+                          원장 보기
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 매출 및 작업전표 목록 */}
+              {((quickFilter === 'ALL' ? quickSearchResults.all : quickFilter === 'SALE' ? quickSearchResults.sales : quickFilter === 'JOB' ? quickSearchResults.jobOrders : [])).map((item) => {
+                const isJobOrder = item.itemType === 'jobOrder';
+                const custName = item.customer?.name || item.customer_name || '거래처 미지정';
+                const custDept = item.customer?.dept || item.dept || '';
+                const title = isJobOrder ? (item.order_title || item.title || '작업전표') : (item.title || '매출 작업');
+                const price = Number(item.total_price || item.supply_price || 0);
+                const manager = item.sales_manager || item.manager_name || '담당자 미지정';
+
+                return (
+                  <div
+                    key={`${item.itemType}-${item.id || item.code_number}`}
+                    className="p-3 hover:bg-sky-50/40 transition flex flex-col md:flex-row md:items-center justify-between gap-2.5 bg-white"
+                  >
+                    {/* 좌측 정보 */}
+                    <div className="space-y-1 min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {isJobOrder ? (
+                          <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-sky-100 text-sky-800 border border-sky-300">
+                            전표: {item.code_number || item.id}
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-900 border border-blue-300">
+                            매출: {item.code_number || item.id}
+                          </span>
+                        )}
+
+                        <span className="text-xs font-extrabold text-slate-900">
+                          {custName} {custDept && <span className="text-slate-500 font-normal">({custDept})</span>}
+                        </span>
+
+                        {item.dday && (
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${item.dday.color}`}>
+                            {item.dday.label}
+                          </span>
+                        )}
+
+                        <span className="text-[10px] text-slate-400 font-semibold">
+                          영업: <strong className="text-slate-700">{manager}</strong>
+                        </span>
+                      </div>
+
+                      <div className="flex items-center space-x-2">
+                        <h4 className="text-xs font-bold text-slate-800 truncate" title={title}>
+                          {title}
+                        </h4>
+                        {item.spec && (
+                          <span className="text-[11px] text-slate-500 font-normal truncate max-w-xs">
+                            [{item.spec}]
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-x-3 text-[11px] text-slate-500">
+                        <span>
+                          금액: <strong className="font-mono text-emerald-700 font-bold">₩{price.toLocaleString()}원</strong>
+                        </span>
+                        {item.delivery_date && (
+                          <span>
+                            납품예정: <strong className="font-mono text-slate-700">{item.delivery_date} {item.delivery_time ? `(${item.delivery_time})` : ''}</strong>
+                          </span>
+                        )}
+                        {(item.phone || item.client_phone) && (
+                          <span>
+                            연락처: <span className="font-mono text-slate-600">{item.phone || item.client_phone}</span>
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* 우측 원클릭 액션 버튼 바 */}
+                    <div className="flex items-center space-x-1.5 flex-shrink-0 self-end md:self-center">
+                      {/* 1. 내용 수정 버튼 */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (isJobOrder) {
+                            setEditingOrder(item);
+                            setShowJobEditModal(true);
+                          } else {
+                            setEditingSale(item);
+                            setShowSaleScheduleModal(true);
+                          }
+                        }}
+                        className="flex items-center space-x-1 px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-lg text-xs font-bold transition shadow-2xs"
+                        title="작업명, 금액, 납품일정, 수량, 세부내용 즉시 수정"
+                      >
+                        <Pencil className="w-3.5 h-3.5 text-amber-700" />
+                        <span>내용 수정</span>
+                      </button>
+
+                      {/* 2. 견적서 버튼 */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const cust = item.customer || customers.find(c => c.id === item.customer_id) || { name: item.customer_name };
+                          setEstimatingSale({ sale: item, customer: cust });
+                        }}
+                        className="flex items-center space-x-1 px-2.5 py-1.5 bg-sky-50 hover:bg-sky-100 text-sky-800 border border-sky-300 rounded-lg text-xs font-bold transition shadow-2xs"
+                        title="견적서 세부 품목 단가 산출 및 작성"
+                      >
+                        <Calculator className="w-3.5 h-3.5 text-sky-700" />
+                        <span>견적서</span>
+                      </button>
+
+                      {/* 3. 인쇄 버튼 */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const cust = item.customer || customers.find(c => c.id === item.customer_id) || { name: item.customer_name };
+                          if (isJobOrder) {
+                            setPrintingOrder(item);
+                          } else {
+                            setPrintingEstimateQuote({ quote: item, customer: cust });
+                          }
+                        }}
+                        className="flex items-center space-x-1 px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-lg text-xs font-bold transition"
+                        title={isJobOrder ? '작업전표 인쇄' : '견적서 인쇄 / PDF'}
+                      >
+                        <Printer className="w-3.5 h-3.5" />
+                        <span>인쇄</span>
+                      </button>
+
+                      {/* 4. 고객사 원장 보기 */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const cust = item.customer || customers.find(c => c.id === item.customer_id || c.name === item.customer_name);
+                          if (cust) setSelectedCustomer(cust);
+                        }}
+                        className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition"
+                        title="고객사 원장 / 거래처 정보 보기"
+                      >
+                        <Building2 className="w-4 h-4" />
+                      </button>
+
+                      {/* 5. 매출관리 페이지로 바로 이동 */}
+                      <button
+                        type="button"
+                        onClick={() => navigate('/sales')}
+                        className="p-1.5 text-slate-400 hover:text-sky-600 hover:bg-sky-50 rounded-lg transition"
+                        title="매출관리 전체 페이지로 이동"
+                      >
+                        <ExternalLink className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ── 1. 🚚 실시간 납품 일정 급건 순서 리스트 (제일 위) ── */}
