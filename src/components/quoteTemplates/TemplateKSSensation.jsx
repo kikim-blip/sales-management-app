@@ -1,5 +1,5 @@
 // src/components/quoteTemplates/TemplateKSSensation.jsx
-// 2_B사: ㈜ 케이에스 센세이션 공식 견적서 템플릿 (관공서 정통 결재형)
+// 2_B사: ㈜ 케이에스 센세이션 공식 견적서 템플릿 (관공서 정통 조달 결재형 서식)
 import React from 'react';
 import { Stamp } from 'lucide-react';
 
@@ -11,6 +11,7 @@ export default function TemplateKSSensation({
   todayKorean,
   managerName,
   stampImage,
+  logoImage,
 }) {
   const custName = customer?.name || quote.customer_name || '거래처';
   const custDept = quote.dept || customer?.dept || '';
@@ -18,16 +19,21 @@ export default function TemplateKSSensation({
 
   return (
     <div className="font-serif text-slate-900 text-xs space-y-4 print:text-black">
-      {/* 1. 메인 타이틀 */}
-      <div className="text-center pt-2 pb-1">
+      {/* 1. 상단 로고 & 정통 명조 메인 타이틀 */}
+      <div className="relative text-center pt-1 pb-1">
+        {logoImage && (
+          <div className="absolute left-0 top-0">
+            <img src={logoImage} alt="로고" className="h-9 max-w-[130px] object-contain" />
+          </div>
+        )}
         <h1 className="text-3xl font-black tracking-[1em] text-slate-950 underline decoration-1 underline-offset-8">
           견 &nbsp; 적 &nbsp; 서
         </h1>
       </div>
 
-      {/* 2. 상단 수신 및 공급자 격자 테이블 */}
+      {/* 2. 상단 수신 및 공급자 정통 격자 테이블 */}
       <div className="grid grid-cols-12 gap-2 text-xs">
-        {/* 좌측: 수신처 및 안내 */}
+        {/* 좌측: 수신처 및 안내문 */}
         <div className="col-span-12 sm:col-span-6 flex flex-col justify-between py-1 pr-2 space-y-2">
           <div className="text-sm font-semibold tracking-wide">
             {todayKorean}
@@ -43,7 +49,7 @@ export default function TemplateKSSensation({
           </div>
         </div>
 
-        {/* 우측: 공급자 격자 서식 */}
+        {/* 우측: 공급자 세로 결재 서식 */}
         <div className="col-span-12 sm:col-span-6 border-2 border-slate-800 text-[11px] relative bg-white">
           <div className="grid grid-cols-12 divide-x divide-slate-800 border-b divide-y-0">
             <div className="col-span-2 row-span-5 bg-slate-100 flex items-center justify-center font-bold text-center p-1 border-r border-slate-800 leading-tight">

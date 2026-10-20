@@ -1,6 +1,6 @@
 // src/components/common/QuotePrintModal.jsx
-import React, { useRef, useState, useMemo } from 'react';
-import { X, Download, Printer, FileText, Stamp, CheckCircle2, ChevronRight, Layers, TableProperties } from 'lucide-react';
+import React, { useRef, useState, useMemo, useEffect } from 'react';
+import { X, Download, Printer, FileText, Stamp, CheckCircle2, ChevronRight, Layers, TableProperties, Upload, Image as ImageIcon, Trash2 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { useGoogleAuth } from '../../context/GoogleAuthContext';
 import { getLocalDateStr } from '../../utils/dateUtils';
@@ -17,30 +17,86 @@ import TemplateKSDesign from '../quoteTemplates/TemplateKSDesign';
 import TemplateHappyDream from '../quoteTemplates/TemplateHappyDream';
 import TemplateComparisonTable from '../quoteTemplates/TemplateComparisonTable';
 
+// 회사별 도장/로고 localStorage 키 헬퍼
+const stampKey = (id) => `company_stamp_${id}`;
+const logoKey = (id) => `company_logo_${id}`;
+
+// 모든 회사 도장/로고를 localStorage에서 로드
+function loadAllStamps() {
+  const m = {};
+  COMPANY_SUPPLIERS.forEach((s) => {
+    m[s.id] = localStorage.getItem(stampKey(s.id)) || null;
+  });
+  return m;
+}
+function loadAllLogos() {
+  const m = {};
+  COMPANY_SUPPLIERS.forEach((s) => {
+    m[s.id] = localStorage.getItem(logoKey(s.id)) || null;
+  });
+  return m;
+}
+
 export default function QuotePrintModal({ quote, customer, onClose }) {
   const { user } = useGoogleAuth();
   const printRef = useRef();
 
   // 1: 경성문화사, 2: 케이에스센세이션, ..., 7: 행복드림, 'comparison': 종합비교대조표
   const [selectedTab, setSelectedTab] = useState(() => quote?.supplier_id || 1);
-  const [stampImage, setStampImage] = useState(() => localStorage.getItem('company_stamp_image') || null);
 
+  // 회사별 도장 맵 { 1: base64|null, 2: ... }
+  const [stampMap, setStampMap] = useState(loadAllStamps);
+  // 회사별 로고 맵 { 1: base64|null, 2: ... }
+  const [logoMap, setLogoMap] = useState(loadAllLogos);
+
+  // 도장 관리 패널 토글
+  const [showAssetPanel, setShowAssetPanel] = useState(false);
+
+  const stampFileRef = useRef();
+  const logoFileRef = useRef();
+
+  // 현재 선택된 회사 도장/로고
+  const currentStamp = selectedTab !== 'comparison' ? (stampMap[selectedTab] || null) : null;
+  const currentLogo = selectedTab !== 'comparison' ? (logoMap[selectedTab] || null) : null;
+
+  // 도장 업로드 (현재 선택된 회사에만 저장)
   const handleStampUpload = (e) => {
     const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        const base64 = ev.target.result;
-        setStampImage(base64);
-        localStorage.setItem('company_stamp_image', base64);
-      };
-      reader.readAsDataURL(file);
-    }
+    if (!file || selectedTab === 'comparison') return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const base64 = ev.target.result;
+      localStorage.setItem(stampKey(selectedTab), base64);
+      setStampMap((prev) => ({ ...prev, [selectedTab]: base64 }));
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
   };
 
-  const clearStamp = () => {
-    setStampImage(null);
-    localStorage.removeItem('company_stamp_image');
+  // 로고 업로드 (현재 선택된 회사에만 저장)
+  const handleLogoUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file || selectedTab === 'comparison') return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const base64 = ev.target.result;
+      localStorage.setItem(logoKey(selectedTab), base64);
+      setLogoMap((prev) => ({ ...prev, [selectedTab]: base64 }));
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  // 도장 삭제
+  const clearStamp = (id) => {
+    localStorage.removeItem(stampKey(id));
+    setStampMap((prev) => ({ ...prev, [id]: null }));
+  };
+
+  // 로고 삭제
+  const clearLogo = (id) => {
+    localStorage.removeItem(logoKey(id));
+    setLogoMap((prev) => ({ ...prev, [id]: null }));
   };
 
   if (!quote) return null;
@@ -82,7 +138,7 @@ export default function QuotePrintModal({ quote, customer, onClose }) {
     return getCompanySupplierById(selectedTab);
   }, [selectedTab]);
 
-  // 현재 선택된 공급사의 계산 데이터 (단가, 공급가액, 부가세, 합계)
+  // 현재 선택된 공급사의 계산 데이터
   const calcData = useMemo(() => {
     if (!currentSupplier) return null;
     return calculateSupplierQuote(parsedItems, currentSupplier, estimateType, quote);
@@ -93,12 +149,11 @@ export default function QuotePrintModal({ quote, customer, onClose }) {
     return calculateComparativeSummary(parsedItems, COMPANY_SUPPLIERS, estimateType, quote);
   }, [parsedItems, estimateType, quote]);
 
-  // 엑셀 다운로드 (구글 시트 템플릿과 동일 구조)
+  // 엑셀 다운로드
   const handleExportExcel = () => {
     const workbook = XLSX.utils.book_new();
 
     if (selectedTab === 'comparison') {
-      // 종합 비교대조표 엑셀
       const fileName = `종합비교대조표_${custName}_${quote.title}_${today}.xlsx`;
       const rows = [
         [`■ 종합 견적 비교대조표 (7개사 총괄) - ${quote.title}`],
@@ -134,7 +189,6 @@ export default function QuotePrintModal({ quote, customer, onClose }) {
       XLSX.utils.book_append_sheet(workbook, worksheet, '종합비교대조표');
       XLSX.writeFile(workbook, fileName);
     } else {
-      // 선택된 개별 회사 견적서 엑셀
       const fileName = `견적서_${currentSupplier.shortName}_${custName}_${quote.title}_${today}.xlsx`;
       const rows = [
         ['견  적  서', '', '', '', '', '', ''],
@@ -199,35 +253,27 @@ export default function QuotePrintModal({ quote, customer, onClose }) {
                 공식 견적서 인쇄 및 내보내기
               </h3>
               <span className="text-xs text-slate-500 hidden md:inline">
-                (7개 회사 고유 양식 & 관공서 비교대조표)
+                (7개 회사 고유 양식 &amp; 관공서 비교대조표)
               </span>
             </div>
 
             <div className="flex items-center space-x-2">
-              <div className="hidden sm:flex items-center gap-1.5 mr-2">
-                <input
-                  type="file"
-                  accept="image/*"
-                  id="stamp-upload"
-                  className="hidden"
-                  onChange={handleStampUpload}
-                />
-                <label
-                  htmlFor="stamp-upload"
-                  className="cursor-pointer text-[11px] px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded font-medium border border-slate-200 flex items-center"
-                >
-                  <Stamp className="w-3 h-3 mr-1 text-slate-500" />
-                  직인 등록
-                </label>
-                {stampImage && (
-                  <button
-                    onClick={clearStamp}
-                    className="text-[11px] px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded font-medium border border-rose-200"
-                  >
-                    초기화
-                  </button>
+              {/* 직인/로고 관리 버튼 */}
+              <button
+                onClick={() => setShowAssetPanel((v) => !v)}
+                className={`flex items-center space-x-1 text-[11px] px-2.5 py-1.5 rounded-lg font-bold border transition ${
+                  showAssetPanel
+                    ? 'bg-rose-600 text-white border-rose-500'
+                    : 'bg-slate-100 hover:bg-slate-200 text-slate-600 border-slate-200'
+                }`}
+                title="회사별 직인 / 로고 관리"
+              >
+                <Stamp className="w-3.5 h-3.5" />
+                <span>직인/로고 관리</span>
+                {selectedTab !== 'comparison' && currentStamp && (
+                  <span className="ml-1 w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" title="직인 등록됨" />
                 )}
-              </div>
+              </button>
 
               <button
                 onClick={handleExportExcel}
@@ -251,6 +297,123 @@ export default function QuotePrintModal({ quote, customer, onClose }) {
             </div>
           </div>
 
+          {/* ── 직인/로고 관리 패널 (토글) ── */}
+          {showAssetPanel && (
+            <div className="bg-white border border-slate-200 rounded-xl p-3 space-y-2 shadow-sm">
+              <div className="text-[11px] font-bold text-slate-600 mb-2 flex items-center space-x-1">
+                <Stamp className="w-3.5 h-3.5 text-rose-500" />
+                <span>회사별 직인 &amp; 로고 개별 관리 (회사 탭을 선택 후 업로드하세요)</span>
+              </div>
+              <div className="grid grid-cols-7 gap-2">
+                {COMPANY_SUPPLIERS.map((s) => {
+                  const sStamp = stampMap[s.id];
+                  const sLogo = logoMap[s.id];
+                  const isCurrentTab = selectedTab === s.id;
+                  return (
+                    <div
+                      key={s.id}
+                      className={`rounded-xl border p-2 text-center text-[10px] space-y-1.5 transition ${
+                        isCurrentTab ? 'border-sky-400 bg-sky-50' : 'border-slate-200 bg-slate-50'
+                      }`}
+                    >
+                      <div className={`font-bold truncate ${isCurrentTab ? 'text-sky-700' : 'text-slate-600'}`}>
+                        {s.shortName}
+                      </div>
+
+                      {/* 직인 */}
+                      <div className="space-y-1">
+                        <div className="text-slate-400 font-semibold">직인</div>
+                        {sStamp ? (
+                          <div className="flex flex-col items-center space-y-1">
+                            <img src={sStamp} alt="직인" className="w-10 h-10 object-contain rounded border border-slate-200" />
+                            <button
+                              onClick={() => clearStamp(s.id)}
+                              className="text-rose-500 hover:text-rose-700 text-[9px] font-bold"
+                              title="직인 삭제"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ) : (
+                          <label
+                            className={`cursor-pointer flex flex-col items-center py-1 rounded border border-dashed text-slate-400 hover:border-sky-400 hover:text-sky-600 transition ${
+                              isCurrentTab ? 'border-sky-300 text-sky-500' : 'border-slate-300'
+                            }`}
+                            title={`${s.shortName} 직인 등록`}
+                          >
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={(e) => {
+                                const file = e.target.files[0];
+                                if (!file) return;
+                                const reader = new FileReader();
+                                reader.onload = (ev) => {
+                                  const base64 = ev.target.result;
+                                  localStorage.setItem(stampKey(s.id), base64);
+                                  setStampMap((prev) => ({ ...prev, [s.id]: base64 }));
+                                };
+                                reader.readAsDataURL(file);
+                                e.target.value = '';
+                              }}
+                            />
+                            <Upload className="w-3.5 h-3.5" />
+                            <span className="text-[9px]">등록</span>
+                          </label>
+                        )}
+                      </div>
+
+                      {/* 로고 */}
+                      <div className="space-y-1">
+                        <div className="text-slate-400 font-semibold">로고</div>
+                        {sLogo ? (
+                          <div className="flex flex-col items-center space-y-1">
+                            <img src={sLogo} alt="로고" className="w-12 h-6 object-contain rounded border border-slate-200" />
+                            <button
+                              onClick={() => clearLogo(s.id)}
+                              className="text-rose-500 hover:text-rose-700 text-[9px] font-bold"
+                              title="로고 삭제"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ) : (
+                          <label
+                            className={`cursor-pointer flex flex-col items-center py-1 rounded border border-dashed text-slate-400 hover:border-emerald-400 hover:text-emerald-600 transition ${
+                              isCurrentTab ? 'border-emerald-300 text-emerald-500' : 'border-slate-300'
+                            }`}
+                            title={`${s.shortName} 로고 등록`}
+                          >
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={(e) => {
+                                const file = e.target.files[0];
+                                if (!file) return;
+                                const reader = new FileReader();
+                                reader.onload = (ev) => {
+                                  const base64 = ev.target.result;
+                                  localStorage.setItem(logoKey(s.id), base64);
+                                  setLogoMap((prev) => ({ ...prev, [s.id]: base64 }));
+                                };
+                                reader.readAsDataURL(file);
+                                e.target.value = '';
+                              }}
+                            />
+                            <ImageIcon className="w-3.5 h-3.5" />
+                            <span className="text-[9px]">등록</span>
+                          </label>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* ── 7개 회사 선택 탭 및 종합비교대조표 토글 바 ── */}
           <div className="flex items-center space-x-1.5 overflow-x-auto pb-1 scrollbar-thin">
             <span className="text-[11px] font-bold text-slate-500 flex-shrink-0 mr-1 flex items-center">
@@ -260,6 +423,7 @@ export default function QuotePrintModal({ quote, customer, onClose }) {
 
             {COMPANY_SUPPLIERS.map((s) => {
               const isActive = selectedTab === s.id;
+              const hasStamp = !!stampMap[s.id];
               return (
                 <button
                   key={`tab-${s.id}`}
@@ -275,6 +439,9 @@ export default function QuotePrintModal({ quote, customer, onClose }) {
                     <span className="text-[10px] bg-sky-500 text-white px-1 rounded ml-1">당사</span>
                   ) : (
                     <span className="text-[10px] text-slate-400 font-mono">+{Math.round((s.rate - 1) * 100)}%</span>
+                  )}
+                  {hasStamp && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-rose-400 inline-block" title="직인 등록됨" />
                   )}
                 </button>
               );
@@ -319,7 +486,8 @@ export default function QuotePrintModal({ quote, customer, onClose }) {
               calcData={calcData}
               todayKorean={todayKorean}
               managerName={managerName}
-              stampImage={stampImage}
+              stampImage={stampMap[1]}
+              logoImage={logoMap[1]}
             />
           ) : selectedTab === 2 ? (
             <TemplateKSSensation
@@ -329,7 +497,8 @@ export default function QuotePrintModal({ quote, customer, onClose }) {
               calcData={calcData}
               todayKorean={todayKorean}
               managerName={managerName}
-              stampImage={stampImage}
+              stampImage={stampMap[2]}
+              logoImage={logoMap[2]}
             />
           ) : selectedTab === 3 ? (
             <TemplateTheSeoul
@@ -339,7 +508,8 @@ export default function QuotePrintModal({ quote, customer, onClose }) {
               calcData={calcData}
               todayKorean={todayKorean}
               managerName={managerName}
-              stampImage={stampImage}
+              stampImage={stampMap[3]}
+              logoImage={logoMap[3]}
             />
           ) : selectedTab === 4 ? (
             <TemplateHappyTree
@@ -349,7 +519,8 @@ export default function QuotePrintModal({ quote, customer, onClose }) {
               calcData={calcData}
               todayKorean={todayKorean}
               managerName={managerName}
-              stampImage={stampImage}
+              stampImage={stampMap[4]}
+              logoImage={logoMap[4]}
             />
           ) : selectedTab === 5 ? (
             <TemplateSpacePlan
@@ -359,7 +530,8 @@ export default function QuotePrintModal({ quote, customer, onClose }) {
               calcData={calcData}
               todayKorean={todayKorean}
               managerName={managerName}
-              stampImage={stampImage}
+              stampImage={stampMap[5]}
+              logoImage={logoMap[5]}
             />
           ) : selectedTab === 6 ? (
             <TemplateKSDesign
@@ -369,7 +541,8 @@ export default function QuotePrintModal({ quote, customer, onClose }) {
               calcData={calcData}
               todayKorean={todayKorean}
               managerName={managerName}
-              stampImage={stampImage}
+              stampImage={stampMap[6]}
+              logoImage={logoMap[6]}
             />
           ) : (
             <TemplateHappyDream
@@ -379,7 +552,8 @@ export default function QuotePrintModal({ quote, customer, onClose }) {
               calcData={calcData}
               todayKorean={todayKorean}
               managerName={managerName}
-              stampImage={stampImage}
+              stampImage={stampMap[7]}
+              logoImage={logoMap[7]}
             />
           )}
         </div>

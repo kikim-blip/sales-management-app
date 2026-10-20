@@ -1,7 +1,7 @@
 // src/components/quoteTemplates/TemplateTheSeoul.jsx
 // 3_C사: 더서울미디어 주식회사 공식 견적서 템플릿 (영문 병기 모던 미니멀형)
 import React from 'react';
-import { Stamp } from 'lucide-react';
+import { Stamp, Globe } from 'lucide-react';
 
 export default function TemplateTheSeoul({
   quote,
@@ -11,6 +11,7 @@ export default function TemplateTheSeoul({
   todayKorean,
   managerName,
   stampImage,
+  logoImage,
 }) {
   const custName = customer?.name || quote.customer_name || '거래처';
   const custContact = quote.contact_person || customer?.contact_person || '사업총괄팀 귀중';
@@ -18,17 +19,29 @@ export default function TemplateTheSeoul({
 
   return (
     <div className="font-sans text-slate-800 text-xs space-y-4 print:text-black">
-      {/* 1. 모던 타이틀 */}
-      <div className="border-b-2 border-slate-900 pb-2">
-        <h1 className="text-2xl font-bold tracking-wider text-slate-900">
-          견적서 <span className="text-slate-400 font-light text-xl">｜ ESTIMATE</span>
-        </h1>
+      {/* 1. 모던 영문 병기 헤더 */}
+      <div className="flex items-center justify-between border-b-2 border-slate-900 pb-2">
+        <div className="flex items-center space-x-3">
+          {logoImage ? (
+            <img src={logoImage} alt="로고" className="h-10 max-w-[150px] object-contain" />
+          ) : (
+            <div className="text-xl font-black tracking-tighter text-slate-900">
+              THESEOUL <span className="text-sky-600 text-sm font-semibold">MEDIA</span>
+            </div>
+          )}
+        </div>
+        <div className="text-right">
+          <h1 className="text-2xl font-bold tracking-wider text-slate-900">
+            견적서 <span className="text-slate-400 font-light text-base">｜ ESTIMATE</span>
+          </h1>
+          <p className="text-[10px] text-slate-500 font-mono">Quotation No. {quote.code_number || `TS-${Date.now().toString().slice(-6)}`}</p>
+        </div>
       </div>
 
       {/* 2. 상단 좌측 Client 정보 & 우측 공급사 정보 */}
       <div className="grid grid-cols-12 gap-3 text-xs">
         {/* 좌측 Client/Project 메타 */}
-        <div className="col-span-12 sm:col-span-6 space-y-1.5 py-1 text-[11.5px]">
+        <div className="col-span-12 sm:col-span-6 space-y-1.5 py-1 text-[11.5px] bg-slate-50/70 p-3 rounded-xl border border-slate-200">
           <div className="flex">
             <span className="w-24 text-slate-500 font-semibold">Client/거래처 :</span>
             <span className="font-bold text-slate-900 text-sm">{custName}</span>
@@ -45,7 +58,7 @@ export default function TemplateTheSeoul({
             <span className="w-24 text-slate-500 font-semibold">Project/건명 &nbsp; :</span>
             <span className="font-bold text-slate-900">{quote.title}</span>
           </div>
-          <div className="flex pt-1 border-t border-slate-200">
+          <div className="flex pt-1.5 border-t border-slate-200">
             <span className="w-24 text-slate-500 font-semibold">Amount/금액 &nbsp; :</span>
             <span className="font-bold text-sky-900 text-sm">
               일금 {koreanTotalPrice}원정 <span className="text-xs text-slate-600">(₩ {totalPrice.toLocaleString()})</span>
@@ -54,7 +67,7 @@ export default function TemplateTheSeoul({
         </div>
 
         {/* 우측 공급사 격자 박스 */}
-        <div className="col-span-12 sm:col-span-6 border border-slate-300 text-[10.5px] relative bg-slate-50/50">
+        <div className="col-span-12 sm:col-span-6 border border-slate-300 text-[10.5px] relative bg-white rounded-xl overflow-hidden">
           <div className="divide-y divide-slate-200">
             <div className="flex">
               <span className="w-20 bg-slate-100 p-1.5 font-bold text-center border-r border-slate-200">등록번호</span>
@@ -82,80 +95,76 @@ export default function TemplateTheSeoul({
           {stampImage ? (
             <img src={stampImage} alt="직인" className="absolute right-2 top-4 w-12 h-12 object-contain mix-blend-multiply pointer-events-none" />
           ) : (
-            <div className="absolute right-2 top-4 w-11 h-11 rounded-full border border-rose-500 text-rose-500 flex items-center justify-center font-bold text-[8px] transform rotate-6 select-none pointer-events-none">
+            <div className="absolute right-2 top-4 w-11 h-11 rounded-full border border-rose-500 text-rose-500 flex items-center justify-center font-bold text-[8px] transform rotate-6 select-none pointer-events-none bg-rose-50/20">
               더서울<br/>직인
             </div>
           )}
         </div>
       </div>
 
-      {/* 3. 명세 테이블 */}
-      <div className="border border-slate-400 overflow-hidden">
+      {/* 3. 명세 테이블 (미니멀 가로선 중심) */}
+      <div className="border-t-2 border-b-2 border-slate-900 overflow-hidden">
         <table className="w-full text-left text-xs border-collapse">
           <thead>
-            <tr className="bg-slate-800 text-white text-[11px] font-semibold text-center">
-              <th className="p-2 border-r border-slate-600 w-16">항 목</th>
-              <th className="p-2 border-r border-slate-600 min-w-[130px]">내 &nbsp; 용</th>
-              <th className="p-2 border-r border-slate-600 w-24">규 &nbsp; 격</th>
-              <th className="p-2 border-r border-slate-600 w-14">페이지</th>
-              <th className="p-2 border-r border-slate-600 w-16">부수</th>
-              <th className="p-2 border-r border-slate-600 w-24 text-right pr-3">단 &nbsp; 가</th>
-              <th className="p-2 border-r border-slate-600 w-28 text-right pr-3">금 &nbsp; 액</th>
+            <tr className="bg-slate-900 text-white text-[11px] font-semibold text-center">
+              <th className="p-2 border-r border-slate-700 w-16">항 목</th>
+              <th className="p-2 border-r border-slate-700 min-w-[130px]">내 &nbsp; 용</th>
+              <th className="p-2 border-r border-slate-700 w-24">규 &nbsp; 격</th>
+              <th className="p-2 border-r border-slate-700 w-14">페이지</th>
+              <th className="p-2 border-r border-slate-700 w-16">수 &nbsp; 량</th>
+              <th className="p-2 border-r border-slate-700 w-24 text-right pr-3">단 &nbsp; 가</th>
+              <th className="p-2 border-r border-slate-700 w-28 text-right pr-3">금 &nbsp; 액</th>
               <th className="p-2 w-28">비 &nbsp; 고</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200">
             {items.map((it, idx) => (
-              <tr key={`item-${idx}`} className="hover:bg-slate-50/50">
-                <td className="p-2 border-r border-slate-200 text-center text-slate-500 text-[10.5px]">
-                  {idx === 0 ? '제작/인쇄' : ''}
-                </td>
-                <td className="p-2 border-r border-slate-200 font-medium text-slate-900">{it.name || quote.title}</td>
-                <td className="p-2 border-r border-slate-200 text-slate-600 text-center">{it.spec || '-'}</td>
-                <td className="p-2 border-r border-slate-200 text-center font-mono">{it.pages || 1}</td>
-                <td className="p-2 border-r border-slate-200 text-center font-mono">{Number(it.quantity || 1).toLocaleString()}</td>
-                <td className="p-2 border-r border-slate-200 text-right pr-3 font-mono">{Number(it.unit_price || 0).toLocaleString()}</td>
-                <td className="p-2 border-r border-slate-200 text-right pr-3 font-mono font-semibold">{Number(it.amount || 0).toLocaleString()}</td>
-                <td className="p-2 text-slate-500 text-[10.5px]">{it.note || '-'}</td>
-              </tr>
-            ))}
-            {Array.from({ length: Math.max(0, 4 - items.length) }).map((_, i) => (
-              <tr key={`empty-${i}`} className="h-7 text-transparent select-none">
-                <td className="border-r border-slate-200">&nbsp;</td>
-                <td className="border-r border-slate-200">&nbsp;</td>
-                <td className="border-r border-slate-200">&nbsp;</td>
-                <td className="border-r border-slate-200">&nbsp;</td>
-                <td className="border-r border-slate-200">&nbsp;</td>
-                <td className="border-r border-slate-200">&nbsp;</td>
-                <td className="border-r border-slate-200">&nbsp;</td>
-                <td>&nbsp;</td>
+              <tr key={`item-${idx}`} className="hover:bg-slate-50 transition">
+                <td className="p-2 text-center text-slate-500 font-mono text-[11px] border-r border-slate-200">{idx + 1}</td>
+                <td className="p-2 font-bold text-slate-900 border-r border-slate-200">{it.name || quote.title}</td>
+                <td className="p-2 text-slate-600 text-center border-r border-slate-200">{it.spec || '-'}</td>
+                <td className="p-2 text-center font-mono border-r border-slate-200">{it.pages || 1}</td>
+                <td className="p-2 text-center font-mono font-semibold border-r border-slate-200">{Number(it.quantity || 1).toLocaleString()} {it.unit || '부'}</td>
+                <td className="p-2 text-right pr-3 font-mono border-r border-slate-200">{Number(it.unit_price || 0).toLocaleString()}</td>
+                <td className="p-2 text-right pr-3 font-mono font-bold text-slate-900 border-r border-slate-200">{Number(it.amount || 0).toLocaleString()}</td>
+                <td className="p-2 text-slate-500 text-[11px]">{it.note || '-'}</td>
               </tr>
             ))}
           </tbody>
-          <tfoot className="border-t-2 border-slate-700 bg-slate-50 font-semibold divide-y divide-slate-200">
+          <tfoot className="border-t-2 border-slate-900 bg-slate-50 font-bold divide-y divide-slate-200">
             <tr>
-              <td colSpan={6} className="p-2 text-right pr-4 text-slate-600">공 급 가 액</td>
-              <td className="p-2 text-right pr-3 font-mono font-bold text-slate-900">₩ {supplyPrice.toLocaleString()}</td>
+              <td colSpan={6} className="p-2 text-right pr-4 text-slate-600 font-semibold">소 계 (SUB TOTAL)</td>
+              <td className="p-2 text-right pr-3 font-mono">₩ {(calcData.rawSupplyPrice || supplyPrice).toLocaleString()}</td>
               <td></td>
             </tr>
             <tr>
-              <td colSpan={6} className="p-2 text-right pr-4 text-slate-600">부 가 세 (10%)</td>
-              <td className="p-2 text-right pr-3 font-mono">₩ {taxPrice.toLocaleString()}</td>
+              <td colSpan={6} className="p-2 text-right pr-4 text-slate-600 font-semibold">공급가액 (SUPPLY AMOUNT)</td>
+              <td className="p-2 text-right pr-3 font-mono font-black text-slate-900">₩ {supplyPrice.toLocaleString()}</td>
+              <td className="p-2 text-center text-[10px] text-slate-500">{calcData.discountAmount > 0 ? '절사' : ''}</td>
+            </tr>
+            <tr>
+              <td colSpan={6} className="p-2 text-right pr-4 text-slate-600 font-semibold">부 가 세 (V.A.T 10%)</td>
+              <td className="p-2 text-right pr-3 font-mono text-slate-700">₩ {taxPrice.toLocaleString()}</td>
               <td></td>
             </tr>
-            <tr className="bg-slate-100 font-bold border-t border-slate-700">
-              <td colSpan={6} className="p-2.5 text-right pr-4 text-sm text-slate-900">합 계 금 액 (VAT포함)</td>
-              <td className="p-2.5 text-right pr-3 font-mono text-base font-black text-sky-800">₩ {totalPrice.toLocaleString()}</td>
-              <td></td>
+            <tr className="bg-slate-900 text-white font-black">
+              <td colSpan={6} className="p-2.5 text-right pr-4 text-sm font-black">총 견적합계 (TOTAL AMOUNT)</td>
+              <td className="p-2.5 text-right pr-3 font-mono text-base font-black text-emerald-400">₩ {totalPrice.toLocaleString()}</td>
+              <td className="p-2 text-center text-[10px] text-slate-400">VAT포함</td>
             </tr>
           </tfoot>
         </table>
       </div>
 
-      {/* 4. 하단 계좌 및 안내 */}
-      <div className="flex justify-between items-center text-[11px] text-slate-600 pt-1 border-t border-slate-200">
-        <span>* 유효기간: 견적일로부터 30일 &nbsp;|&nbsp; 납품기한: 발주일로부터 14일 이내</span>
-        {supplier.bank && <span className="font-semibold text-slate-800">입금계좌: {supplier.bank}</span>}
+      {/* 4. 결제정보 & 비고 */}
+      <div className="flex flex-wrap items-center justify-between text-[11px] text-slate-600 border border-slate-200 p-2.5 rounded-xl bg-slate-50/50">
+        <div>
+          <span className="font-semibold text-slate-800">결제조건: </span> {quote.payment_terms || '납품 후 100% 현금'} &nbsp;|&nbsp; 
+          <span className="font-semibold text-slate-800">유효기간: </span> {quote.valid_days || '견적 후 30일'}
+        </div>
+        <div>
+          <span className="font-semibold text-slate-800">입금계좌: </span> {supplier.bank}
+        </div>
       </div>
     </div>
   );

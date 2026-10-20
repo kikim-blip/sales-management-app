@@ -1,7 +1,7 @@
 // src/components/quoteTemplates/TemplateKyungsung.jsx
-// 1_당사: 주식회사 경성문화사 공식 견적서 템플릿
+// 1_당사: 주식회사 경성문화사 공식 견적서 템플릿 (전통 종합 인쇄/기획사 양식)
 import React from 'react';
-import { Stamp } from 'lucide-react';
+import { Stamp, ShieldCheck } from 'lucide-react';
 
 export default function TemplateKyungsung({
   quote,
@@ -11,6 +11,7 @@ export default function TemplateKyungsung({
   todayKorean,
   managerName,
   stampImage,
+  logoImage,
 }) {
   const custName = customer?.name || quote.customer_name || '거래처';
   const custDept = quote.dept || customer?.dept || '';
@@ -22,20 +23,38 @@ export default function TemplateKyungsung({
 
   return (
     <div className="font-sans text-slate-900 text-xs space-y-4 print:text-black">
-      {/* 1. 메인 대제목 */}
-      <div className="text-center pt-2 pb-1">
-        <h1 className="text-3xl font-black tracking-[0.6em] text-slate-950 underline decoration-2 underline-offset-8">
-          견 &nbsp; 적 &nbsp; 서
-        </h1>
+      {/* 1. 상단 로고 & 메인 대제목 */}
+      <div className="flex items-center justify-between border-b-2 border-slate-900 pb-2">
+        <div className="w-40 flex items-center">
+          {logoImage ? (
+            <img src={logoImage} alt="회사 로고" className="h-10 max-w-[150px] object-contain" />
+          ) : (
+            <div className="text-slate-400 text-[11px] font-mono">
+              [ 경성문화사 ]
+            </div>
+          )}
+        </div>
+        <div className="text-center flex-1">
+          <h1 className="text-3xl font-black tracking-[0.6em] text-slate-950 underline decoration-2 underline-offset-8">
+            견 &nbsp; 적 &nbsp; 서
+          </h1>
+        </div>
+        <div className="w-40 text-right text-[10px] text-slate-500 font-mono">
+          <div className="flex items-center justify-end text-sky-800 font-bold">
+            <ShieldCheck className="w-3.5 h-3.5 mr-0.5" />
+            <span>ISO 9001/14001</span>
+          </div>
+          <div>인증기업 (당사)</div>
+        </div>
       </div>
 
-      {/* 2. 상단 수신처 및 공급자 박스 */}
+      {/* 2. 상단 수신처 및 공급자 박스 (전통 2분할 프레임) */}
       <div className="grid grid-cols-12 border-2 border-slate-900 text-xs">
         {/* 좌측: 수신처 */}
         <div className="col-span-12 sm:col-span-5 border-b-2 sm:border-b-0 sm:border-r-2 border-slate-900 flex flex-col justify-between p-3.5 bg-white">
           <div className="space-y-1.5 text-center my-auto py-2">
-            <h2 className="text-base font-black text-slate-900 tracking-widest mb-1.5">
-              거 &nbsp; 래 &nbsp; 처
+            <h2 className="text-xs font-bold text-slate-500 tracking-widest">
+              수 &nbsp; 신
             </h2>
             <h2 className="text-lg font-black text-slate-900 leading-tight">
               {custName}
@@ -58,7 +77,7 @@ export default function TemplateKyungsung({
         </div>
 
         {/* 우측: 공급자 (경성문화사) */}
-        <div className="col-span-12 sm:col-span-7 p-3.5 relative bg-slate-50/40 space-y-1 text-[11px]">
+        <div className="col-span-12 sm:col-span-7 p-3.5 relative bg-amber-50/20 space-y-1 text-[11px]">
           <div className="flex items-center justify-between border-b border-slate-300 pb-1.5">
             <div className="font-black text-slate-900 text-sm">{supplier.name}</div>
             <span className="text-[10px] text-slate-500 font-mono">{supplier.certTag}</span>
@@ -111,7 +130,7 @@ export default function TemplateKyungsung({
           </div>
         </div>
 
-        <div className="flex items-center justify-between bg-amber-50/50">
+        <div className="flex items-center justify-between bg-amber-50/60">
           <div className="flex items-center flex-1">
             <div className="w-20 sm:w-24 bg-slate-200/80 font-black text-center py-2.5 text-slate-800 flex items-center justify-center border-r-2 border-slate-900 flex-shrink-0">
               금 &nbsp; 액
@@ -131,7 +150,7 @@ export default function TemplateKyungsung({
       <div className="border-2 border-slate-900 overflow-hidden">
         <table className="w-full text-left text-xs border-collapse">
           <thead>
-            <tr className="bg-amber-100/80 text-slate-900 border-b-2 border-slate-900 text-[11px] font-black text-center">
+            <tr className="bg-amber-100/90 text-slate-900 border-b-2 border-slate-900 text-[11px] font-black text-center">
               <th className="p-2 border-r border-slate-400 min-w-[140px]">품 &nbsp; 명</th>
               <th className="p-2 border-r border-slate-400 w-28">규 &nbsp; 격</th>
               {isPrintTemplate && <th className="p-2 border-r border-slate-400 w-16">페이지</th>}
@@ -193,7 +212,7 @@ export default function TemplateKyungsung({
               <td className="p-2 text-right pr-3 font-mono font-bold text-slate-700">₩ {taxPrice.toLocaleString()}</td>
               <td></td>
             </tr>
-            <tr className="bg-amber-100/60 font-black text-slate-950 border-t-2 border-slate-900">
+            <tr className="bg-amber-100/70 font-black text-slate-950 border-t-2 border-slate-900">
               <td colSpan={isPrintTemplate ? 5 : 4} className="p-2.5 text-right pr-4 text-sm font-black">합 계 금 액 (VAT 포함)</td>
               <td className="p-2.5 text-right pr-3 font-mono text-base font-black text-rose-700">₩ {totalPrice.toLocaleString()}</td>
               <td className="p-2 text-center text-[10px] text-slate-500">원整</td>
