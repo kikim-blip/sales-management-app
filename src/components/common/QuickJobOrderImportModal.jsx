@@ -1,18 +1,17 @@
 // src/components/common/QuickJobOrderImportModal.jsx
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Upload, FileText, CheckCircle2, AlertCircle, Sparkles, ArrowRight, Calendar, User, Phone, Mail, Building, Clock, Layers, Save, Image as ImageIcon } from 'lucide-react';
+import { X, Upload, FileText, CheckCircle2, AlertCircle, Sparkles, Calendar, User, Phone, Mail, Building, Clock, Layers, Save, Image as ImageIcon, MessageSquare } from 'lucide-react';
 import { parseHwpJobOrder, parseTextJobOrder } from '../../utils/jobOrderParser';
 import { getLocalDateStr } from '../../utils/dateUtils';
 import { useData } from '../../context/DataContext';
 
 export default function QuickJobOrderImportModal({ isOpen, onClose, onSuccess }) {
-  const { customers, addCustomer, addSale, fetchAllData } = useData();
+  const { customers, addCustomer, addSales, addJobOrder, fetchAllData } = useData();
 
   const [isDragging, setIsDragging] = useState(false);
   const [parsing, setParsing] = useState(false);
   const [parsedData, setParsedData] = useState(null);
   const [pastedImage, setPastedImage] = useState(null);
-  const [manualText, setManualText] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   const fileInputRef = useRef(null);
@@ -66,7 +65,6 @@ export default function QuickJobOrderImportModal({ isOpen, onClose, onSuccess })
         const result = await parseHwpJobOrder(file);
         setParsedData(result);
       } else {
-        // 텍스트 파일 등
         const text = await file.text();
         processText(text);
       }
@@ -124,7 +122,7 @@ export default function QuickJobOrderImportModal({ isOpen, onClose, onSuccess })
     (parsedData?.customer_name && c.name.includes(parsedData.customer_name))
   );
 
-  // 🚀 최종 등록 처리: 고객 등록 + 납품 일정 & 작업전표 매출 등록
+  // 🚀 최종 등록 처리: 고객 등록 + 작업전표(addJobOrder) + 매출(addSales)
   const handleSubmit = async () => {
     if (!parsedData || !parsedData.title) {
       alert('품명(작업명)이 누락되었습니다.');
@@ -137,7 +135,7 @@ export default function QuickJobOrderImportModal({ isOpen, onClose, onSuccess })
       let customerId = matchedCustomer ? matchedCustomer.id : null;
 
       // 1. 미등록 고객사인 경우 신규 고객 자동 생성
-      if (!customerId && parsedData.customer_name) {
+      if (!customerId && parsedData.customer_name && addCustomer) {
         const newCustId = `cust_${Date.now()}`;
         const newCustomerPayload = {
           id: newCustId,
@@ -153,33 +151,27 @@ export default function QuickJobOrderImportModal({ isOpen, onClose, onSuccess })
         customerId = newCustId;
       }
 
-      // 2. 신규 매출 / 납품 일정 / 작업전표 등록
       const codeNumber = parsedData.code_number || `44-${today.replace(/-/g, '').slice(2)}-${Math.floor(1000 + Math.random() * 9000)}`;
-      const newSalePayload = {
-        id: `sale_${Date.now()}`,
-        code_number: codeNumber,
-        customer_id: customerId,
-        customer_name: parsedData.customer_name || '거래처',
-        dept: parsedData.dept || '',
-        contact_person: parsedData.contact_person || '',
-        phone: parsedData.phone || '',
-        email: parsedData.email || '',
-        title: parsedData.title,
-        spec: parsedData.spec || '',
-        pages: parsedData.pages || '',
-        quantity: Number(parsedData.quantity) || 1,
-        supply_price: Number(parsedData.supply_price) || 0,
-        tax: Math.round((Number(parsedData.supply_price) || 0) * 0.1),
-        total_price: Math.round((Number(parsedData.supply_price) || 0) * 1.1),
-        sales_manager: parsedData.sales_manager || '김광일',
-        reg_date: parsedData.receipt_date || parsedData.reg_date || today,
-        delivery_date: parsedData.delivery_date || today,
-        billing_status: '미청구',
-        payment_status: '미수',
-        billing_schedule: parsedData.note || '',
-        // 작업전표 세부정보
-        order_spec: {
+      const deliveryDate = parsedData.delivery_date || today;
+      const receiptDate = parsedData.receipt_date || today;
+
+      // 2. 작업전표(JobOrder) 등록
+      if (addJobOrder) {
+        await addJobOrder({
+          id: codeNumber,
           code_number: codeNumber,
+          customer_id: customerId,
+          customer_name: parsedData.customer_name || '거래처',
+          dept: parsedData.dept || '',
+          title: parsedData.title,
+          spec: parsedData.spec || '',
+          quantity: Number(parsedData.quantity) || 1,
+          client_contact_person: parsedData.contact_person || '',
+          client_phone: parsedData.phone || '',
+          manager_name: parsedData.sales_manager || '김광일',
+          receipt_date: receiptDate,
+          delivery_date: deliveryDate,
+          request_note: parsedData.request_note || '',
           cover_work: parsedData.cover_work || '',
           cover_paper: parsedData.cover_paper || '',
           cover_print: parsedData.cover_print || '',
@@ -191,17 +183,44 @@ export default function QuickJobOrderImportModal({ isOpen, onClose, onSuccess })
           manuscript: parsedData.manuscript || '',
           production_process: parsedData.production_process || '',
           delivery_place: parsedData.delivery_place || '',
-        }
-      };
+        });
+      }
 
-      await addSale(newSalePayload);
+      // 3. 매출(Sales) 및 납품 일정 등록
+      if (addSales) {
+        await addSales({
+          code_number: codeNumber,
+          customer_id: customerId,
+          customer_name: parsedData.customer_name || '거래처',
+          dept: parsedData.dept || '',
+          contact_person: parsedData.contact_person || '',
+          phone: parsedData.phone || '',
+          email: parsedData.email || '',
+          title: parsedData.title,
+          spec: parsedData.spec || '',
+          pages: parsedData.pages || '',
+          quantity: Number(parsedData.quantity) || 1,
+          supply_price: 0,
+          tax: 0,
+          total_price: 0,
+          sales_manager: parsedData.sales_manager || '김광일',
+          reg_date: receiptDate,
+          delivery_date: deliveryDate,
+          billing_status: '미청구',
+          payment_status: '미수',
+          billing_schedule: parsedData.request_note || '',
+          content: parsedData.request_note || '',
+        });
+      }
+
       if (fetchAllData) await fetchAllData(true);
 
-      alert(`[${parsedData.title}] 납품 일정이 성공적으로 등록되었습니다!\n납품일: ${parsedData.delivery_date || today}`);
-      if (onSuccess) onSuccess(newSalePayload);
+      alert(`[${parsedData.title}] 납품 일정이 성공적으로 등록되었습니다!\n납품일: ${deliveryDate}`);
+      if (onSuccess) onSuccess({ ...parsedData, code_number: codeNumber });
       onClose();
     } catch (err) {
-      alert('등록 중 오류가 발생했습니다: ' + err.message);
+      console.error('Submit error:', err);
+      alert('등록 중 오류가 발생했습니다: ' + (err.message || String(err)));
     } finally {
       setSubmitting(false);
     }
@@ -425,7 +444,7 @@ export default function QuickJobOrderImportModal({ isOpen, onClose, onSuccess })
                 </div>
 
                 <div className="sm:col-span-3">
-                  <label className="block text-[11px] font-bold text-slate-600 mb-1">수량 (부수)</label>
+                  <label className="block text-[11px] font-bold text-slate-600 mb-1">수량 (부수/장)</label>
                   <input
                     type="number"
                     value={parsedData.quantity || '1'}
@@ -433,6 +452,21 @@ export default function QuickJobOrderImportModal({ isOpen, onClose, onSuccess })
                     className="w-full p-2 border border-slate-300 rounded-lg text-xs font-mono font-bold"
                   />
                 </div>
+              </div>
+
+              {/* 🌟 3. 전표 하단부 요청사항 (작업 지시 사항) ── */}
+              <div className="bg-amber-50/40 p-4 rounded-xl border border-amber-200 space-y-1.5">
+                <label className="block text-xs font-black text-amber-900 flex items-center">
+                  <MessageSquare className="w-3.5 h-3.5 mr-1.5 text-amber-700" />
+                  전표 하단 요청사항 (작업 지시 및 특이사항)
+                </label>
+                <textarea
+                  rows={3}
+                  value={parsedData.request_note || ''}
+                  onChange={(e) => handleFieldChange('request_note', e.target.value)}
+                  placeholder="한글 전표 하단에 적힌 요청사항이나 제작 시 주의사항이 여기에 자동 입력됩니다."
+                  className="w-full p-2.5 border border-amber-300 rounded-lg text-xs leading-relaxed bg-white text-slate-900 font-medium focus:ring-2 focus:ring-amber-400 focus:outline-none"
+                />
               </div>
 
               {/* 공정 및 인쇄 사양 상세 */}
