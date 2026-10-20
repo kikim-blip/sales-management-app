@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useData } from '../context/DataContext';
 import { useGoogleAuth } from '../context/GoogleAuthContext';
-import { AlertCircle, FileText, RefreshCw, ChevronRight, Clock, AlertTriangle, Calendar, Printer, CheckCircle2, Users, Share2, Zap, Pencil, Truck, XCircle, Plus, Search, Calculator, Download, Building2, User, Phone, Layers, ListFilter, ArrowUpDown } from 'lucide-react';
+import { AlertCircle, FileText, RefreshCw, ChevronRight, Clock, Sparkles, AlertTriangle, Calendar, Printer, CheckCircle2, Users, Share2, Zap, Pencil, Truck, XCircle, Plus, Search, Calculator, Download, Building2, User, Phone, Layers, ListFilter, ArrowUpDown } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 import CustomerDetailModal from '../components/common/CustomerDetailModal';
@@ -10,6 +10,7 @@ import JobOrderPrintModal from '../components/common/JobOrderPrintModal';
 import JobOrderModal from '../components/common/JobOrderModal';
 import EstimateModal from '../components/common/EstimateModal';
 import QuotePrintModal from '../components/common/QuotePrintModal';
+import QuickJobOrderImportModal from '../components/common/QuickJobOrderImportModal';
 import { getLocalDateStr, calculateDDay } from '../utils/dateUtils';
 import { normalizeStaffName } from '../utils/nameUtils';
 
@@ -41,6 +42,7 @@ export default function DashboardPage() {
   // 💡 견적서 작성/산출 모달 및 견적서 인쇄 모달 상태
   const [estimatingSale, setEstimatingSale] = useState(null);
   const [printingEstimateQuote, setPrintingEstimateQuote] = useState(null);
+  const [isQuickImportOpen, setIsQuickImportOpen] = useState(false);
 
   // 💡 미수 관리 테이블 상태 (구분: 담당자별 / 부서·과별 / 기관별, 검색어, 미수건만 보기)
   const [receivableGroupBy, setReceivableGroupBy] = useState('contact'); // 'contact' | 'dept' | 'org'
@@ -809,6 +811,14 @@ export default function DashboardPage() {
             </span>
           </div>
 
+          <button
+            onClick={() => setIsQuickImportOpen(true)}
+            className="flex items-center space-x-1 sm:space-x-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-xl text-[11px] sm:text-xs font-black shadow-sm transition active:scale-95 border border-amber-300/40 whitespace-nowrap mr-1.5"
+            title="한글(.hwp) 작업전표 파일 드래그 또는 복사 붙여넣기로 납품 일정 자동 등록"
+          >
+            <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-200 animate-pulse" />
+            <span>⚡ 작업전표 불러오기 (HWP/붙여넣기)</span>
+          </button>
           <button
             onClick={openNewSaleModal}
             className="flex items-center space-x-1 sm:space-x-1.5 bg-sky-600 hover:bg-sky-500 text-white px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-xl text-[11px] sm:text-xs font-bold shadow-sm transition active:scale-95 border border-sky-400/30 whitespace-nowrap"
@@ -1918,6 +1928,12 @@ export default function DashboardPage() {
           onClose={() => setPrintingEstimateQuote(null)}
         />
       )}
+
+      {/* ── ⚡ 작업전표 스마트 불러오기 (HWP / 붙여넣기) 모달 ── */}
+      <QuickJobOrderImportModal
+        isOpen={isQuickImportOpen}
+        onClose={() => setIsQuickImportOpen(false)}
+      />
 
     </div>
   );

@@ -1,11 +1,12 @@
 // src/pages/JobOrderPage.jsx
 import React, { useState } from 'react';
 import { useData } from '../context/DataContext';
-import { Plus, Search, FileText, ArrowRight, Printer, Pencil, Trash2, UserCheck, Calendar, Zap, Calculator } from 'lucide-react';
+import { Plus, Sparkles, Search, FileText, ArrowRight, Printer, Pencil, Trash2, UserCheck, Calendar, Zap, Calculator } from 'lucide-react';
 import JobOrderModal from '../components/common/JobOrderModal';
 import JobOrderPrintModal from '../components/common/JobOrderPrintModal';
 import EstimateModal from '../components/common/EstimateModal';
 import QuotePrintModal from '../components/common/QuotePrintModal';
+import QuickJobOrderImportModal from '../components/common/QuickJobOrderImportModal';
 import { getLocalDateStr } from '../utils/dateUtils';
 
 export default function JobOrderPage() {
@@ -18,6 +19,7 @@ export default function JobOrderPage() {
   // 💡 견적서 작성 및 출력 모달 상태
   const [estimatingOrder, setEstimatingOrder] = useState(null);
   const [printingQuote, setPrintingQuote] = useState(null);
+  const [isQuickImportOpen, setIsQuickImportOpen] = useState(false);
 
 
   const todayStr = getLocalDateStr();
@@ -178,16 +180,26 @@ export default function JobOrderPage() {
           <p className="text-xs text-slate-500 mt-1">접수된 작업전표 목록을 조회하고 실물 서식 인쇄 및 매출 자동 연동을 관리합니다.</p>
         </div>
 
-        <button
-          onClick={() => {
-            setEditingOrder(null);
-            setShowModal(true);
-          }}
-          className="flex items-center justify-center space-x-2 bg-sky-600 hover:bg-sky-700 text-white px-4 py-2.5 rounded-xl font-semibold text-sm shadow-sm transition"
-        >
-          <Plus className="w-4 h-4" />
-          <span>신규 작업전표 작성</span>
-        </button>
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={() => setIsQuickImportOpen(true)}
+            className="flex items-center justify-center space-x-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white px-4 py-2.5 rounded-xl font-bold text-sm shadow-sm transition border border-amber-300/40"
+            title="한글(.hwp) 작업전표 드래그 또는 붙여넣기로 자동 등록"
+          >
+            <Sparkles className="w-4 h-4 text-amber-200 animate-pulse" />
+            <span>⚡ 작업전표 불러오기 (HWP/붙여넣기)</span>
+          </button>
+          <button
+            onClick={() => {
+              setEditingOrder(null);
+              setShowModal(true);
+            }}
+            className="flex items-center justify-center space-x-2 bg-sky-600 hover:bg-sky-700 text-white px-4 py-2.5 rounded-xl font-semibold text-sm shadow-sm transition"
+          >
+            <Plus className="w-4 h-4" />
+            <span>신규 작업전표 작성</span>
+          </button>
+        </div>
       </div>
 
       {/* 검색 바 */}
@@ -398,6 +410,11 @@ export default function JobOrderPage() {
           onClose={() => setPrintingQuote(null)}
         />
       )}
+      {/* ── ⚡ 작업전표 스마트 불러오기 (HWP / 붙여넣기) 모달 ── */}
+      <QuickJobOrderImportModal
+        isOpen={isQuickImportOpen}
+        onClose={() => setIsQuickImportOpen(false)}
+      />
     </div>
   );
 }
