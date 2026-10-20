@@ -767,7 +767,9 @@ export default function DashboardPage() {
     });
     return results;
   })();
-  if (loading) {
+  // 💡 데이터가 아예 없는 최초 1회 로딩 시에만 전체 화면 로딩을 띄우고,
+  // 기존 데이터가 있거나 백그라운드 자동 갱신 시에는 사용자가 작성 중인 화면과 모달이 절대 사라지지 않도록 유지
+  if (loading && (!customers || customers.length === 0) && (!sales || sales.length === 0) && (!jobOrders || jobOrders.length === 0)) {
     return (
       <div className="flex items-center justify-center py-20 text-slate-500 space-x-2">
         <RefreshCw className="w-5 h-5 animate-spin text-sky-600" />

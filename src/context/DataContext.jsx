@@ -115,7 +115,7 @@ export function DataProvider({ children }) {
   const lastFetchRef = useRef(0);
 
   // ─── 전체 데이터 D1에서 일괄 조회 (초기 로딩 + 수동 새로고침) ─────────────
-  const fetchAllData = useCallback(async (force = false) => {
+  const fetchAllData = useCallback(async (force = false, isSilent = false) => {
     if (!isLoggedIn) return;
 
     const now = Date.now();
@@ -125,7 +125,9 @@ export function DataProvider({ children }) {
     isFetchingRef.current = true;
 
     try {
-      setLoading(true);
+      if (!isSilent) {
+        setLoading(true);
+      }
       setError(null);
 
       const data = await fetchAllD1Data();
@@ -231,17 +233,20 @@ export function DataProvider({ children }) {
   useEffect(() => {
     if (!isLoggedIn) return;
 
-    // 1️⃣ 탭/창 복귀 감지 (PC를 오래 방치 후 돌아왔을 때 즉시 갱신)
+    // 1️⃣ 탭/창 복귀 감지 (마지막 조회 후 2분 이상 경과 시에만 백그라운드 조용히 갱신)
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        fetchAllData(true); // force refresh
+        const now = Date.now();
+        if (now - lastFetchRef.current > 120000) {
+          fetchAllData(true, true); // force=true, isSilent=true (화면 방해 없음)
+        }
       }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
-    // 2️⃣ 10분(600초) 주기 자동 갱신 (탭이 열려 있어도 데이터 최신화)
+    // 2️⃣ 10분(600초) 주기 자동 갱신 (작성 중인 화면 방해 없이 조용히 백그라운드 최신화)
     const interval = setInterval(() => {
-      fetchAllData(true);
+      fetchAllData(true, true);
     }, 10 * 60 * 1000);
 
     return () => {
