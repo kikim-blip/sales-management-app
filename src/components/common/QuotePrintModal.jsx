@@ -85,13 +85,13 @@ export default function QuotePrintModal({ quote, customer, onClose }) {
   // 현재 선택된 공급사의 계산 데이터 (단가, 공급가액, 부가세, 합계)
   const calcData = useMemo(() => {
     if (!currentSupplier) return null;
-    return calculateSupplierQuote(parsedItems, currentSupplier, estimateType);
-  }, [parsedItems, currentSupplier, estimateType]);
+    return calculateSupplierQuote(parsedItems, currentSupplier, estimateType, quote);
+  }, [parsedItems, currentSupplier, estimateType, quote]);
 
   // 7개사 전체 비교대조 데이터
   const summaryData = useMemo(() => {
-    return calculateComparativeSummary(parsedItems, COMPANY_SUPPLIERS, estimateType);
-  }, [parsedItems, estimateType]);
+    return calculateComparativeSummary(parsedItems, COMPANY_SUPPLIERS, estimateType, quote);
+  }, [parsedItems, estimateType, quote]);
 
   // 엑셀 다운로드 (구글 시트 템플릿과 동일 구조)
   const handleExportExcel = () => {

@@ -34,18 +34,19 @@ export function numberToKoreanWon(num) {
 }
 
 /**
- * 특정 공급사(회사) 기준으로 품목 및 합계 계산
+ * 특정 공급사(회사) 기준으로 품목 및 합계 계산 (공급가액 절사 완벽 지원)
  * @param {Array} rawItems 원본 품목 목록 (당사 기준)
  * @param {Object} supplier 회사 정보 ({ id, rate, ... })
  * @param {String} estimateType 'print' | 'general'
+ * @param {Object} quote 저장된 견적서/매출 객체 (절사 정보 포함)
  */
-export function calculateSupplierQuote(rawItems, supplier, estimateType = 'print') {
-  if (!supplier) return { items: [], supplyPrice: 0, taxPrice: 0, totalPrice: 0 };
+export function calculateSupplierQuote(rawItems, supplier, estimateType = 'print', quote = null) {
+  if (!supplier) return { items: [], rawSupplyPrice: 0, supplyPrice: 0, taxPrice: 0, totalPrice: 0 };
 
   const rate = supplier.rate || 1.0;
   const isBaseCompany = supplier.id === 1;
 
-  let totalSupplyPrice = 0;
+  let totalRawSupplyPrice = 0;
 
   const items = (rawItems || []).map((it) => {
     const pages = it.pages !== undefined && it.pages !== '' && !isNaN(Number(it.pages)) && Number(it.pages) > 0
@@ -66,7 +67,7 @@ export function calculateSupplierQuote(rawItems, supplier, estimateType = 'print
       ? pages * quantity * unitPrice
       : quantity * unitPrice;
 
-    totalSupplyPrice += amount;
+    totalRawSupplyPrice += amount;
 
     return {
       ...it,
@@ -77,12 +78,27 @@ export function calculateSupplierQuote(rawItems, supplier, estimateType = 'print
     };
   });
 
-  const taxPrice = Math.round(totalSupplyPrice * 0.1);
-  const totalPrice = totalSupplyPrice + taxPrice;
+  // 💡 공급가액 절사(만/천/백/십 단위) 계산
+  let finalSupplyPrice = totalRawSupplyPrice;
+
+  if (isBaseCompany && quote && quote.supply_price !== undefined && Number(quote.supply_price) > 0) {
+    // 당사 건이고 저장된 공급가액이 있는 경우 최우선 반영
+    finalSupplyPrice = Number(quote.supply_price);
+  } else if (quote && quote.discount_unit && Number(quote.discount_unit) > 0) {
+    const unit = Number(quote.discount_unit);
+    finalSupplyPrice = Math.floor(totalRawSupplyPrice / unit) * unit;
+  } else if (quote && quote.discount_unit === 'custom' && quote.custom_supply_price) {
+    finalSupplyPrice = Number(quote.custom_supply_price) || totalRawSupplyPrice;
+  }
+
+  const taxPrice = Math.round(finalSupplyPrice * 0.1);
+  const totalPrice = finalSupplyPrice + taxPrice;
 
   return {
     items,
-    supplyPrice: totalSupplyPrice,
+    rawSupplyPrice: totalRawSupplyPrice,
+    supplyPrice: finalSupplyPrice,
+    discountAmount: totalRawSupplyPrice - finalSupplyPrice,
     taxPrice,
     totalPrice,
     koreanTotalPrice: numberToKoreanWon(totalPrice),
@@ -92,20 +108,22 @@ export function calculateSupplierQuote(rawItems, supplier, estimateType = 'print
 /**
  * 종합비교대조표용 7개사 전체 견적 집계
  */
-export function calculateComparativeSummary(rawItems, suppliers, estimateType = 'print') {
-  const baseCalc = calculateSupplierQuote(rawItems, suppliers[0], estimateType);
+export function calculateComparativeSummary(rawItems, suppliers, estimateType = 'print', quote = null) {
+  const baseCalc = calculateSupplierQuote(rawItems, suppliers[0], estimateType, quote);
   const baseTotal = baseCalc.totalPrice;
 
   return suppliers.map((sup) => {
-    const calc = calculateSupplierQuote(rawItems, sup, estimateType);
+    const calc = calculateSupplierQuote(rawItems, sup, estimateType, quote);
     const diff = calc.totalPrice - baseTotal;
     const ratio = baseTotal > 0 ? (calc.totalPrice / baseTotal) : 1;
 
     return {
       supplier: sup,
+      rawSupplyPrice: calc.rawSupplyPrice,
       supplyPrice: calc.supplyPrice,
       taxPrice: calc.taxPrice,
       totalPrice: calc.totalPrice,
+      discountAmount: calc.discountAmount,
       diff,
       ratio,
       koreanTotalPrice: calc.koreanTotalPrice,

@@ -144,13 +144,13 @@ export default function TemplateKSSensation({
           <tfoot className="border-t border-slate-800 bg-slate-50 font-bold divide-y divide-slate-200">
             <tr>
               <td colSpan={5} className="p-2 text-right pr-4 text-slate-700">합 &nbsp; &nbsp; &nbsp; &nbsp; 계</td>
-              <td className="p-2 text-right pr-3 font-mono">₩ {supplyPrice.toLocaleString()}</td>
+              <td className="p-2 text-right pr-3 font-mono">₩ {(calcData.rawSupplyPrice || supplyPrice).toLocaleString()}</td>
               <td></td>
             </tr>
             <tr>
               <td colSpan={5} className="p-2 text-right pr-4 text-slate-700">공 &nbsp; 급 &nbsp; 가 &nbsp; 액</td>
               <td className="p-2 text-right pr-3 font-mono font-black">₩ {supplyPrice.toLocaleString()}</td>
-              <td></td>
+              <td className="p-2 text-center text-[10px] text-slate-500">{calcData.discountAmount > 0 ? '절사' : ''}</td>
             </tr>
             <tr>
               <td colSpan={5} className="p-2 text-right pr-4 text-slate-700">부 가 세 (10%)</td>

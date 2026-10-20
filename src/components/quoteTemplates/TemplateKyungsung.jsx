@@ -178,13 +178,15 @@ export default function TemplateKyungsung({
           <tfoot className="border-t-2 border-slate-900 bg-slate-50/70 font-bold text-slate-900 divide-y divide-slate-200">
             <tr>
               <td colSpan={isPrintTemplate ? 5 : 4} className="p-2 text-right pr-4 font-bold text-slate-700">소 &nbsp; 계</td>
-              <td className="p-2 text-right pr-3 font-mono font-bold">₩ {supplyPrice.toLocaleString()}</td>
+              <td className="p-2 text-right pr-3 font-mono font-bold">₩ {(calcData.rawSupplyPrice || supplyPrice).toLocaleString()}</td>
               <td></td>
             </tr>
             <tr>
               <td colSpan={isPrintTemplate ? 5 : 4} className="p-2 text-right pr-4 font-bold text-slate-700">공 급 가 액</td>
               <td className="p-2 text-right pr-3 font-mono font-black text-slate-950">₩ {supplyPrice.toLocaleString()}</td>
-              <td className="p-2 text-center text-slate-500 text-[11px]">절사</td>
+              <td className="p-2 text-center text-slate-500 text-[11px]">
+                {calcData.discountAmount > 0 ? '절사' : ''}
+              </td>
             </tr>
             <tr>
               <td colSpan={isPrintTemplate ? 5 : 4} className="p-2 text-right pr-4 font-bold text-slate-700">부 &nbsp; 가 &nbsp; 세</td>

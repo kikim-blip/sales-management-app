@@ -135,7 +135,7 @@ export default function TemplateKSDesign({
           <tfoot className="border-t border-slate-700 bg-slate-50 font-bold divide-y divide-slate-200">
             <tr>
               <td colSpan={5} className="p-2 text-right pr-4 text-slate-700">소 &nbsp; &nbsp; &nbsp; &nbsp; 계</td>
-              <td className="p-2 text-right pr-3 font-mono">₩ {supplyPrice.toLocaleString()}</td>
+              <td className="p-2 text-right pr-3 font-mono">₩ {(calcData.rawSupplyPrice || supplyPrice).toLocaleString()}</td>
               <td></td>
             </tr>
             <tr>

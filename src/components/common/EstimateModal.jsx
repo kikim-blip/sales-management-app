@@ -1,6 +1,6 @@
 // src/components/common/EstimateModal.jsx
 import React, { useState } from 'react';
-import { X, Plus, Trash2, Calculator, Printer, Save, FileText, CheckCircle2, Layers, BookOpen, Package, Building2 } from 'lucide-react';
+import { X, Plus, Trash2, Calculator, Printer, Save, FileText, CheckCircle2, Layers, BookOpen, Package, Building2, Scissors } from 'lucide-react';
 import { getLocalDateStr } from '../../utils/dateUtils';
 import { useData } from '../../context/DataContext';
 import { COMPANY_SUPPLIERS } from '../../data/companySuppliers';
@@ -65,6 +65,10 @@ export default function EstimateModal({ sale, customer, onClose, onSave, onPrint
   const [paymentTerms, setPaymentTerms] = useState(sale.payment_terms || '');
   const [estimateNote, setEstimateNote] = useState(sale.estimate_note || '');
   const [saving, setSaving] = useState(false);
+
+  // 💡 공급가액 절사 단위 (0: 없음, 10: 십원, 100: 백원, 1000: 천원, 10000: 만원, 'custom': 직접입력)
+  const [discountUnit, setDiscountUnit] = useState(sale.discount_unit !== undefined ? sale.discount_unit : 0);
+  const [customSupplyPrice, setCustomSupplyPrice] = useState(sale.custom_supply_price || '');
 
   // 품목 항목 수정
   const handleItemChange = (index, field, value) => {
@@ -136,10 +140,24 @@ export default function EstimateModal({ sale, customer, onClose, onSave, onPrint
     setItems(items.filter((_, i) => i !== index));
   };
 
-  // 합계 계산
-  const totalSupplyPrice = items.reduce((acc, curr) => acc + (Number(curr.amount) || 0), 0);
-  const totalTax = includeVat ? Math.round(totalSupplyPrice * 0.1) : 0;
-  const totalPrice = totalSupplyPrice + totalTax;
+  // 💡 공급가액 및 절사(원/십/백/천/만 단위) 계산
+  const rawSupplyPrice = items.reduce((acc, curr) => acc + (Number(curr.amount) || 0), 0);
+  const finalSupplyPrice = (() => {
+    if (discountUnit === 'custom') {
+      const parsed = Number(customSupplyPrice);
+      return !isNaN(parsed) && parsed >= 0 ? parsed : rawSupplyPrice;
+    }
+    const unit = Number(discountUnit);
+    if (unit > 0) {
+      return Math.floor(rawSupplyPrice / unit) * unit;
+    }
+    return rawSupplyPrice;
+  })();
+
+  const discountAmount = rawSupplyPrice - finalSupplyPrice;
+  const totalTax = includeVat ? Math.round(finalSupplyPrice * 0.1) : 0;
+  const totalPrice = finalSupplyPrice + totalTax;
+  const totalSupplyPrice = finalSupplyPrice;
 
   // 견적서 저장 및 매출액 반영
   const handleSave = async () => {
@@ -148,7 +166,11 @@ export default function EstimateModal({ sale, customer, onClose, onSave, onPrint
       const updatedPayload = {
         ...sale,
         supplier_id: supplierId,
-        supply_price: totalSupplyPrice,
+        raw_supply_price: rawSupplyPrice,
+        supply_price: finalSupplyPrice,
+        discount_unit: discountUnit,
+        discount_amount: discountAmount,
+        custom_supply_price: discountUnit === 'custom' ? customSupplyPrice : null,
         tax: totalTax,
         total_price: totalPrice,
         estimate_type: estimateType,
@@ -512,6 +534,69 @@ export default function EstimateModal({ sale, customer, onClose, onSave, onPrint
 
           {/* 4. 부가세 및 최종 견적 합계액 카드 */}
           <div className="bg-slate-900 text-white p-5 rounded-2xl space-y-4">
+            
+            {/* ── 🌟 공급가액 절사 선택 메뉴 바 (만/천/백/십 원 단위 절사) ── */}
+            <div className="bg-slate-800/90 p-3 rounded-xl border border-slate-700 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-200 flex items-center">
+                  <Scissors className="w-3.5 h-3.5 mr-1.5 text-amber-400" />
+                  공급가액 절사 선택:
+                </span>
+                {discountAmount > 0 ? (
+                  <span className="text-[11px] font-bold text-amber-300 bg-amber-500/20 px-2.5 py-0.5 rounded-full border border-amber-400/40">
+                    ✂ -₩ {discountAmount.toLocaleString()}원 절사 적용됨
+                  </span>
+                ) : (
+                  <span className="text-[10.5px] text-slate-400">
+                    원 단위 그대로 적용
+                  </span>
+                )}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-1.5">
+                {[
+                  { label: '절사 없음', unit: 0 },
+                  { label: '10원 절사', unit: 10 },
+                  { label: '100원 절사', unit: 100 },
+                  { label: '1,000원 절사 (천원 단위)', unit: 1000 },
+                  { label: '10,000원 절사 (만원 단위)', unit: 10000 },
+                  { label: '직접 지정', unit: 'custom' },
+                ].map((btn) => (
+                  <button
+                    key={`disc-${btn.unit}`}
+                    type="button"
+                    onClick={() => {
+                      setDiscountUnit(btn.unit);
+                      if (btn.unit === 'custom' && !customSupplyPrice) {
+                        setCustomSupplyPrice(String(finalSupplyPrice));
+                      }
+                    }}
+                    className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center space-x-1 ${
+                      discountUnit === btn.unit
+                        ? 'bg-amber-400 text-slate-950 font-black shadow-md ring-2 ring-amber-300'
+                        : 'bg-slate-700/80 text-slate-300 hover:bg-slate-600 hover:text-white'
+                    }`}
+                  >
+                    <span>{btn.label}</span>
+                  </button>
+                ))}
+
+                {discountUnit === 'custom' && (
+                  <div className="flex items-center space-x-1 ml-2 bg-slate-950 px-2 py-1 rounded-lg border border-amber-400">
+                    <span className="text-xs text-amber-300 font-semibold">공급가액:</span>
+                    <input
+                      type="number"
+                      placeholder="공급가액 직접 입력"
+                      value={customSupplyPrice}
+                      onChange={(e) => setCustomSupplyPrice(e.target.value)}
+                      className="w-28 p-0.5 bg-transparent text-amber-300 text-xs font-mono font-bold text-right outline-none"
+                    />
+                    <span className="text-xs text-amber-300">원</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
               <label className="flex items-center space-x-2 text-xs font-semibold text-slate-300 cursor-pointer">
                 <input
@@ -524,9 +609,18 @@ export default function EstimateModal({ sale, customer, onClose, onSave, onPrint
               </label>
 
               <div className="flex items-center space-x-6 text-xs">
+                {discountAmount > 0 && (
+                  <div>
+                    <span className="text-slate-400 mr-2">품목 합계:</span>
+                    <span className="font-mono text-slate-400 text-xs line-through">₩ {rawSupplyPrice.toLocaleString()} 원</span>
+                  </div>
+                )}
                 <div>
-                  <span className="text-slate-400 mr-2">공급가액 합계:</span>
-                  <strong className="font-mono text-white text-sm">₩ {totalSupplyPrice.toLocaleString()} 원</strong>
+                  <span className="text-slate-300 mr-2">공급가액:</span>
+                  <strong className="font-mono text-white text-base">₩ {finalSupplyPrice.toLocaleString()} 원</strong>
+                  {discountAmount > 0 && (
+                    <span className="text-[10px] text-amber-400 font-bold ml-1.5">(절사)</span>
+                  )}
                 </div>
                 <div>
                   <span className="text-slate-400 mr-2">세액 (10%):</span>
@@ -569,6 +663,9 @@ export default function EstimateModal({ sale, customer, onClose, onSave, onPrint
                 onPrint({
                   ...sale,
                   supplier_id: supplierId,
+                  raw_supply_price: rawSupplyPrice,
+                  discount_unit: discountUnit,
+                  discount_amount: discountAmount,
                   estimate_type: estimateType,
                   estimate_items: items,
                   estimate_date: estimateDate,
