@@ -1,10 +1,10 @@
-// src/components/common/EstimateModal.jsx
+﻿// src/components/common/EstimateModal.jsx
 import React, { useState } from 'react';
-import { X, Plus, Trash2, Calculator, Printer, Save, FileText, CheckCircle2, Layers, BookOpen, Package, Building2, Scissors, Upload, FileSpreadsheet, Sparkles } from 'lucide-react';
+import { X, Plus, Trash2, Calculator, Printer, Save, FileText, CheckCircle2, Layers, BookOpen, Package, Building2, Scissors, Upload, FileSpreadsheet, Sparkles, ChevronDown } from 'lucide-react';
 import { getLocalDateStr } from '../../utils/dateUtils';
 import { useData } from '../../context/DataContext';
 import { COMPANY_SUPPLIERS } from '../../data/companySuppliers';
-import { parseEstimateFile, parseEstimateClipboardText } from '../../utils/estimateExcelParser';
+import { parseEstimateFile, parseEstimateClipboardText, parseSheetFromWorkbook } from '../../utils/estimateExcelParser';
 
 export default function EstimateModal({ sale, customer, onClose, onSave, onPrint }) {
   const { toggleCalc, showCalc } = useData();
@@ -74,25 +74,52 @@ export default function EstimateModal({ sale, customer, onClose, onSave, onPrint
   const [excelImporting, setExcelImporting] = useState(false);
   const excelFileInputRef = React.useRef(null);
 
+  // 시트 선택 팝업 상태
+  const [sheetSelectState, setSheetSelectState] = useState(null); // { sheetNames, workbook }
+
   // 💡 엑셀 / 파일 견적서 처리
   const handleExcelFile = async (file) => {
     if (!file) return;
     setExcelImporting(true);
     try {
-      const { items: newItems, sourceName } = await parseEstimateFile(file);
+      const result = await parseEstimateFile(file);
+
+      // 시트가 여러 개이면 선택 팝업 표시
+      if (result.needSheetSelect) {
+        setSheetSelectState({ sheetNames: result.sheetNames, workbook: result.workbook, fileName: file.name });
+        return;
+      }
+
+      const { items: newItems, sourceName } = result;
       if (!newItems || newItems.length === 0) {
         alert('파일에서 유효한 견적 품목을 찾지 못했습니다.');
         return;
       }
       setItems(newItems);
-      alert(`[${file.name || sourceName}]에서 총 ${newItems.length}개의 품목을 성공적으로 불러왔습니다!`);
+      alert(`[${file.name || sourceName}]에서 총 ${newItems.length}개의 품목을 불러왔습니다!`);
     } catch (err) {
       alert(err.message || '견적 파일 분석 오류');
     } finally {
       setExcelImporting(false);
-      if (excelFileInputRef.current) {
-        excelFileInputRef.current.value = '';
+      if (excelFileInputRef.current) excelFileInputRef.current.value = '';
+    }
+  };
+
+  // 시트 선택 확정
+  const handleSheetSelected = (sheetName) => {
+    if (!sheetSelectState) return;
+    try {
+      const { items: newItems } = parseSheetFromWorkbook(sheetSelectState.workbook, sheetName);
+      if (!newItems || newItems.length === 0) {
+        alert(`"${sheetName}" 시트에서 유효한 견적 품목을 찾지 못했습니다.`);
+        return;
       }
+      setItems(newItems);
+      alert(`"${sheetName}" 시트에서 ${newItems.length}개의 품목을 불러왔습니다!`);
+    } catch (err) {
+      alert(err.message || '시트 파싱 오류');
+    } finally {
+      setSheetSelectState(null);
     }
   };
 
@@ -191,12 +218,14 @@ export default function EstimateModal({ sale, customer, onClose, onSave, onPrint
   };
 
   // 💡 공급가액 및 절사(원/십/백/천/만 단위) 계산
+  // discountUnit은 숫자(0/100/1000/10000) 또는 'custom' 문자열
   const rawSupplyPrice = items.reduce((acc, curr) => acc + (Number(curr.amount) || 0), 0);
   const finalSupplyPrice = (() => {
     if (discountUnit === 'custom') {
       const parsed = Number(customSupplyPrice);
       return !isNaN(parsed) && parsed >= 0 ? parsed : rawSupplyPrice;
     }
+    // Number() 변환으로 '1000' 같은 문자열도 처리
     const unit = Number(discountUnit);
     if (unit > 0) {
       return Math.floor(rawSupplyPrice / unit) * unit;
@@ -423,97 +452,69 @@ export default function EstimateModal({ sale, customer, onClose, onSave, onPrint
           </div>
 
           {/* 3. 품목별 단가 산출 테이블 */}
-          <div className="space-y-2.5">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h3 className="text-sm font-extrabold text-slate-900 flex items-center space-x-1.5">
+          <div className="space-y-2">
+            {/* 헤더 바: 드래그 드롭 + 버튼 통합 (1줄 슬림 배치) */}
+            <div
+              onDragOver={(e) => { e.preventDefault(); setIsExcelDragging(true); }}
+              onDragLeave={(e) => { e.preventDefault(); setIsExcelDragging(false); }}
+              onDrop={(e) => {
+                e.preventDefault(); setIsExcelDragging(false);
+                const file = e.dataTransfer.files?.[0];
+                if (file) handleExcelFile(file);
+              }}
+              className={`flex flex-wrap items-center justify-between gap-2 px-3 py-2 rounded-xl border-2 border-dashed transition ${
+                isExcelDragging
+                  ? 'border-emerald-400 bg-emerald-50 ring-2 ring-emerald-300/40'
+                  : 'border-slate-200 bg-slate-50/60 hover:border-slate-300'
+              }`}
+            >
+              {/* 왼쪽: 제목 */}
+              <h3 className="text-sm font-extrabold text-slate-900 flex items-center space-x-1.5 flex-shrink-0">
                 <span>📋 견적 세부 품목 명세서</span>
                 <span className="text-xs font-bold text-sky-700 bg-sky-50 px-2 py-0.5 rounded border border-sky-200">
                   {estimateType === 'print' ? '인쇄·출력 제작 모드' : '일반 물품·용역 모드'}
                 </span>
                 <span className="text-xs font-normal text-slate-400">({items.length}개 품목)</span>
               </h3>
-
-              <div className="flex items-center space-x-2">
+              {/* 오른쪽: 버튼 그룹 */}
+              <div className="flex items-center space-x-1.5 flex-shrink-0">
                 <input
                   type="file"
                   ref={excelFileInputRef}
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) handleExcelFile(file);
-                  }}
-                  accept=".xlsx, .xls, .csv, .txt, .tsv, .pdf"
+                  onChange={(e) => { const file = e.target.files?.[0]; if (file) handleExcelFile(file); }}
+                  accept=".xlsx,.xls,.csv,.txt,.tsv,.pdf"
                   className="hidden"
                 />
-
+                {isExcelDragging ? (
+                  <span className="text-xs font-bold text-emerald-700 animate-pulse">📂 파일을 여기에 드롭하세요!</span>
+                ) : (
+                  <span className="text-[11px] text-slate-400 hidden sm:flex items-center space-x-1">
+                    <Upload className="w-3 h-3 inline" />
+                    <span>드래그 드롭 또는</span>
+                    <kbd className="px-1 py-0.5 bg-white border border-slate-300 rounded font-mono text-[10px] shadow-xs">Ctrl+V</kbd>
+                    <span>지원</span>
+                  </span>
+                )}
                 <button
                   type="button"
                   onClick={() => excelFileInputRef.current?.click()}
                   disabled={excelImporting}
-                  className="flex items-center space-x-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-sm"
-                  title="엑셀/CSV/텍스트/PDF 견적서 불러오기"
+                  className="flex items-center space-x-1 px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition shadow-sm"
+                  title="엑셀/CSV 견적서 불러오기"
                 >
                   <FileSpreadsheet className="w-3.5 h-3.5" />
-                  <span>{excelImporting ? '분석 중...' : '엑셀 견적서 불러오기'}</span>
+                  <span>{excelImporting ? '분석 중...' : '불러오기'}</span>
                 </button>
-
                 <button
                   type="button"
                   onClick={handleAddItem}
-                  className="flex items-center space-x-1 px-3 py-1.5 bg-sky-50 text-sky-700 border border-sky-200 rounded-xl text-xs font-bold hover:bg-sky-100 transition shadow-sm"
+                  className="flex items-center space-x-1 px-2.5 py-1.5 bg-sky-50 text-sky-700 border border-sky-200 rounded-lg text-xs font-bold hover:bg-sky-100 transition shadow-sm"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  <span>+ 품목 추가</span>
+                  <span>품목 추가</span>
                 </button>
               </div>
             </div>
-
-            {/* 기존 엑셀/파일 드래그 앤 드롭 영역 */}
-            <div
-              onDragOver={(e) => {
-                e.preventDefault();
-                setIsExcelDragging(true);
-              }}
-              onDragLeave={(e) => {
-                e.preventDefault();
-                setIsExcelDragging(false);
-              }}
-              onDrop={(e) => {
-                e.preventDefault();
-                setIsExcelDragging(false);
-                const file = e.dataTransfer.files?.[0];
-                if (file) handleExcelFile(file);
-              }}
-              onClick={() => excelFileInputRef.current?.click()}
-              className={`p-3 rounded-xl border-2 border-dashed transition cursor-pointer flex flex-wrap items-center justify-between gap-2 text-xs ${
-                isExcelDragging
-                  ? 'border-emerald-500 bg-emerald-50 text-emerald-800 ring-4 ring-emerald-300/50 scale-[1.01]'
-                  : 'border-slate-200 hover:border-emerald-400 bg-slate-50/70 hover:bg-emerald-50/30 text-slate-600'
-              }`}
-            >
-              <div className="flex items-center space-x-2.5">
-                <div className={`p-2 rounded-xl transition ${isExcelDragging ? 'bg-emerald-500 text-white animate-bounce' : 'bg-emerald-100 text-emerald-800'}`}>
-                  <Upload className="w-4 h-4" />
-                </div>
-                <div>
-                  <div className="flex items-center space-x-2">
-                    <span className="font-extrabold text-slate-800">
-                      기존 견적서 파일 드래그 & 드롭
-                    </span>
-                    <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded">
-                      .xlsx / .xls / .csv / .txt
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-slate-500 mt-0.5">
-                    기존에 작성된 엑셀 견적서를 끌어다 놓거나 클릭하면 품목·수량·단가가 자동 반영됩니다. (PDF/표 복사 후 <kbd className="px-1.5 py-0.5 bg-white border border-slate-300 rounded font-mono text-[10px] text-slate-700 shadow-xs font-bold">Ctrl+V</kbd> 붙여넣기도 즉시 지원)
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center space-x-1.5 text-[11px] font-bold text-emerald-700 bg-white px-2.5 py-1 rounded-lg border border-emerald-200 shadow-2xs">
-                <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-                <span>파일 드롭 또는 클릭</span>
-              </div>
-            </div>
-
             <div className="overflow-x-auto border border-slate-200 rounded-2xl shadow-sm">
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
@@ -655,79 +656,71 @@ export default function EstimateModal({ sale, customer, onClose, onSave, onPrint
           </div>
 
           {/* 4. 부가세 및 최종 견적 합계액 카드 */}
-          <div className="bg-slate-900 text-white p-5 rounded-2xl space-y-4">
+          {/* 4. 부가세 및 최종 견적 합계액 카드 */}
+          <div className="bg-slate-900 text-white p-4 rounded-2xl space-y-3">
             
-            {/* ── 🌟 공급가액 절사 선택 메뉴 바 (만/천/백/십 원 단위 절사) ── */}
-            <div className="bg-slate-800/90 p-3 rounded-xl border border-slate-700 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-200 flex items-center">
-                  <Scissors className="w-3.5 h-3.5 mr-1.5 text-amber-400" />
-                  공급가액 절사 선택:
-                </span>
-                {discountAmount > 0 ? (
-                  <span className="text-[11px] font-bold text-amber-300 bg-amber-500/20 px-2.5 py-0.5 rounded-full border border-amber-400/40">
-                    ✂ -₩ {discountAmount.toLocaleString()}원 절사 적용됨
-                  </span>
-                ) : (
-                  <span className="text-[10.5px] text-slate-400">
-                    원 단위 그대로 적용
-                  </span>
-                )}
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2">
-                {[
-                  { label: '절사 없음', unit: 0, calc: rawSupplyPrice },
-                  { label: '만 원 단위 맞춤 (천원 이하 절사)', unit: 10000, calc: Math.floor(rawSupplyPrice / 10000) * 10000 },
-                  { label: '천 원 단위 맞춤 (백원 이하 절사)', unit: 1000, calc: Math.floor(rawSupplyPrice / 1000) * 1000 },
-                  { label: '백 원 단위 맞춤', unit: 100, calc: Math.floor(rawSupplyPrice / 100) * 100 },
-                  { label: '직접 금액 지정', unit: 'custom', calc: null },
-                ].map((btn) => {
-                  const isSelected = discountUnit === btn.unit;
-                  const previewDiff = btn.calc !== null ? rawSupplyPrice - btn.calc : 0;
-                  return (
-                    <button
-                      key={`disc-${btn.unit}`}
-                      type="button"
-                      onClick={() => {
-                        setDiscountUnit(btn.unit);
-                        if (btn.unit === 'custom' && !customSupplyPrice) {
-                          setCustomSupplyPrice(String(finalSupplyPrice));
-                        }
-                      }}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex flex-col items-start gap-0.5 border ${
-                        isSelected
-                          ? 'bg-amber-400 text-slate-950 font-black shadow-lg border-amber-300 ring-2 ring-amber-300/60 scale-[1.02]'
-                          : 'bg-slate-800 text-slate-200 hover:bg-slate-700 border-slate-700'
-                      }`}
-                    >
-                      <span className="flex items-center">
-                        {btn.label}
-                        {isSelected && <span className="ml-1 text-[10px] bg-slate-950 text-amber-300 px-1 rounded">선택됨</span>}
+            {/* ── 공급가액 절사 (컴팩트 1줄) ── */}
+            <div className="flex flex-wrap items-center gap-1.5 py-1 border-b border-slate-800 pb-3">
+              <span className="text-[11px] font-bold text-slate-400 flex items-center mr-1">
+                <Scissors className="w-3 h-3 mr-1 text-amber-400" />절사:
+              </span>
+              {[
+                { label: '없음', unit: 0, calc: rawSupplyPrice },
+                { label: '만원↑', unit: 10000, calc: Math.floor(rawSupplyPrice / 10000) * 10000 },
+                { label: '천원↑', unit: 1000, calc: Math.floor(rawSupplyPrice / 1000) * 1000 },
+                { label: '백원↑', unit: 100, calc: Math.floor(rawSupplyPrice / 100) * 100 },
+                { label: '직접입력', unit: 'custom', calc: null },
+              ].map((btn) => {
+                // 반드시 Number() 비교로 통일 (저장된 값이 문자열일 수 있음)
+                const isSelected = btn.unit === 'custom'
+                  ? discountUnit === 'custom'
+                  : Number(discountUnit) === Number(btn.unit);
+                const calcVal = btn.calc !== null ? btn.calc : null;
+                const diff = calcVal !== null ? rawSupplyPrice - calcVal : 0;
+                return (
+                  <button
+                    key={`disc-${btn.unit}`}
+                    type="button"
+                    onClick={() => {
+                      setDiscountUnit(btn.unit === 'custom' ? 'custom' : Number(btn.unit));
+                      if (btn.unit === 'custom' && !customSupplyPrice) {
+                        setCustomSupplyPrice(String(finalSupplyPrice));
+                      }
+                    }}
+                    title={calcVal !== null ? `→ ₩${calcVal.toLocaleString()}원 ${diff > 0 ? `(-₩${diff.toLocaleString()})` : ''}` : '직접 입력'}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition border ${
+                      isSelected
+                        ? 'bg-amber-400 text-slate-950 border-amber-300 shadow-md ring-1 ring-amber-300/60'
+                        : 'bg-slate-800 text-slate-300 hover:bg-slate-700 border-slate-700'
+                    }`}
+                  >
+                    <span>{btn.label}</span>
+                    {calcVal !== null && (
+                      <span className={`block text-[10px] font-mono font-normal leading-tight ${isSelected ? 'text-slate-800' : 'text-slate-500'}`}>
+                        ₩{calcVal.toLocaleString()}{diff > 0 ? ` -${diff.toLocaleString()}` : ''}
                       </span>
-                      {btn.calc !== null && (
-                        <span className={`text-[10px] font-mono font-normal ${isSelected ? 'text-slate-900 font-bold' : 'text-slate-400'}`}>
-                          → ₩ {btn.calc.toLocaleString()}원 {previewDiff > 0 ? `(-₩${previewDiff.toLocaleString()})` : ''}
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-
-                {discountUnit === 'custom' && (
-                  <div className="flex items-center space-x-1 ml-2 bg-slate-950 px-2 py-1 rounded-lg border border-amber-400">
-                    <span className="text-xs text-amber-300 font-semibold">공급가액:</span>
-                    <input
-                      type="number"
-                      placeholder="공급가액 직접 입력"
-                      value={customSupplyPrice}
-                      onChange={(e) => setCustomSupplyPrice(e.target.value)}
-                      className="w-28 p-0.5 bg-transparent text-amber-300 text-xs font-mono font-bold text-right outline-none"
-                    />
-                    <span className="text-xs text-amber-300">원</span>
-                  </div>
-                )}
-              </div>
+                    )}
+                  </button>
+                );
+              })}
+              {discountUnit === 'custom' && (
+                <div className="flex items-center space-x-1 bg-slate-950 px-2 py-1 rounded-lg border border-amber-400">
+                  <span className="text-[11px] text-amber-300 font-semibold">₩</span>
+                  <input
+                    type="number"
+                    placeholder="직접 입력"
+                    value={customSupplyPrice}
+                    onChange={(e) => setCustomSupplyPrice(e.target.value)}
+                    className="w-24 p-0.5 bg-transparent text-amber-300 text-[11px] font-mono font-bold text-right outline-none"
+                  />
+                  <span className="text-[11px] text-amber-300">원</span>
+                </div>
+              )}
+              {discountAmount > 0 && (
+                <span className="ml-auto text-[11px] font-bold text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded-full border border-amber-400/40">
+                  ✂ -{discountAmount.toLocaleString()}원 절사
+                </span>
+              )}
             </div>
 
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
@@ -837,6 +830,51 @@ export default function EstimateModal({ sale, customer, onClose, onSave, onPrint
           </div>
         </div>
 
+
+      {/* ── 시트 선택 팝업 (엑셀 시트 여러 개일 때) ── */}
+      {sheetSelectState && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-extrabold text-slate-900 flex items-center space-x-2">
+                <FileSpreadsheet className="w-5 h-5 text-emerald-600" />
+                <span>시트 선택</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setSheetSelectState(null)}
+                className="text-slate-400 hover:text-slate-700 p-1 rounded-lg hover:bg-slate-100 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <p className="text-xs text-slate-500">
+              <span className="font-semibold text-slate-700">{sheetSelectState.fileName}</span> 파일에
+              시트가 {sheetSelectState.sheetNames.length}개 있습니다. 견적 품목이 있는 시트를 선택해 주세요.
+            </p>
+            <div className="space-y-1.5 max-h-48 overflow-y-auto">
+              {sheetSelectState.sheetNames.map((name, idx) => (
+                <button
+                  key={name}
+                  type="button"
+                  onClick={() => handleSheetSelected(name)}
+                  className="w-full text-left px-3 py-2.5 rounded-xl border border-slate-200 hover:border-emerald-400 hover:bg-emerald-50 transition text-sm font-semibold text-slate-700 flex items-center space-x-2"
+                >
+                  <span className="text-[11px] font-mono text-slate-400 w-5 text-center">{idx + 1}</span>
+                  <span>{name}</span>
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => setSheetSelectState(null)}
+              className="w-full py-2 text-xs text-slate-500 hover:text-slate-700 transition"
+            >
+              취소
+            </button>
+          </div>
+        </div>
+      )}
       </div>
     </div>
   );
