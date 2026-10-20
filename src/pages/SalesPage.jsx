@@ -1265,7 +1265,7 @@ export default function SalesPage() {
                             {contactPerson && <span>👤 담당: <strong className="text-slate-800">{contactPerson}</strong></span>}
                             {phone && <span>📞 {phone}</span>}
                             {email && <span>✉️ {email}</span>}
-                            {manager && <span className="text-rose-600 font-semibold">💼 영업: {manager}</span>}
+                            {manager && <span className="text-slate-700 font-semibold">✍️ 작성자: {manager}</span>}
                           </div>
                         );
                       })()}
@@ -1459,7 +1459,7 @@ export default function SalesPage() {
                               {contactPerson && <span>👤 담당: <strong className="text-slate-800">{contactPerson}</strong></span>}
                               {phone && <span>📞 {phone}</span>}
                               {email && <span>✉️ {email}</span>}
-                              {manager && <span className="text-rose-600 font-semibold">💼 영업: {manager}</span>}
+                              {manager && <span className="text-slate-700 font-semibold">✍️ 작성자: {manager}</span>}
                             </div>
                           );
                         })()}

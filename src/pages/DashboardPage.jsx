@@ -1122,7 +1122,7 @@ export default function DashboardPage() {
                         )}
 
                         <span className="text-[10px] text-slate-400 font-semibold">
-                          영업: <strong className="text-slate-700">{manager}</strong>
+                          작성자: <strong className="text-slate-700">{manager}</strong>
                         </span>
                       </div>
 
@@ -1326,7 +1326,7 @@ export default function DashboardPage() {
                               {contactPerson && <span>👤 담당: <strong className="text-slate-700">{contactPerson}</strong></span>}
                               {phone && <span>📞 {phone}</span>}
                               {email && <span>✉️ {email}</span>}
-                              {manager && <span className="text-rose-600 font-semibold">💼 영업: {manager}</span>}
+                              {manager && <span className="text-slate-700 font-semibold">✍️ 작성자: {manager}</span>}
                             </span>
                           );
                         })()}
