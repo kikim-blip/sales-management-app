@@ -68,25 +68,46 @@ export default function DashboardPage() {
 
     const cleanQ = q.replace(/[^0-9]/g, '');
 
-    // 1. 매출 검색
+    // 1. 매출 검색 (작업명, 기관명, 전표코드, 부서명, 담당자명, 연락처, 이메일, 사양, 세부내용 포괄 검색)
     const matchedSales = (sales || []).filter(s => {
-      const title = (s.title || '').toLowerCase();
-      const custName = (s.customer_name || '').toLowerCase();
-      const code = (s.code_number || s.id || '').toLowerCase();
-      const manager = (s.sales_manager || s.manager_name || '').toLowerCase();
-      const spec = (s.spec || '').toLowerCase();
-      const note = (s.note || '').toLowerCase();
-      const phone = (s.phone || '').replace(/[^0-9]/g, '');
+      const cust = (customers || []).find(c => c.id === s.customer_id);
+      const custContacts = s.customer_id ? (contacts || []).filter(ct => ct.customer_id === s.customer_id) : [];
 
-      return title.includes(q) ||
+      const title = (s.title || '').toLowerCase();
+      const custName = (s.customer_name || cust?.name || '').toLowerCase();
+      const code = (s.code_number || s.id || '').toLowerCase();
+      const manager = (s.sales_manager || s.manager_name || cust?.sales_manager || '').toLowerCase();
+      const dept = (s.dept || cust?.dept || '').toLowerCase();
+      const contactPerson = (s.contact_person || s.client_contact_person || cust?.contact_person || '').toLowerCase();
+      const spec = (s.spec || '').toLowerCase();
+      const content = (s.content || '').toLowerCase();
+      const note = (s.note || '').toLowerCase();
+      const phone = (s.phone || s.mobile || s.client_phone || cust?.phone || '').replace(/[^0-9]/g, '');
+      const email = (s.email || s.client_email || cust?.email || '').toLowerCase();
+
+      const matchesContactList = custContacts.some(ct => 
+        (ct.name || '').toLowerCase().includes(q) ||
+        (cleanQ.length >= 3 && (ct.phone || '').replace(/[^0-9]/g, '').includes(cleanQ)) ||
+        (cleanQ.length >= 3 && (ct.mobile || '').replace(/[^0-9]/g, '').includes(cleanQ)) ||
+        (ct.email || '').toLowerCase().includes(q)
+      );
+
+      return (
+        title.includes(q) ||
         custName.includes(q) ||
         code.includes(q) ||
         manager.includes(q) ||
+        dept.includes(q) ||
+        contactPerson.includes(q) ||
         spec.includes(q) ||
+        content.includes(q) ||
         note.includes(q) ||
-        (cleanQ.length >= 3 && phone.includes(cleanQ));
+        email.includes(q) ||
+        (cleanQ.length >= 3 && phone.includes(cleanQ)) ||
+        matchesContactList
+      );
     }).map(s => {
-      const cust = customers.find(c => c.id === s.customer_id) || { name: s.customer_name, dept: s.dept, phone: s.phone };
+      const cust = (customers || []).find(c => c.id === s.customer_id) || { name: s.customer_name, dept: s.dept, phone: s.phone, contact_person: s.contact_person };
       const dday = s.delivery_date ? calculateDDay(s.delivery_date, s.delivery_time) : null;
       return {
         ...s,
@@ -96,27 +117,46 @@ export default function DashboardPage() {
       };
     });
 
-    // 2. 작업전표 검색
+    // 2. 작업전표 검색 (작업명, 기관명, 전표코드, 부서명, 담당자명, 연락처, 이메일, 사양, 세부내용 포괄 검색)
     const matchedJobs = (jobOrders || []).filter(j => {
+      const cust = (customers || []).find(c => c.id === j.customer_id);
+      const custContacts = j.customer_id ? (contacts || []).filter(ct => ct.customer_id === j.customer_id) : [];
+
       const title = (j.order_title || j.title || '').toLowerCase();
-      const custName = (j.customer_name || '').toLowerCase();
+      const custName = (j.customer_name || cust?.name || '').toLowerCase();
       const code = (j.code_number || j.id || '').toLowerCase();
-      const manager = (j.sales_manager || j.manager_name || '').toLowerCase();
+      const manager = (j.sales_manager || j.manager_name || cust?.sales_manager || '').toLowerCase();
+      const dept = (j.dept || cust?.dept || '').toLowerCase();
+      const contactPerson = (j.client_contact_person || j.contact_person || cust?.contact_person || '').toLowerCase();
       const spec = (j.spec || '').toLowerCase();
       const content = (j.content || '').toLowerCase();
-      const note = (j.special_requests || j.note || '').toLowerCase();
-      const phone = (j.client_phone || '').replace(/[^0-9]/g, '');
+      const note = (j.special_requests || j.note || j.request_note || '').toLowerCase();
+      const phone = (j.client_phone || j.phone || cust?.phone || '').replace(/[^0-9]/g, '');
+      const email = (j.client_email || j.email || cust?.email || '').toLowerCase();
 
-      return title.includes(q) ||
+      const matchesContactList = custContacts.some(ct => 
+        (ct.name || '').toLowerCase().includes(q) ||
+        (cleanQ.length >= 3 && (ct.phone || '').replace(/[^0-9]/g, '').includes(cleanQ)) ||
+        (cleanQ.length >= 3 && (ct.mobile || '').replace(/[^0-9]/g, '').includes(cleanQ)) ||
+        (ct.email || '').toLowerCase().includes(q)
+      );
+
+      return (
+        title.includes(q) ||
         custName.includes(q) ||
         code.includes(q) ||
         manager.includes(q) ||
+        dept.includes(q) ||
+        contactPerson.includes(q) ||
         spec.includes(q) ||
         content.includes(q) ||
         note.includes(q) ||
-        (cleanQ.length >= 3 && phone.includes(cleanQ));
+        email.includes(q) ||
+        (cleanQ.length >= 3 && phone.includes(cleanQ)) ||
+        matchesContactList
+      );
     }).map(j => {
-      const cust = customers.find(c => c.id === j.customer_id) || { name: j.customer_name, dept: j.dept, phone: j.client_phone };
+      const cust = (customers || []).find(c => c.id === j.customer_id) || { name: j.customer_name, dept: j.dept, phone: j.client_phone, contact_person: j.client_contact_person };
       const dday = j.delivery_date ? calculateDDay(j.delivery_date, j.delivery_time) : null;
       return {
         ...j,
@@ -126,17 +166,32 @@ export default function DashboardPage() {
       };
     });
 
-    // 3. 고객사 검색
+    // 3. 고객사 검색 (기관명, 과명, 대표담당자, 1:N 담당자명, 연락처, 이메일 검색)
     const matchedCusts = (customers || []).filter(c => {
       const name = (c.name || '').toLowerCase();
       const dept = (c.dept || '').toLowerCase();
       const contact = (c.contact_person || '').toLowerCase();
-      const phone = (c.phone || '').replace(/[^0-9]/g, '');
+      const manager = (c.sales_manager || '').toLowerCase();
+      const email = (c.email || '').toLowerCase();
+      const phone = (c.phone || c.mobile || '').replace(/[^0-9]/g, '');
 
-      return name.includes(q) ||
+      const custContacts = (contacts || []).filter(ct => ct.customer_id === c.id);
+      const matchesContactList = custContacts.some(ct => 
+        (ct.name || '').toLowerCase().includes(q) ||
+        (cleanQ.length >= 3 && (ct.phone || '').replace(/[^0-9]/g, '').includes(cleanQ)) ||
+        (cleanQ.length >= 3 && (ct.mobile || '').replace(/[^0-9]/g, '').includes(cleanQ)) ||
+        (ct.email || '').toLowerCase().includes(q)
+      );
+
+      return (
+        name.includes(q) ||
         dept.includes(q) ||
         contact.includes(q) ||
-        (cleanQ.length >= 3 && phone.includes(cleanQ));
+        manager.includes(q) ||
+        email.includes(q) ||
+        (cleanQ.length >= 3 && phone.includes(cleanQ)) ||
+        matchesContactList
+      );
     });
 
     const combined = [...matchedSales, ...matchedJobs].sort((a, b) => {
@@ -152,7 +207,7 @@ export default function DashboardPage() {
       customers: matchedCusts,
       total: combined.length + matchedCusts.length,
     };
-  }, [quickQuery, sales, jobOrders, customers]);
+  }, [quickQuery, sales, jobOrders, customers, contacts]);
 
   // 💡 미수 관리 테이블 상태 (구분: 담당자별 / 부서·과별 / 기관별, 검색어, 미수건만 보기)
   const [receivableGroupBy, setReceivableGroupBy] = useState('contact'); // 'contact' | 'dept' | 'org'
@@ -1031,6 +1086,9 @@ export default function DashboardPage() {
                 const isJobOrder = item.itemType === 'jobOrder';
                 const custName = item.customer?.name || item.customer_name || '거래처 미지정';
                 const custDept = item.dept || item.customer?.dept || '';
+                const contactPerson = item.contact_person || item.client_contact_person || item.customer?.contact_person || '';
+                const phone = item.phone || item.mobile || item.client_phone || item.customer?.phone || item.customer?.mobile || '';
+                const email = item.email || item.client_email || item.customer?.email || '';
                 const title = isJobOrder ? (item.order_title || item.title || '작업전표') : (item.title || '매출 작업');
                 const price = Number(item.total_price || item.supply_price || 0);
                 const manager = item.sales_manager || item.manager_name || '담당자 미지정';
@@ -1080,17 +1138,27 @@ export default function DashboardPage() {
                       </div>
 
                       <div className="flex flex-wrap items-center gap-x-3 text-[11px] text-slate-500">
+                        {contactPerson && (
+                          <span>
+                            담당: <strong className="text-slate-700">{contactPerson}</strong>
+                          </span>
+                        )}
+                        {phone && (
+                          <span>
+                            연락처: <span className="font-mono text-slate-600">{phone}</span>
+                          </span>
+                        )}
+                        {email && (
+                          <span>
+                            이메일: <span className="text-slate-600">{email}</span>
+                          </span>
+                        )}
                         <span>
                           금액: <strong className="font-mono text-emerald-700 font-bold">₩{price.toLocaleString()}원</strong>
                         </span>
                         {item.delivery_date && (
                           <span>
                             납품예정: <strong className="font-mono text-slate-700">{item.delivery_date} {item.delivery_time ? `(${item.delivery_time})` : ''}</strong>
-                          </span>
-                        )}
-                        {(item.phone || item.client_phone) && (
-                          <span>
-                            연락처: <span className="font-mono text-slate-600">{item.phone || item.client_phone}</span>
                           </span>
                         )}
                       </div>
