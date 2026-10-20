@@ -1,14 +1,18 @@
 // src/components/common/EstimateModal.jsx
 import React, { useState } from 'react';
-import { X, Plus, Trash2, Calculator, Printer, Save, FileText, CheckCircle2, Layers, BookOpen, Package } from 'lucide-react';
+import { X, Plus, Trash2, Calculator, Printer, Save, FileText, CheckCircle2, Layers, BookOpen, Package, Building2 } from 'lucide-react';
 import { getLocalDateStr } from '../../utils/dateUtils';
 import { useData } from '../../context/DataContext';
+import { COMPANY_SUPPLIERS } from '../../data/companySuppliers';
 
 export default function EstimateModal({ sale, customer, onClose, onSave, onPrint }) {
   const { toggleCalc, showCalc } = useData();
   if (!sale) return null;
 
   const todayStr = getLocalDateStr();
+
+  // 발행 회사 선택 (기본: 1_당사 주식회사 경성문화사)
+  const [supplierId, setSupplierId] = useState(sale.supplier_id || 1);
 
   // 기존에 저장된 estimate_type이 있으면 불러오고 없으면 기본 'print' (인쇄제작형)
   const [estimateType, setEstimateType] = useState(sale.estimate_type || 'print'); // 'print' | 'general'
@@ -143,6 +147,7 @@ export default function EstimateModal({ sale, customer, onClose, onSave, onPrint
       setSaving(true);
       const updatedPayload = {
         ...sale,
+        supplier_id: supplierId,
         supply_price: totalSupplyPrice,
         tax: totalTax,
         total_price: totalPrice,
@@ -220,6 +225,43 @@ export default function EstimateModal({ sale, customer, onClose, onSave, onPrint
         {/* 모달 본문 영역 */}
         <div className="p-6 overflow-y-auto space-y-5 flex-1 text-slate-800">
           
+          {/* ── 🌟 견적서 발행 공급사(회사) 선택 바 (7개사) ── */}
+          <div className="bg-sky-50/50 p-3 rounded-2xl border border-sky-200 flex flex-wrap items-center justify-between gap-2.5">
+            <div className="flex items-center space-x-2">
+              <div className="w-7 h-7 rounded-lg bg-sky-600 text-white flex items-center justify-center font-bold">
+                <Building2 className="w-4 h-4" />
+              </div>
+              <div>
+                <span className="text-[11px] font-bold text-slate-500 block">발행 회사 (공급사 선택)</span>
+                <select
+                  value={supplierId}
+                  onChange={(e) => setSupplierId(Number(e.target.value))}
+                  className="font-black text-slate-900 text-sm bg-transparent border-none p-0 focus:ring-0 cursor-pointer"
+                >
+                  {COMPANY_SUPPLIERS.map((s) => (
+                    <option key={`sup-opt-${s.id}`} value={s.id}>
+                      {s.name} {s.id === 1 ? '(당사)' : `(${s.tag})`}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-2 text-xs">
+              <span className="bg-white border border-slate-200 px-2.5 py-1 rounded-lg text-slate-600 font-medium">
+                사업자번호: <strong className="text-slate-800 font-mono">{COMPANY_SUPPLIERS.find(s => s.id === supplierId)?.bizNum}</strong>
+              </span>
+              <span className="bg-white border border-slate-200 px-2.5 py-1 rounded-lg text-slate-600 font-medium">
+                대표: <strong className="text-slate-800">{COMPANY_SUPPLIERS.find(s => s.id === supplierId)?.ceo}</strong>
+              </span>
+              <span className={`px-2 py-1 rounded-lg font-bold text-[11px] ${
+                supplierId === 1 ? 'bg-sky-100 text-sky-800' : 'bg-purple-100 text-purple-800'
+              }`}>
+                {supplierId === 1 ? '기준 단가 (100%)' : `비교견적 단가 (+${Math.round((COMPANY_SUPPLIERS.find(s => s.id === supplierId)?.rate - 1) * 100)}%)`}
+              </span>
+            </div>
+          </div>
+
           {/* ── 🌟 견적서 양식 선택 탭 (인쇄출력 제작형 vs 일반 물품용역형) ── */}
           <div className="bg-slate-100 p-1.5 rounded-2xl flex items-center justify-between gap-2 border border-slate-200">
             <div className="flex items-center space-x-1 sm:space-x-2">
@@ -526,6 +568,7 @@ export default function EstimateModal({ sale, customer, onClose, onSave, onPrint
               if (onPrint) {
                 onPrint({
                   ...sale,
+                  supplier_id: supplierId,
                   estimate_type: estimateType,
                   estimate_items: items,
                   estimate_date: estimateDate,
