@@ -1,9 +1,10 @@
 // src/components/common/EstimateModal.jsx
 import React, { useState } from 'react';
-import { X, Plus, Trash2, Calculator, Printer, Save, FileText, CheckCircle2, Layers, BookOpen, Package, Building2, Scissors } from 'lucide-react';
+import { X, Plus, Trash2, Calculator, Printer, Save, FileText, CheckCircle2, Layers, BookOpen, Package, Building2, Scissors, Upload, FileSpreadsheet, Sparkles } from 'lucide-react';
 import { getLocalDateStr } from '../../utils/dateUtils';
 import { useData } from '../../context/DataContext';
 import { COMPANY_SUPPLIERS } from '../../data/companySuppliers';
+import { parseEstimateFile, parseEstimateClipboardText } from '../../utils/estimateExcelParser';
 
 export default function EstimateModal({ sale, customer, onClose, onSave, onPrint }) {
   const { toggleCalc, showCalc } = useData();
@@ -69,6 +70,55 @@ export default function EstimateModal({ sale, customer, onClose, onSave, onPrint
   // 💡 공급가액 절사 단위 (0: 없음, 10: 십원, 100: 백원, 1000: 천원, 10000: 만원, 'custom': 직접입력)
   const [discountUnit, setDiscountUnit] = useState(sale.discount_unit !== undefined ? sale.discount_unit : 0);
   const [customSupplyPrice, setCustomSupplyPrice] = useState(sale.custom_supply_price || '');
+  const [isExcelDragging, setIsExcelDragging] = useState(false);
+  const [excelImporting, setExcelImporting] = useState(false);
+  const excelFileInputRef = React.useRef(null);
+
+  // 💡 엑셀 / 파일 견적서 처리
+  const handleExcelFile = async (file) => {
+    if (!file) return;
+    setExcelImporting(true);
+    try {
+      const { items: newItems, sourceName } = await parseEstimateFile(file);
+      if (!newItems || newItems.length === 0) {
+        alert('파일에서 유효한 견적 품목을 찾지 못했습니다.');
+        return;
+      }
+      setItems(newItems);
+      alert(`[${file.name || sourceName}]에서 총 ${newItems.length}개의 품목을 성공적으로 불러왔습니다!`);
+    } catch (err) {
+      alert(err.message || '견적 파일 분석 오류');
+    } finally {
+      setExcelImporting(false);
+      if (excelFileInputRef.current) {
+        excelFileInputRef.current.value = '';
+      }
+    }
+  };
+
+  // 💡 클립보드(Ctrl+V) 표 붙여넣기 리스너
+  React.useEffect(() => {
+    const handlePaste = (e) => {
+      const activeEl = document.activeElement;
+      if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA')) {
+        return;
+      }
+      const text = e.clipboardData?.getData('text');
+      if (text && text.includes('\t')) {
+        try {
+          const { items: pastedItems } = parseEstimateClipboardText(text);
+          if (pastedItems && pastedItems.length > 0) {
+            setItems(pastedItems);
+            alert(`붙여넣은 표에서 ${pastedItems.length}개의 품목을 자동으로 반영했습니다!`);
+          }
+        } catch (err) {
+          // ignore
+        }
+      }
+    };
+    window.addEventListener('paste', handlePaste);
+    return () => window.removeEventListener('paste', handlePaste);
+  }, []);
 
   // 품목 항목 수정
   const handleItemChange = (index, field, value) => {
@@ -373,8 +423,8 @@ export default function EstimateModal({ sale, customer, onClose, onSave, onPrint
           </div>
 
           {/* 3. 품목별 단가 산출 테이블 */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
+          <div className="space-y-2.5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <h3 className="text-sm font-extrabold text-slate-900 flex items-center space-x-1.5">
                 <span>📋 견적 세부 품목 명세서</span>
                 <span className="text-xs font-bold text-sky-700 bg-sky-50 px-2 py-0.5 rounded border border-sky-200">
@@ -382,14 +432,86 @@ export default function EstimateModal({ sale, customer, onClose, onSave, onPrint
                 </span>
                 <span className="text-xs font-normal text-slate-400">({items.length}개 품목)</span>
               </h3>
-              <button
-                type="button"
-                onClick={handleAddItem}
-                className="flex items-center space-x-1 px-3 py-1.5 bg-sky-50 text-sky-700 border border-sky-200 rounded-xl text-xs font-bold hover:bg-sky-100 transition shadow-sm"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>+ 품목 추가</span>
-              </button>
+
+              <div className="flex items-center space-x-2">
+                <input
+                  type="file"
+                  ref={excelFileInputRef}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleExcelFile(file);
+                  }}
+                  accept=".xlsx, .xls, .csv, .txt, .tsv, .pdf"
+                  className="hidden"
+                />
+
+                <button
+                  type="button"
+                  onClick={() => excelFileInputRef.current?.click()}
+                  disabled={excelImporting}
+                  className="flex items-center space-x-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-sm"
+                  title="엑셀/CSV/텍스트/PDF 견적서 불러오기"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5" />
+                  <span>{excelImporting ? '분석 중...' : '엑셀 견적서 불러오기'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleAddItem}
+                  className="flex items-center space-x-1 px-3 py-1.5 bg-sky-50 text-sky-700 border border-sky-200 rounded-xl text-xs font-bold hover:bg-sky-100 transition shadow-sm"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>+ 품목 추가</span>
+                </button>
+              </div>
+            </div>
+
+            {/* 기존 엑셀/파일 드래그 앤 드롭 영역 */}
+            <div
+              onDragOver={(e) => {
+                e.preventDefault();
+                setIsExcelDragging(true);
+              }}
+              onDragLeave={(e) => {
+                e.preventDefault();
+                setIsExcelDragging(false);
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                setIsExcelDragging(false);
+                const file = e.dataTransfer.files?.[0];
+                if (file) handleExcelFile(file);
+              }}
+              onClick={() => excelFileInputRef.current?.click()}
+              className={`p-3 rounded-xl border-2 border-dashed transition cursor-pointer flex flex-wrap items-center justify-between gap-2 text-xs ${
+                isExcelDragging
+                  ? 'border-emerald-500 bg-emerald-50 text-emerald-800 ring-4 ring-emerald-300/50 scale-[1.01]'
+                  : 'border-slate-200 hover:border-emerald-400 bg-slate-50/70 hover:bg-emerald-50/30 text-slate-600'
+              }`}
+            >
+              <div className="flex items-center space-x-2.5">
+                <div className={`p-2 rounded-xl transition ${isExcelDragging ? 'bg-emerald-500 text-white animate-bounce' : 'bg-emerald-100 text-emerald-800'}`}>
+                  <Upload className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="flex items-center space-x-2">
+                    <span className="font-extrabold text-slate-800">
+                      기존 견적서 파일 드래그 & 드롭
+                    </span>
+                    <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded">
+                      .xlsx / .xls / .csv / .txt
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    기존에 작성된 엑셀 견적서를 끌어다 놓거나 클릭하면 품목·수량·단가가 자동 반영됩니다. (PDF/표 복사 후 <kbd className="px-1.5 py-0.5 bg-white border border-slate-300 rounded font-mono text-[10px] text-slate-700 shadow-xs font-bold">Ctrl+V</kbd> 붙여넣기도 즉시 지원)
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center space-x-1.5 text-[11px] font-bold text-emerald-700 bg-white px-2.5 py-1 rounded-lg border border-emerald-200 shadow-2xs">
+                <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                <span>파일 드롭 또는 클릭</span>
+              </div>
             </div>
 
             <div className="overflow-x-auto border border-slate-200 rounded-2xl shadow-sm">
@@ -553,33 +675,44 @@ export default function EstimateModal({ sale, customer, onClose, onSave, onPrint
                 )}
               </div>
 
-              <div className="flex flex-wrap items-center gap-1.5">
+              <div className="flex flex-wrap items-center gap-2">
                 {[
-                  { label: '절사 없음', unit: 0 },
-                  { label: '10원 절사', unit: 10 },
-                  { label: '100원 절사', unit: 100 },
-                  { label: '1,000원 절사 (천원 단위)', unit: 1000 },
-                  { label: '10,000원 절사 (만원 단위)', unit: 10000 },
-                  { label: '직접 지정', unit: 'custom' },
-                ].map((btn) => (
-                  <button
-                    key={`disc-${btn.unit}`}
-                    type="button"
-                    onClick={() => {
-                      setDiscountUnit(btn.unit);
-                      if (btn.unit === 'custom' && !customSupplyPrice) {
-                        setCustomSupplyPrice(String(finalSupplyPrice));
-                      }
-                    }}
-                    className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center space-x-1 ${
-                      discountUnit === btn.unit
-                        ? 'bg-amber-400 text-slate-950 font-black shadow-md ring-2 ring-amber-300'
-                        : 'bg-slate-700/80 text-slate-300 hover:bg-slate-600 hover:text-white'
-                    }`}
-                  >
-                    <span>{btn.label}</span>
-                  </button>
-                ))}
+                  { label: '절사 없음', unit: 0, calc: rawSupplyPrice },
+                  { label: '만 원 단위 맞춤 (천원 이하 절사)', unit: 10000, calc: Math.floor(rawSupplyPrice / 10000) * 10000 },
+                  { label: '천 원 단위 맞춤 (백원 이하 절사)', unit: 1000, calc: Math.floor(rawSupplyPrice / 1000) * 1000 },
+                  { label: '백 원 단위 맞춤', unit: 100, calc: Math.floor(rawSupplyPrice / 100) * 100 },
+                  { label: '직접 금액 지정', unit: 'custom', calc: null },
+                ].map((btn) => {
+                  const isSelected = discountUnit === btn.unit;
+                  const previewDiff = btn.calc !== null ? rawSupplyPrice - btn.calc : 0;
+                  return (
+                    <button
+                      key={`disc-${btn.unit}`}
+                      type="button"
+                      onClick={() => {
+                        setDiscountUnit(btn.unit);
+                        if (btn.unit === 'custom' && !customSupplyPrice) {
+                          setCustomSupplyPrice(String(finalSupplyPrice));
+                        }
+                      }}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex flex-col items-start gap-0.5 border ${
+                        isSelected
+                          ? 'bg-amber-400 text-slate-950 font-black shadow-lg border-amber-300 ring-2 ring-amber-300/60 scale-[1.02]'
+                          : 'bg-slate-800 text-slate-200 hover:bg-slate-700 border-slate-700'
+                      }`}
+                    >
+                      <span className="flex items-center">
+                        {btn.label}
+                        {isSelected && <span className="ml-1 text-[10px] bg-slate-950 text-amber-300 px-1 rounded">선택됨</span>}
+                      </span>
+                      {btn.calc !== null && (
+                        <span className={`text-[10px] font-mono font-normal ${isSelected ? 'text-slate-900 font-bold' : 'text-slate-400'}`}>
+                          → ₩ {btn.calc.toLocaleString()}원 {previewDiff > 0 ? `(-₩${previewDiff.toLocaleString()})` : ''}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
 
                 {discountUnit === 'custom' && (
                   <div className="flex items-center space-x-1 ml-2 bg-slate-950 px-2 py-1 rounded-lg border border-amber-400">
