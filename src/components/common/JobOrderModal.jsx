@@ -3,10 +3,11 @@ import { X, CheckCircle2, UserCheck, Hash, Save, AlertTriangle, Calculator } fro
 import { useGoogleAuth } from '../../context/GoogleAuthContext';
 import { useData } from '../../context/DataContext';
 import { getLocalDateStr } from '../../utils/dateUtils';
+import { resolveCustomerAndContact } from '../../utils/customerContactMatcher';
 
 export default function JobOrderModal({ customers = [], initialData = null, onSave, onClose }) {
   const { user } = useGoogleAuth();
-  const { addCustomer, showCalc, toggleCalc } = useData();
+  const { addCustomer, updateCustomer, contacts = [], addContact, updateContact, showCalc, toggleCalc } = useData();
 
   const isEditMode = !!initialData;
   const today = getLocalDateStr();
@@ -161,22 +162,22 @@ export default function JobOrderModal({ customers = [], initialData = null, onSa
     try {
       setSubmitting(true);
       const safeCustomers = Array.isArray(customers) ? customers : [];
-      let targetCustId = formData.customer_id;
-      const matched = safeCustomers.find(c => c && c.name && c.name.trim() === customerNameInput.trim());
 
-      if (!matched && customerNameInput.trim() && typeof addCustomer === 'function') {
-        const newCust = await addCustomer({
-          name: customerNameInput.trim(),
-          dept: formData.dept || '',
-          contact_person: formData.client_contact_person || '',
-          phone: formData.client_phone || '',
-          email: formData.client_email || '',
-          sales_manager: userName,
-        });
-        if (newCust && newCust.id) targetCustId = newCust.id;
-      } else if (matched) {
-        targetCustId = matched.id;
-      }
+      // 💡 [지능형 매칭 & 최신 소속 자동 갱신]
+      const { customerId: targetCustId, dept: resolvedDept } = await resolveCustomerAndContact({
+        customerName: customerNameInput.trim(),
+        dept: formData.dept || '',
+        contactPerson: formData.client_contact_person || '',
+        phone: formData.client_phone || '',
+        email: formData.client_email || '',
+        salesManager: userName,
+        customers: safeCustomers,
+        contacts,
+        addCustomer,
+        updateCustomer,
+        addContact,
+        updateContact,
+      });
 
       if (!isEditMode) {
         try {

@@ -12,11 +12,10 @@ import EstimateModal from '../components/common/EstimateModal';
 import CustomerDetailModal from '../components/common/CustomerDetailModal';
 import { getLocalDateStr } from '../utils/dateUtils';
 import { normalizeStaffName } from '../utils/nameUtils';
-
-
+import { resolveCustomerAndContact } from '../utils/customerContactMatcher';
 
 export default function SalesPage() {
-  const { sales, customers, contacts = [], jobOrders, payments, staffs = [], addSales, updateSales, deleteSales, addJobOrder, addPayment, addCustomer, addContact, selectedTeamGroup, showCalc, toggleCalc } = useData();
+  const { sales, customers, contacts = [], jobOrders, payments, staffs = [], addSales, updateSales, deleteSales, addJobOrder, addPayment, addCustomer, updateCustomer, addContact, updateContact, selectedTeamGroup, showCalc, toggleCalc } = useData();
   const { user } = useGoogleAuth();
   const loggedInUserName = user?.userName || user?.name || (user?.email ? user.email.split('@')[0] : '');
 
@@ -219,7 +218,7 @@ export default function SalesPage() {
       return [
         s.reg_date || s.receipt_date || '',
         cust ? cust.name : (s.customer_name || s.customer_id || ''),
-        cust ? cust.dept : (s.dept || ''),
+        s.dept || cust?.dept || '',
         s.title || '',
         s.billing_schedule || '진행중',
         s.supply_price || 0,
@@ -569,55 +568,31 @@ export default function SalesPage() {
     try {
       setSubmitting(true);
 
-      let targetCustomerId = '';
-
-      // 1. 고객 매칭: [기관명 + 부서명] 완전 일치 매칭
-      const inputName = custName.toLowerCase();
-      const inputDept = (formData.dept || '').trim().toLowerCase();
-
-      const matchedCust = customers.find(c => {
-        const cName = (c.name || '').trim().toLowerCase();
-        const cDept = (c.dept || '').trim().toLowerCase();
-        // 기관명과 부서명이 모두 일치해야만 동일 거래처로 판정
-        return cName === inputName && cDept === inputDept;
+      // 💡 [지능형 매칭 & 최신 소속 자동 갱신]
+      // 1. 담당자명 + 연락처가 동일하면 기존 고객/담당자로 판정 (중복 생성 방지)
+      // 2. 소속(과명)이 기존과 다르면 마스터 DB(customers)의 소속을 마지막에 등록한 최신 과명으로 갱신
+      // 3. 기존 매출/전표는 고유 dept 스냅샷을 영구 보존하여 납품완료 건 무결성 유지
+      const { customerId: targetCustomerId, dept: resolvedDept, isExistingCustomer } = await resolveCustomerAndContact({
+        customerName: custName,
+        dept: formData.dept || '',
+        contactPerson: formData.contact_person || '',
+        phone: formData.phone || '',
+        mobile: formData.mobile || '',
+        email: formData.email || '',
+        salesManager: formData.sales_manager || loggedInUserName,
+        customers,
+        contacts,
+        addCustomer,
+        updateCustomer,
+        addContact,
+        updateContact,
       });
-
-      // 2. 미등록 고객이거나 부서가 다른 경우 독립된 신규 고객으로 등록
-      if (!matchedCust) {
-        const newCustData = {
-          name: custName,
-          dept: formData.dept || '',
-          // ✅ 고객사(customers)에는 조직정보만 저장 — 담당자/연락처 저장 안 함
-        };
-        const savedCust = await addCustomer(newCustData);
-        targetCustomerId = savedCust?.id || `CUST-${Date.now()}`;
-      } else {
-        targetCustomerId = matchedCust.id;
-      }
-
-      // 3. 담당자가 입력되었고 contacts DB에 없으면 자동 등록
-      if (formData.contact_person && formData.contact_person.trim()) {
-        const contactNameLow = formData.contact_person.trim().toLowerCase();
-        const existingContact = contacts.find(c =>
-          c.customer_id === targetCustomerId &&
-          (c.name || '').trim().toLowerCase() === contactNameLow
-        );
-        if (!existingContact) {
-          await addContact({
-            customer_id: targetCustomerId,
-            name: formData.contact_person.trim(),
-            phone: formData.phone || '',
-            mobile: formData.mobile || '',
-            email: formData.email || '',
-          });
-        }
-      }
 
       const salePayload = {
         ...formData,
         customer_id: targetCustomerId,
         customer_name: custName,
-        dept: formData.dept || '',
+        dept: formData.dept || resolvedDept || '',
         contact_person: formData.contact_person || '',
         phone: formData.phone || '',
         mobile: formData.mobile || '',
@@ -631,7 +606,7 @@ export default function SalesPage() {
         alert('매출/견적 항목이 수정 완료되었습니다!');
       } else {
         await addSales(salePayload);
-        alert(!matchedCust ? '신규 고객 정보가 함께 저장되고, 매출이 등록되었습니다!' : '신규 매출이 등록 완료되었습니다!');
+        alert(isExistingCustomer ? '기존 거래처 정보(최신 과명 갱신)로 신규 매출이 등록 완료되었습니다!' : '신규 고객 정보가 함께 저장되고, 매출이 등록되었습니다!');
       }
       setShowModal(false);
     } catch (err) {

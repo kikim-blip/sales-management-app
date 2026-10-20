@@ -14,10 +14,11 @@ import QuotePrintModal from '../components/common/QuotePrintModal';
 import QuickJobOrderImportModal from '../components/common/QuickJobOrderImportModal';
 import { getLocalDateStr, calculateDDay } from '../utils/dateUtils';
 import { normalizeStaffName } from '../utils/nameUtils';
+import { resolveCustomerAndContact } from '../utils/customerContactMatcher';
 
 export default function DashboardPage() {
   const navigate = useNavigate();
-  const { customers, contacts = [], sales, payments, jobOrders, staffs = [], loading, error, selectedTeamGroup, updateJobOrder, updateSales, addSales, addCustomer, addContact } = useData();
+  const { customers, contacts = [], sales, payments, jobOrders, staffs = [], loading, error, selectedTeamGroup, updateJobOrder, updateSales, addSales, addCustomer, updateCustomer, addContact, updateContact } = useData();
   const { user } = useGoogleAuth();
 
   const customerDropdownRef = useRef(null);
@@ -498,8 +499,8 @@ export default function DashboardPage() {
   // 💡 구글 캘린더 건별 선택 등록 연동 헬퍼
   const handleAddToGoogleCalendar = (order) => {
     const cust = customers.find(c => c.id === order.customer_id);
-    const orgName = cust ? cust.name : (order.customer_name || order.customer_id || '');
-    const deptName = cust ? cust.dept : (order.dept || '');
+    const orgName = order.customer_name || cust?.name || order.customer_id || '';
+    const deptName = order.dept || cust?.dept || '';
     const jobTitle = order.displayTitle || order.title || '납품 건';
 
     // 1. 제목: [기관명/부서] 작업제목 (부서 없으면 [기관명] 작업제목)
@@ -752,53 +753,32 @@ export default function DashboardPage() {
 
     try {
       setSubmittingSale(true);
-      let targetCustomerId = '';
-      // 1. 고객 매칭: [기관명 + 부서명] 완전 일치 매칭
-      const inputName = custName.toLowerCase();
-      const inputDept = (newSaleFormData.dept || '').trim().toLowerCase();
 
-      const matchedCust = customers.find(c => {
-        const cName = (c.name || '').trim().toLowerCase();
-        const cDept = (c.dept || '').trim().toLowerCase();
-        return cName === inputName && cDept === inputDept;
+      // 💡 [지능형 매칭 & 최신 소속 자동 갱신]
+      // 1. 담당자명 + 연락처가 동일하면 기존 고객/담당자로 판정 (중복 생성 방지)
+      // 2. 소속(과명)이 기존과 다르면 마스터 DB(customers)의 소속을 마지막에 등록한 최신 과명으로 갱신
+      // 3. 기존 매출/전표는 고유 dept 스냅샷을 영구 보존하여 납품완료 건 무결성 유지
+      const { customerId: targetCustomerId, dept: resolvedDept, isExistingCustomer } = await resolveCustomerAndContact({
+        customerName: custName,
+        dept: newSaleFormData.dept || '',
+        contactPerson: newSaleFormData.contact_person || '',
+        phone: newSaleFormData.phone || '',
+        mobile: newSaleFormData.mobile || '',
+        email: newSaleFormData.email || '',
+        salesManager: newSaleFormData.sales_manager || loggedInUserName,
+        customers,
+        contacts,
+        addCustomer,
+        updateCustomer,
+        addContact,
+        updateContact,
       });
-
-      // 2. 미등록 고객이거나 부서가 다른 경우 독립된 신규 고객으로 등록
-      if (!matchedCust) {
-        const newCustData = {
-          name: custName,
-          dept: newSaleFormData.dept || '',
-          // ✅ 고객사(customers)에는 조직정보만 저장 — 담당자/연락처 저장 안 함
-        };
-        const savedCust = await addCustomer(newCustData);
-        targetCustomerId = savedCust?.id || `CUST-${Date.now()}`;
-      } else {
-        targetCustomerId = matchedCust.id;
-      }
-
-      // 3. 담당자가 입력되었고 contacts DB에 없으면 자동 등록
-      if (newSaleFormData.contact_person && newSaleFormData.contact_person.trim()) {
-        const contactNameLow = newSaleFormData.contact_person.trim().toLowerCase();
-        const existingContact = contacts.find(c =>
-          c.customer_id === targetCustomerId &&
-          (c.name || '').trim().toLowerCase() === contactNameLow
-        );
-        if (!existingContact) {
-          await addContact({
-            customer_id: targetCustomerId,
-            name: newSaleFormData.contact_person.trim(),
-            phone: newSaleFormData.phone || '',
-            mobile: newSaleFormData.mobile || '',
-            email: newSaleFormData.email || '',
-          });
-        }
-      }
 
       const salePayload = {
         ...newSaleFormData,
         customer_id: targetCustomerId,
         customer_name: custName,
-        dept: newSaleFormData.dept || '',
+        dept: newSaleFormData.dept || resolvedDept || '',
         contact_person: newSaleFormData.contact_person || '',
         phone: newSaleFormData.phone || '',
         mobile: newSaleFormData.mobile || '',
@@ -813,7 +793,7 @@ export default function DashboardPage() {
         setEditingSale(null);
       } else {
         await addSales(salePayload);
-        alert(!matchedCust ? '신규 고객 정보가 함께 저장되고, 매출이 등록되었습니다!' : '신규 매출이 정상 등록되었습니다!');
+        alert(isExistingCustomer ? '기존 거래처 정보(최신 과명 갱신)로 신규 매출이 정상 등록되었습니다!' : '신규 고객 정보가 함께 저장되고, 매출이 등록되었습니다!');
       }
       setShowNewSaleModal(false);
     } catch (err) {
@@ -1050,7 +1030,7 @@ export default function DashboardPage() {
               {((quickFilter === 'ALL' ? quickSearchResults.all : quickFilter === 'SALE' ? quickSearchResults.sales : quickFilter === 'JOB' ? quickSearchResults.jobOrders : [])).map((item) => {
                 const isJobOrder = item.itemType === 'jobOrder';
                 const custName = item.customer?.name || item.customer_name || '거래처 미지정';
-                const custDept = item.customer?.dept || item.dept || '';
+                const custDept = item.dept || item.customer?.dept || '';
                 const title = isJobOrder ? (item.order_title || item.title || '작업전표') : (item.title || '매출 작업');
                 const price = Number(item.total_price || item.supply_price || 0);
                 const manager = item.sales_manager || item.manager_name || '담당자 미지정';

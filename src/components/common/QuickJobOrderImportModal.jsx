@@ -4,9 +4,10 @@ import { X, Upload, FileText, CheckCircle2, AlertCircle, Sparkles, Calendar, Use
 import { parseHwpJobOrder, parseTextJobOrder } from '../../utils/jobOrderParser';
 import { getLocalDateStr } from '../../utils/dateUtils';
 import { useData } from '../../context/DataContext';
+import { resolveCustomerAndContact } from '../../utils/customerContactMatcher';
 
 export default function QuickJobOrderImportModal({ isOpen, onClose, onSuccess }) {
-  const { customers, addCustomer, addSales, addJobOrder, fetchAllData } = useData();
+  const { customers, contacts = [], addCustomer, updateCustomer, addContact, updateContact, addSales, addJobOrder, fetchAllData } = useData();
 
   const [isDragging, setIsDragging] = useState(false);
   const [parsing, setParsing] = useState(false);
@@ -116,13 +117,7 @@ export default function QuickJobOrderImportModal({ isOpen, onClose, onSuccess })
     }));
   };
 
-  // 고객사 자동 매칭 확인
-  const matchedCustomer = customers.find(c =>
-    c.name === parsedData?.customer_name ||
-    (parsedData?.customer_name && c.name.includes(parsedData.customer_name))
-  );
-
-  // 🚀 최종 등록 처리: 고객 등록 + 작업전표(addJobOrder) + 매출(addSales)
+  // 🚀 최종 등록 처리: 고객 지능형 매칭/갱신 + 작업전표(addJobOrder) + 매출(addSales)
   const handleSubmit = async () => {
     if (!parsedData || !parsedData.title) {
       alert('품명(작업명)이 누락되었습니다.');
@@ -132,25 +127,24 @@ export default function QuickJobOrderImportModal({ isOpen, onClose, onSuccess })
     setSubmitting(true);
     try {
       const today = getLocalDateStr();
-      let customerId = matchedCustomer ? matchedCustomer.id : null;
 
-      // 1. 미등록 고객사인 경우 신규 고객 자동 생성
-      if (!customerId && parsedData.customer_name && addCustomer) {
-        const newCustId = `cust_${Date.now()}`;
-        const newCustomerPayload = {
-          id: newCustId,
-          name: parsedData.customer_name,
-          dept: parsedData.dept || '',
-          contact_person: parsedData.contact_person || '',
-          phone: parsedData.phone || '',
-          email: parsedData.email || '',
-          sales_manager: parsedData.sales_manager || '김광일',
-          reg_date: today,
-        };
-        await addCustomer(newCustomerPayload);
-        customerId = newCustId;
-      }
+      // 💡 [지능형 매칭 & 최신 소속 자동 갱신]
+      const { customerId, dept: resolvedDept } = await resolveCustomerAndContact({
+        customerName: parsedData.customer_name || '',
+        dept: parsedData.dept || '',
+        contactPerson: parsedData.contact_person || '',
+        phone: parsedData.phone || '',
+        email: parsedData.email || '',
+        salesManager: parsedData.sales_manager || '김광일',
+        customers,
+        contacts,
+        addCustomer,
+        updateCustomer,
+        addContact,
+        updateContact,
+      });
 
+      const finalDept = parsedData.dept || resolvedDept || '';
       const codeNumber = parsedData.code_number || `44-${today.replace(/-/g, '').slice(2)}-${Math.floor(1000 + Math.random() * 9000)}`;
       const deliveryDate = parsedData.delivery_date || today;
       const receiptDate = parsedData.receipt_date || today;
@@ -162,7 +156,7 @@ export default function QuickJobOrderImportModal({ isOpen, onClose, onSuccess })
           code_number: codeNumber,
           customer_id: customerId,
           customer_name: parsedData.customer_name || '거래처',
-          dept: parsedData.dept || '',
+          dept: finalDept,
           title: parsedData.title,
           spec: parsedData.spec || '',
           quantity: Number(parsedData.quantity) || 1,
@@ -192,7 +186,7 @@ export default function QuickJobOrderImportModal({ isOpen, onClose, onSuccess })
           code_number: codeNumber,
           customer_id: customerId,
           customer_name: parsedData.customer_name || '거래처',
-          dept: parsedData.dept || '',
+          dept: finalDept,
           contact_person: parsedData.contact_person || '',
           phone: parsedData.phone || '',
           email: parsedData.email || '',
