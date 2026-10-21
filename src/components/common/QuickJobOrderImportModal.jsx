@@ -117,6 +117,14 @@ export default function QuickJobOrderImportModal({ isOpen, onClose, onSuccess })
     }));
   };
 
+  // JSX 내 고객 매칭 표시용 — 미리보기 배지 표시에만 사용 (실제 저장 시에는 resolveCustomerAndContact 사용)
+  const matchedCustomer = parsedData
+    ? customers.find(c =>
+        c.name === parsedData.customer_name ||
+        (parsedData.customer_name && c.name.includes(parsedData.customer_name))
+      )
+    : null;
+
   // 🚀 최종 등록 처리: 고객 지능형 매칭/갱신 + 작업전표(addJobOrder) + 매출(addSales)
   const handleSubmit = async () => {
     if (!parsedData || !parsedData.title) {
