@@ -4,10 +4,13 @@ import { X, Upload, FileText, CheckCircle2, AlertCircle, Sparkles, Calendar, Use
 import { parseHwpJobOrder, parseTextJobOrder } from '../../utils/jobOrderParser';
 import { getLocalDateStr } from '../../utils/dateUtils';
 import { useData } from '../../context/DataContext';
+import { useGoogleAuth } from '../../context/GoogleAuthContext';
 import { resolveCustomerAndContact } from '../../utils/customerContactMatcher';
 
 export default function QuickJobOrderImportModal({ isOpen, onClose, onSuccess }) {
   const { customers, contacts = [], addCustomer, updateCustomer, addContact, updateContact, addSales, addJobOrder, fetchAllData } = useData();
+  const { user } = useGoogleAuth();
+  const loggedInUserName = user?.userName || user?.name || (user?.email ? user.email.split('@')[0] : '');
 
   const [isDragging, setIsDragging] = useState(false);
   const [parsing, setParsing] = useState(false);
@@ -64,6 +67,10 @@ export default function QuickJobOrderImportModal({ isOpen, onClose, onSuccess })
     try {
       if (file.name.toLowerCase().endsWith('.hwp')) {
         const result = await parseHwpJobOrder(file);
+        // HWP에서 별도 작성자가 감지되지 않았으면 현재 로그인한 사용자로 자동 설정
+        if (!result.sales_manager && loggedInUserName) {
+          result.sales_manager = loggedInUserName;
+        }
         setParsedData(result);
       } else {
         const text = await file.text();
@@ -81,6 +88,10 @@ export default function QuickJobOrderImportModal({ isOpen, onClose, onSuccess })
     setParsing(true);
     try {
       const result = parseTextJobOrder(text);
+      // 별도 작성자가 감지되지 않았으면 현재 로그인한 사용자로 자동 설정
+      if (!result.sales_manager && loggedInUserName) {
+        result.sales_manager = loggedInUserName;
+      }
       setParsedData(result);
     } catch (err) {
       alert('텍스트 분석 중 오류가 발생했습니다: ' + err.message);
@@ -135,6 +146,7 @@ export default function QuickJobOrderImportModal({ isOpen, onClose, onSuccess })
     setSubmitting(true);
     try {
       const today = getLocalDateStr();
+      const writerName = (parsedData.sales_manager || loggedInUserName || '담당자').trim();
 
       // 💡 [지능형 매칭 & 최신 소속 자동 갱신]
       const { customerId, dept: resolvedDept } = await resolveCustomerAndContact({
@@ -143,7 +155,7 @@ export default function QuickJobOrderImportModal({ isOpen, onClose, onSuccess })
         contactPerson: parsedData.contact_person || '',
         phone: parsedData.phone || '',
         email: parsedData.email || '',
-        salesManager: parsedData.sales_manager || '김광일',
+        salesManager: writerName,
         customers,
         contacts,
         addCustomer,
@@ -170,7 +182,7 @@ export default function QuickJobOrderImportModal({ isOpen, onClose, onSuccess })
           quantity: Number(parsedData.quantity) || 1,
           client_contact_person: parsedData.contact_person || '',
           client_phone: parsedData.phone || '',
-          manager_name: parsedData.sales_manager || '김광일',
+          manager_name: writerName,
           receipt_date: receiptDate,
           delivery_date: deliveryDate,
           request_note: parsedData.request_note || '',
@@ -188,7 +200,7 @@ export default function QuickJobOrderImportModal({ isOpen, onClose, onSuccess })
         });
       }
 
-      // 3. 매출(Sales) 및 납품 일정 등록
+      // 3. 매출(Sales) 및 납품 일정 등록 (전표 번호 태깅하여 현황판 중복 노출 방지)
       if (addSales) {
         await addSales({
           code_number: codeNumber,
@@ -205,13 +217,14 @@ export default function QuickJobOrderImportModal({ isOpen, onClose, onSuccess })
           supply_price: 0,
           tax: 0,
           total_price: 0,
-          sales_manager: parsedData.sales_manager || '김광일',
+          sales_manager: writerName,
           reg_date: receiptDate,
           delivery_date: deliveryDate,
           billing_status: '미청구',
           payment_status: '미수',
           billing_schedule: parsedData.request_note || '',
-          content: parsedData.request_note || '',
+          note: `[전표: ${codeNumber}]`,
+          content: parsedData.request_note ? `[전표: ${codeNumber}] ${parsedData.request_note}` : `[전표: ${codeNumber}]`,
         });
       }
 
@@ -413,10 +426,10 @@ export default function QuickJobOrderImportModal({ isOpen, onClose, onSuccess })
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-600 mb-1">영업담당</label>
+                  <label className="block text-[11px] font-bold text-slate-600 mb-1">작성자 (담당)</label>
                   <input
                     type="text"
-                    value={parsedData.sales_manager || '김광일'}
+                    value={parsedData.sales_manager || loggedInUserName || '담당자'}
                     onChange={(e) => handleFieldChange('sales_manager', e.target.value)}
                     className="w-full p-2 border border-slate-300 rounded-lg text-xs font-semibold bg-white"
                   />

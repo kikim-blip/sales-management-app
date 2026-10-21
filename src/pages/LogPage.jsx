@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useData } from '../context/DataContext';
 import { useGoogleAuth } from '../context/GoogleAuthContext';
+import { parseKoreanDate } from '../utils/dateUtils';
 import {
   FileText,
   Search,
@@ -56,7 +57,7 @@ export default function LogPage() {
       }
       // 4. 기간 필터
       if (dateRange !== 'ALL') {
-        const logDate = new Date(log.created_at || Date.now());
+        const logDate = parseKoreanDate(log.created_at);
         const now = new Date();
         if (dateRange === 'TODAY') {
           if (logDate.toDateString() !== now.toDateString()) return false;
@@ -76,7 +77,7 @@ export default function LogPage() {
   const stats = useMemo(() => {
     const total = logs.length;
     const todayStr = new Date().toDateString();
-    const todayCount = logs.filter(l => new Date(l.created_at || Date.now()).toDateString() === todayStr).length;
+    const todayCount = logs.filter(l => parseKoreanDate(l.created_at).toDateString() === todayStr).length;
     const deliveryCount = logs.filter(l => l.action === '납품완료' || l.action === '상태변경').length;
     const paymentCount = logs.filter(l => l.category === '수금').length;
     const createCount = logs.filter(l => l.action === '등록').length;

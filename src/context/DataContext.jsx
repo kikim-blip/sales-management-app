@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useGoogleAuth } from './GoogleAuthContext';
 import { sendWebhookEvent } from '../services/webhookService';
+import { getKoreanTimestamp } from '../utils/dateUtils';
 import {
   fetchAllD1Data,
   createCustomer, updateCustomerApi, deleteCustomerApi,
@@ -77,7 +78,7 @@ export function DataProvider({ children }) {
   const addLog = useCallback(async (action, category, details, targetId = '') => {
     const userName = user?.userName || user?.name || (user?.email ? user.email.split('@')[0] : '시스템');
     const userEmail = user?.email || '';
-    const now = new Date().toLocaleString('ko-KR');
+    const now = getKoreanTimestamp();
 
     const newLog = {
       id: Date.now(),

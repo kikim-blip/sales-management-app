@@ -52,7 +52,7 @@ async function ensureInitialData(db) {
   if (staffCount === 0) {
     await db.prepare(`
       INSERT OR IGNORE INTO staffs (user_code, user_name, company_code, email, dept, position, team, role, status, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', '+9 hours'))
     `).bind('44', '김광일', '3', 'richkikim@gmail.com', '세종영업본부', '담당자', '영업1조', '관리자', '승인완료').run();
   }
 }
@@ -231,7 +231,7 @@ async function createCustomer(db, request) {
   const id = body.id || generateId('CUST');
   await db.prepare(
     `INSERT OR REPLACE INTO customers (id, name, dept, contact_person, phone, email, sales_manager, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))`
+     VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now', '+9 hours'))`
   ).bind(id, body.name || '', body.dept || '', body.contact_person || '',
          body.phone || '', body.email || '', body.sales_manager || '').run();
   const row = await db.prepare('SELECT * FROM customers WHERE id = ?').bind(id).first();
@@ -241,7 +241,7 @@ async function createCustomer(db, request) {
 async function updateCustomer(db, id, request) {
   const body = await request.json();
   await db.prepare(
-    `UPDATE customers SET name=?, dept=?, contact_person=?, phone=?, email=?, sales_manager=?, updated_at=datetime('now','localtime')
+    `UPDATE customers SET name=?, dept=?, contact_person=?, phone=?, email=?, sales_manager=?, updated_at=datetime('now','+9 hours')
      WHERE id=?`
   ).bind(body.name || '', body.dept || '', body.contact_person || '',
          body.phone || '', body.email || '', body.sales_manager || '', id).run();
@@ -284,7 +284,7 @@ async function createSale(db, request) {
       dept, team, sales_manager, contact_person, phone, mobile, email,
       estimate_type, estimate_date, valid_days, payment_terms, estimate_note, estimate_items,
       updated_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now','localtime'))`
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now','+9 hours'))`
   ).bind(id, body.reg_date||'', body.receipt_date||'', body.delivery_date||'',
          body.delivery_time||'', body.customer_id||'', body.title||'', body.content||'',
          body.note||'', body.billing_schedule||'진행중', body.type||'매출',
@@ -309,7 +309,7 @@ async function updateSale(db, id, request) {
      calendar_synced=?, superthread_synced=?, dept=?, team=?, sales_manager=?,
      contact_person=?, phone=?, mobile=?, email=?,
      estimate_type=?, estimate_date=?, valid_days=?, payment_terms=?, estimate_note=?, estimate_items=?,
-     updated_at=datetime('now','localtime') WHERE id=?`
+     updated_at=datetime('now','+9 hours') WHERE id=?`
   ).bind(merged.reg_date||'', merged.receipt_date||'', merged.delivery_date||'', merged.delivery_time||'',
          merged.customer_id||'', merged.title||'', merged.content||'', merged.note||'',
          merged.billing_schedule||'진행중', merged.type||'매출', merged.supply_price||0,
@@ -347,7 +347,7 @@ async function createPayment(db, request) {
   const id = body.id || generateId('PAY');
   await db.prepare(
     `INSERT OR REPLACE INTO payments (id, payment_date, customer_id, amount, method, note, dept, updated_at)
-     VALUES (?,?,?,?,?,?,?,datetime('now','localtime'))`
+     VALUES (?,?,?,?,?,?,?,datetime('now','+9 hours'))`
   ).bind(id, body.payment_date||'', body.customer_id||'', body.amount||0,
          body.method||'계좌이체', body.note||'', body.dept||'').run();
   const row = await db.prepare('SELECT * FROM payments WHERE id = ?').bind(id).first();
@@ -357,7 +357,7 @@ async function createPayment(db, request) {
 async function updatePayment(db, id, request) {
   const body = await request.json();
   await db.prepare(
-    `UPDATE payments SET payment_date=?, customer_id=?, amount=?, method=?, note=?, dept=?, updated_at=datetime('now','localtime') WHERE id=?`
+    `UPDATE payments SET payment_date=?, customer_id=?, amount=?, method=?, note=?, dept=?, updated_at=datetime('now','+9 hours') WHERE id=?`
   ).bind(body.payment_date||'', body.customer_id||'', body.amount||0,
          body.method||'계좌이체', body.note||'', body.dept||'', id).run();
   const row = await db.prepare('SELECT * FROM payments WHERE id = ?').bind(id).first();
@@ -395,7 +395,7 @@ async function createJobOrder(db, request) {
       cover_proof_date, inner_proof_date, proof_method, planning, photography,
       illustration, copyright_web, production_progress, delivery_destination,
       cover_related, inner_related, request_note, editor_name, designer_name, status, updated_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now','localtime'))`
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now','+9 hours'))`
   ).bind(id, id, body.manager_name||'', body.receipt_date||'', body.delivery_date||'',
          body.delivery_time||'', body.customer_id||'', body.dept||'', body.title||'',
          body.spec||'', body.pages||'', body.duplex||'', body.quantity||0, body.estimated_price||0,
@@ -428,7 +428,7 @@ async function updateJobOrder(db, id, request) {
      cover_proof_date=?, inner_proof_date=?, proof_method=?, planning=?, photography=?,
      illustration=?, copyright_web=?, production_progress=?, delivery_destination=?,
      cover_related=?, inner_related=?, request_note=?, editor_name=?, designer_name=?,
-     status=?, updated_at=datetime('now','localtime') WHERE id=? OR code_number=?`
+     status=?, updated_at=datetime('now','+9 hours') WHERE id=? OR code_number=?`
   ).bind(merged.manager_name||'', merged.receipt_date||'', merged.delivery_date||'',
          merged.delivery_time||'', merged.customer_id||'', merged.dept||'', merged.title||'',
          merged.spec||'', merged.pages||'', merged.duplex||'', merged.quantity||0, merged.estimated_price||0,
@@ -502,7 +502,7 @@ async function upsertStaff(db, request) {
       `UPDATE staffs SET
          user_code = ?, user_name = ?, company_code = ?, email = ?,
          dept = ?, position = ?, team = ?, role = ?, status = ?,
-         updated_at = datetime('now','localtime')
+         updated_at = datetime('now','+9 hours')
        WHERE id = ?`
     ).bind(
       userCode || existing.user_code,
@@ -534,7 +534,7 @@ async function upsertStaff(db, request) {
     // 신규 사원 등록
     const result = await db.prepare(
       `INSERT INTO staffs (user_code, user_name, company_code, email, dept, position, team, role, status, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now','localtime'), datetime('now','localtime'))`
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now','+9 hours'), datetime('now','+9 hours'))`
     ).bind(
       userCode, userName, companyCode, email, dept, position, team, role, status
     ).run();
@@ -639,7 +639,7 @@ async function createPost(db, request) {
   const id = b.id || `POST-${Date.now()}`;
   await db.prepare(
     `INSERT INTO posts (id, title, content, author_name, author_email, category, is_pinned, file_url, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now','localtime'), datetime('now','localtime'))`
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now','+9 hours'), datetime('now','+9 hours'))`
   ).bind(
     id, b.title || '', b.content || '', b.author_name || '', b.author_email || '',
     b.category || '공지', b.is_pinned ? 1 : 0, b.file_url || ''
@@ -657,7 +657,7 @@ async function updatePost(db, id, request) {
   await db.prepare(
     `UPDATE posts SET
        title = ?, content = ?, author_name = ?, author_email = ?,
-       category = ?, is_pinned = ?, file_url = ?, updated_at = datetime('now','localtime')
+       category = ?, is_pinned = ?, file_url = ?, updated_at = datetime('now','+9 hours')
      WHERE id = ?`
   ).bind(
     merged.title, merged.content, merged.author_name, merged.author_email,
@@ -760,7 +760,7 @@ async function createContact(db, request) {
   const id = body.id || generateId('CONT');
   await db.prepare(
     `INSERT OR REPLACE INTO contacts (id, customer_id, name, phone, mobile, email, note, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))`
+     VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now', '+9 hours'))`
   ).bind(id, body.customer_id || '', body.name || '', body.phone || '', body.mobile || '',
          body.email || '', body.note || '').run();
   const row = await db.prepare('SELECT * FROM contacts WHERE id = ?').bind(id).first();
@@ -772,7 +772,7 @@ async function updateContact(db, id, request) {
   const existing = await db.prepare('SELECT * FROM contacts WHERE id = ?').bind(id).first() || {};
   const merged = { ...existing, ...body };
   await db.prepare(
-    `UPDATE contacts SET customer_id=?, name=?, phone=?, mobile=?, email=?, note=?, updated_at=datetime('now','localtime') WHERE id=?`
+    `UPDATE contacts SET customer_id=?, name=?, phone=?, mobile=?, email=?, note=?, updated_at=datetime('now','+9 hours') WHERE id=?`
   ).bind(merged.customer_id || '', merged.name || '', merged.phone || '', merged.mobile || '',
          merged.email || '', merged.note || '', id).run();
   const row = await db.prepare('SELECT * FROM contacts WHERE id = ?').bind(id).first();
@@ -852,7 +852,17 @@ async function getLogs(db, url) {
 
 async function createLog(db, request) {
   const body = await request.json();
-  const now = new Date().toLocaleString('ko-KR');
+  const now = body.created_at || new Intl.DateTimeFormat('ko-KR', {
+    timeZone: 'Asia/Seoul',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true,
+  }).format(new Date());
+
   await db.prepare(
     `INSERT INTO audit_logs (user_name, user_email, action, category, details, target_id, created_at)
      VALUES (?, ?, ?, ?, ?, ?, ?)`

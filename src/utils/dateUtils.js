@@ -49,3 +49,50 @@ export function calculateDDay(deliveryDateStr, baseDateStr = null) {
   }
   return { diffDays, label: `📅 D-${diffDays}`, color: 'bg-slate-100 text-slate-700 border-slate-200' };
 }
+
+/**
+ * 한국 표준시(KST, Asia/Seoul) 기준의 일시 문자열을 생성합니다.
+ * 서버 환경(UTC 등)에 무관하게 항상 정확한 한국 시간(오전/오후)을 출력합니다.
+ * 예: "2026. 10. 22. 오후 5:48:37"
+ */
+export function getKoreanTimestamp(dateInput = new Date()) {
+  const d = dateInput instanceof Date ? dateInput : new Date(dateInput);
+  if (isNaN(d.getTime())) return '';
+  return new Intl.DateTimeFormat('ko-KR', {
+    timeZone: 'Asia/Seoul',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true,
+  }).format(d);
+}
+
+/**
+ * 한국어 일시 문자열("2026. 10. 21. 오전 8:48:37" 등) 및 다양한 날짜 포맷을 안전하게 Date 객체로 파싱합니다.
+ */
+export function parseKoreanDate(dateStr) {
+  if (!dateStr) return new Date();
+  if (dateStr instanceof Date) return dateStr;
+
+  const str = String(dateStr).trim();
+  const m = str.match(/(\d{4})[.\-\/]\s*(\d{1,2})[.\-\/]\s*(\d{1,2})\.?\s*(오전|오후)?\s*(\d{1,2})?:?(\d{1,2})?:?(\d{1,2})?/);
+  if (m) {
+    const year = Number(m[1]);
+    const month = Number(m[2]) - 1;
+    const day = Number(m[3]);
+    let hour = m[5] !== undefined ? Number(m[5]) : 0;
+    const minute = m[6] !== undefined ? Number(m[6]) : 0;
+    const second = m[7] !== undefined ? Number(m[7]) : 0;
+    const ampm = m[4];
+    if (ampm === '오후' && hour < 12) hour += 12;
+    if (ampm === '오전' && hour === 12) hour = 0;
+    return new Date(year, month, day, hour, minute, second);
+  }
+
+  const parsed = new Date(str);
+  return isNaN(parsed.getTime()) ? new Date() : parsed;
+}
+

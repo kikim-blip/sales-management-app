@@ -60,7 +60,7 @@ function parseHwpTextWithTokens(text) {
 
   const result = {
     code_number: '',
-    sales_manager: '김광일',
+    sales_manager: '',
     receipt_date: '',
     delivery_date: '',
     customer_name: '',
@@ -193,7 +193,7 @@ export function parseTextJobOrder(rawText) {
 
   const data = {
     code_number: matchPattern(/코드번호\s*[:：]?\s*([0-9A-Za-z-]+)/),
-    sales_manager: matchPattern(/담당\s*[:：]?\s*([가-힣]{2,4})/) || '김광일',
+    sales_manager: matchPattern(/담당\s*[:：]?\s*([가-힣]{2,4})/) || '',
     receipt_date: normalizeKoreanDate(matchPattern(/접수일\s*[:：]?\s*([0-9년월일\s.-]+)/)),
     delivery_date: normalizeKoreanDate(matchPattern(/납품일\s*[:：]?\s*([0-9년월일\s.-]+)/)),
     customer_name: matchPattern(/발주처\s*[:：]?\s*([^\n\t]+)/),

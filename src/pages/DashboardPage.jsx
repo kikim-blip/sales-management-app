@@ -508,11 +508,22 @@ export default function DashboardPage() {
   const saleItems = filteredSales
     .filter(s => s.delivery_date && s.billing_schedule !== '납품완료' && s.billing_schedule !== '청구완료')
     .filter(s => {
-      // 작업전표에서 파생된 중복 건 제외
-      const matchedJob = filteredJobOrders.find(j => 
-        (j.code_number && (s.content?.includes(j.code_number) || s.note?.includes(j.code_number) || s.title?.includes(j.code_number))) ||
-        (j.id && (s.content?.includes(j.id) || s.note?.includes(j.id)))
-      );
+      // 작업전표에서 파생되었거나 동일한 작업 건 중복 제외
+      const matchedJob = filteredJobOrders.find(j => {
+        const jCode = j.code_number || j.id;
+        // 1) 전표 코드 직접 일치
+        if (s.code_number && (s.code_number === j.code_number || s.code_number === j.id)) return true;
+        // 2) 내용, 메모, 제목에 전표 번호 포함
+        if (jCode && (s.content?.includes(jCode) || s.note?.includes(jCode) || s.title?.includes(jCode))) return true;
+        if (j.id && (s.content?.includes(j.id) || s.note?.includes(j.id))) return true;
+        // 3) 동일 발주처 + 동일 품명 + 동일 납품예정일 (동일 건 중복 노출 원천 차단)
+        const sameCust = (s.customer_id && s.customer_id === j.customer_id) ||
+                         (s.customer_name && j.customer_name && s.customer_name.trim() === j.customer_name.trim());
+        const sameTitle = s.title && j.title && s.title.trim().toLowerCase() === j.title.trim().toLowerCase();
+        const sameDelivery = s.delivery_date && s.delivery_date === j.delivery_date;
+        if (sameCust && sameTitle && sameDelivery) return true;
+        return false;
+      });
       return !matchedJob;
     })
     .map(sale => {
@@ -533,16 +544,34 @@ export default function DashboardPage() {
     });
 
 
-  // 💡 중복 키 제거 헬퍼 적용 (동일 SALE-162 등의 카드 2번 중복 노출 원천 방지)
+  // 💡 중복 키 제거 헬퍼 적용 (전표와 매출 동일 건 2번 중복 노출 원천 방지)
   const urgentDeliveryList = useMemo(() => {
-    const combined = [...jobItems, ...saleItems];
     const map = new Map();
-    combined.forEach(item => {
+    // 1. 작업전표 우선 등록 (전표가 마스터 카드 역할)
+    jobItems.forEach(item => {
       const key = `${item.itemType}-${item.id || item.code_number}`;
-      if (!map.has(key)) {
+      map.set(key, item);
+    });
+
+    // 2. 매출 항목 등록 (전표와 중복되는 건은 제외)
+    saleItems.forEach(item => {
+      const isDuplicateOfJob = Array.from(map.values()).some(j => {
+        const jCode = j.code_number || j.id;
+        if (item.code_number && (item.code_number === j.code_number || item.code_number === j.id)) return true;
+        if (jCode && (item.content?.includes(jCode) || item.note?.includes(jCode) || item.title?.includes(jCode))) return true;
+        const sameCust = (item.customer_id && item.customer_id === j.customer_id) ||
+                         (item.customer_name && j.customer_name && item.customer_name.trim() === j.customer_name.trim());
+        const sameTitle = item.title && j.title && item.title.trim().toLowerCase() === j.title.trim().toLowerCase();
+        const sameDelivery = item.delivery_date && item.delivery_date === j.delivery_date;
+        return sameCust && sameTitle && sameDelivery;
+      });
+
+      if (!isDuplicateOfJob) {
+        const key = `${item.itemType}-${item.id || item.code_number}`;
         map.set(key, item);
       }
     });
+
     return Array.from(map.values()).sort((a, b) => {
       if (a.dday.diffDays !== b.dday.diffDays) {
         return a.dday.diffDays - b.dday.diffDays;
