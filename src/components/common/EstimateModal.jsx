@@ -6,7 +6,7 @@ import { useData } from '../../context/DataContext';
 import { useToast } from '../../context/ToastContext';
 import { COMPANY_SUPPLIERS } from '../../data/companySuppliers';
 import { parseEstimateFile, parseEstimateClipboardText, parseSheetFromWorkbook } from '../../utils/estimateExcelParser';
-import { generateEstimateSummary, serializeEstimateItemsForSheet } from '../../utils/estimateSummaryHelper';
+import { generateEstimateSummary, serializeEstimateItemsForSheet, cleanExpiredEstimateDrafts } from '../../utils/estimateSummaryHelper';
 
 export default function EstimateModal({ sale, customer, onClose, onSave, onPrint }) {
   const { toggleCalc, showCalc } = useData();
@@ -16,7 +16,11 @@ export default function EstimateModal({ sale, customer, onClose, onSave, onPrint
   const todayStr = getLocalDateStr();
 
   const draftKey = `estimate_draft_${sale.code_number || sale.id}`;
-  const isTargetSpecialOrder = sale.code_number === '44-261022-3390' || (sale.title && sale.title.includes('자원순환기본계획'));
+
+  // 모달 진입 시 만료된 오래된 드래프트(14일 경과) 자동 청소
+  React.useEffect(() => {
+    cleanExpiredEstimateDrafts(14);
+  }, []);
 
   // 로컬 드래프트 복원 헬퍼
   const loadSavedDraft = () => {
@@ -106,35 +110,7 @@ export default function EstimateModal({ sale, customer, onClose, onSave, onPrint
     const fromDb = parseDbItems();
     if (fromDb && fromDb.length > 0) return fromDb;
 
-    // 4. 44-261022-3390 (자원순환기본계획) 건: 사용자가 입력했던 정확한 2개 품목 완벽 복원
-    if (isTargetSpecialOrder) {
-      return [
-        {
-          id: 'item-1',
-          name: '내지(출력/칼라)',
-          spec: 'A4',
-          pages: 128,
-          quantity: 10,
-          unit: '부',
-          unit_price: 300,
-          amount: 384000,
-          note: '',
-        },
-        {
-          id: 'item-2',
-          name: '제본(무선제본)',
-          spec: 'A4',
-          pages: 1,
-          quantity: 10,
-          unit: '부',
-          unit_price: 4000,
-          amount: 40000,
-          note: '',
-        }
-      ];
-    }
-
-    // 5. 기본 초기 행 (기존 작업명 및 공급가액 반영)
+    // 4. 기본 초기 행 (기존 작업명 및 공급가액 반영)
     return [
       {
         id: 'item-1',
@@ -173,13 +149,11 @@ export default function EstimateModal({ sale, customer, onClose, onSave, onPrint
     ? sale.client_contact_person
     : (sale.contact_person !== undefined ? sale.contact_person : null);
 
-  const initialContactPerson = isTargetSpecialOrder
-    ? ((explicitContactPerson && explicitContactPerson !== '정소영 주무관') ? explicitContactPerson : '박윤균 주무관')
-    : (explicitContactPerson !== null ? explicitContactPerson : (customer?.contact_person || ''));
+  const initialContactPerson = explicitContactPerson !== null
+    ? explicitContactPerson
+    : (customer?.contact_person || '');
 
-  const initialContactPhone = isTargetSpecialOrder
-    ? '010-5622-3779'
-    : (sale.client_phone || sale.phone || customer?.phone || customer?.mobile || '');
+  const initialContactPhone = sale.client_phone || sale.phone || customer?.phone || customer?.mobile || '';
 
   const initialContactEmail = sale.client_email || sale.email || customer?.email || '';
 
@@ -203,7 +177,7 @@ export default function EstimateModal({ sale, customer, onClose, onSave, onPrint
   );
 
   // 💡 공급가액 절사 단위
-  const defaultDiscountUnit = isTargetSpecialOrder ? 10000 : 0;
+  const defaultDiscountUnit = 0;
   const [discountUnit, setDiscountUnit] = useState(
     isDraftValidAndNewer && savedDraft?.discountUnit !== undefined
       ? savedDraft.discountUnit

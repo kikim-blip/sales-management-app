@@ -5,7 +5,7 @@ import { useGoogleAuth } from './GoogleAuthContext';
 import { sendWebhookEvent } from '../services/webhookService';
 import { getKoreanTimestamp } from '../utils/dateUtils';
 import { enqueueOfflineOperation, flushOfflineSyncQueue } from '../utils/offlineSyncQueue';
-import { generateEstimateSummary, serializeEstimateItemsForSheet } from '../utils/estimateSummaryHelper';
+import { generateEstimateSummary, serializeEstimateItemsForSheet, cleanExpiredEstimateDrafts } from '../utils/estimateSummaryHelper';
 import {
   fetchAllD1Data,
   createCustomer, updateCustomerApi, deleteCustomerApi,
@@ -169,35 +169,7 @@ export function DataProvider({ children }) {
             if (savedDraft) localDraft = JSON.parse(savedDraft);
           } catch (_) {}
 
-          // 💡 44-261022-3390 (자원순환기본계획) 건 특별 무결성 보정
-          if (codeNo === '44-261022-3390' || (job.title && job.title.includes('자원순환기본계획'))) {
-            const restoredContact = (job.client_contact_person === '정소영 주무관' || !job.client_contact_person)
-              ? '박윤균 주무관'
-              : job.client_contact_person;
-            const restoredPhone = (job.client_contact_person === '정소영 주무관' || !job.client_phone)
-              ? '010-5622-3779'
-              : job.client_phone;
-
-            const targetItems = (job.estimate_items && job.estimate_items !== '[]')
-              ? job.estimate_items
-              : (localDraft?.items || [
-                  { id: 'item-1', name: '내지(출력/칼라)', spec: 'A4', pages: 128, quantity: 10, unit: '부', unit_price: 300, amount: 384000, note: '' },
-                  { id: 'item-2', name: '제본(무선제본)', spec: 'A4', pages: 1, quantity: 10, unit: '부', unit_price: 4000, amount: 40000, note: '' }
-                ]);
-
-            return {
-              ...job,
-              client_contact_person: restoredContact,
-              client_phone: restoredPhone,
-              estimate_items: typeof targetItems === 'string' ? targetItems : JSON.stringify(targetItems),
-              discount_unit: job.discount_unit !== undefined ? job.discount_unit : (localDraft?.discountUnit || 10000),
-              supply_price: job.supply_price || 420000,
-              tax: job.tax || 42000,
-              total_price: job.total_price || 462000,
-            };
-          }
-
-          // 일반 작업전표: 로컬 캐시/드래프트의 견적 품목 보존
+          // 일반 작업전표: 서버에 estimate_items가 아직 없고 로컬 드래프트가 있을 경우만 보존
           if (!job.estimate_items && localDraft?.items) {
             return {
               ...job,
@@ -283,6 +255,11 @@ export function DataProvider({ children }) {
     if (!isLoggedIn) return;
     fetchAllData();
   }, [isLoggedIn, fetchAllData]);
+
+  // 💡 LocalStorage 만료 드래프트(14일 경과) 가비지 컬렉션 (앱 초기 진입 시 1회 실행)
+  useEffect(() => {
+    cleanExpiredEstimateDrafts(14);
+  }, []);
 
   // 💡 자동 갱신: 탭 복귀 시 즉시 새로고침 + 10분 주기 백그라운드 폴링
   useEffect(() => {

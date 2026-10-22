@@ -494,17 +494,10 @@ export default function DashboardPage() {
       const cust = customers.find(c => c.id === order.customer_id);
       const finalDept = order.dept || cust?.dept || '';
       const finalOrg = cust?.name || order.customer_name || order.customer_id || '미지정';
-      const isTargetSpecial = order.code_number === '44-261022-3390' || (order.title && order.title.includes('자원순환기본계획'));
-      const finalContact = isTargetSpecial
-        ? ((order.client_contact_person && order.client_contact_person !== '정소영 주무관') ? order.client_contact_person : '박윤균 주무관')
-        : order.client_contact_person;
-      const finalPhone = isTargetSpecial
-        ? '010-5622-3779'
-        : order.client_phone;
       return {
         ...order,
-        client_contact_person: finalContact,
-        client_phone: finalPhone,
+        client_contact_person: order.client_contact_person || '',
+        client_phone: order.client_phone || '',
         itemType: 'jobOrder', // 작업전표
         displayCode: order.code_number || order.id,
         displayTitle: order.title || '제목 없음',
@@ -1354,16 +1347,11 @@ export default function DashboardPage() {
                         </span>
                         {(() => {
                           const cust = customers.find(c => c.id === item.customer_id);
-                          const isTargetOrder = item.code_number === '44-261022-3390' || (item.title && item.title.includes('자원순환기본계획'));
                           const rawContact = item.client_contact_person !== undefined
                             ? item.client_contact_person
                             : (item.contact_person !== undefined ? item.contact_person : null);
-                          const contactPerson = isTargetOrder
-                            ? ((rawContact && rawContact !== '정소영 주무관') ? rawContact : '박윤균 주무관')
-                            : (rawContact !== null ? rawContact : (cust?.contact_person || ''));
-                          const phone = isTargetOrder
-                            ? '010-5622-3779'
-                            : (item.client_phone || item.phone || cust?.phone || '');
+                          const contactPerson = rawContact !== null ? rawContact : (cust?.contact_person || '');
+                          const phone = item.client_phone || item.phone || cust?.phone || '';
                           const email = item.client_email || item.email || cust?.email || '';
                           const manager = item.sales_manager || item.manager_name || cust?.sales_manager || '';
                           if (!contactPerson && !phone && !email && !manager) return null;

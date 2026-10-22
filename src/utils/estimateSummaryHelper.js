@@ -61,3 +61,49 @@ export function deserializeEstimateItems(val, fallbackTitle = '') {
   }
   return [];
 }
+
+/**
+ * 💡 LocalStorage 가비지 컬렉션(GC):
+ * 생성/수정 후 14일(기본값)이 경과한 오래된 견적 드래프트(estimate_draft_*)를 자동 삭제합니다.
+ */
+export function cleanExpiredEstimateDrafts(maxDays = 14) {
+  if (typeof window === 'undefined' || !window.localStorage) return 0;
+  const now = Date.now();
+  const maxAgeMs = maxDays * 24 * 60 * 60 * 1000;
+  let deletedCount = 0;
+
+  try {
+    const keysToRemove = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith('estimate_draft_')) {
+        try {
+          const raw = localStorage.getItem(key);
+          if (!raw) {
+            keysToRemove.push(key);
+            continue;
+          }
+          const draft = JSON.parse(raw);
+          const timestamp = Number(draft.updatedAt || draft.savedAt || draft.createdAt || 0);
+          if (!timestamp || (now - timestamp > maxAgeMs)) {
+            keysToRemove.push(key);
+          }
+        } catch (_) {
+          keysToRemove.push(key);
+        }
+      }
+    }
+
+    keysToRemove.forEach((k) => {
+      localStorage.removeItem(k);
+      deletedCount++;
+    });
+
+    if (deletedCount > 0) {
+      console.log(`[LocalStorage GC] 14일 경과 만료 드래프트 ${deletedCount}건 자동 정리 완료.`);
+    }
+  } catch (e) {
+    console.warn('드래프트 GC 실행 중 오류:', e);
+  }
+  return deletedCount;
+}

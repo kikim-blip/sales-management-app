@@ -1,5 +1,5 @@
 // public/sw.js
-const CACHE_NAME = 'sales-pwa-v17-concurrency-offline-sync';
+const CACHE_NAME = 'sales-pwa-v18-storage-gc-dead-letter-normalization';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
