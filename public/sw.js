@@ -1,5 +1,5 @@
 // public/sw.js
-const CACHE_NAME = 'sales-pwa-v12-procurement-master-unified';
+const CACHE_NAME = 'sales-pwa-v13-light-print-formula-perfect';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();

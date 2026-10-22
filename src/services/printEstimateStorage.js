@@ -265,6 +265,45 @@ export const DEFAULT_GOVERNMENT_MASTER_RATES = {
     color: 120, // 원색(컬러) 장당 출력료 (원/장)
     mono: 35,   // 흑백(단색) 장당 출력료 (원/장)
   },
+  // 경인쇄(마스터인쇄) 고시 기준단가 (조달청/공공 표준)
+  lightPrintRates: {
+    // 50부까지 기본단가 (표지는 8절 기준, 본문은 각 절수 기준)
+    base50: {
+      '8절_백상지': 16750,
+      '8절_중질지': 15270,
+      '8절_신문용지': 15080,
+      '10절_백상지': 12150,
+      '16절_백상지': 8920,
+      '16절_중질지': 8120,
+      '16절_신문용지': 8070,
+      '25절_백상지': 5580,
+      '32절_백상지': 4190,
+    },
+    // 초과 10부마다 가산단가 (원/10부)
+    extra10: {
+      '8절': 183,
+      '10절': 157,
+      '16절': 101,
+      '25절': 80,
+      '32절': 55,
+    },
+    // 조판생략 감액단가 (면당)
+    typesetDiscount: {
+      '8절': 4420,
+      '10절': 3500,
+      '16절': 2450,
+      '25절': 1530,
+      '32절': 1240,
+    },
+    // 표지 배수 가산 기준
+    coverSheets: {
+      base8_10: 5,     // 8절/10절 기본 5매
+      base16_32: 3,    // 16절 이하 기본 3매
+      artPaper: 2.5,   // 아트지/레자크지 가산 2.5매
+      extraColor: 2.5, // 1도 초과 추가 1색도당 2.5매
+      coating: 5.0,    // 코팅 가산 5.0매
+    },
+  },
   // 공공 법정 가산율 기본값
   defaultManageRate: 5,   // 일반관리비율 5% (최대 14%)
   defaultProfitRate: 10,  // 이윤율 10% (최대 25%)
@@ -276,7 +315,31 @@ export function getGovernmentMasterRates() {
     const raw = localStorage.getItem(STORAGE_KEYS.GOV_STD_RATES);
     if (!raw) return DEFAULT_GOVERNMENT_MASTER_RATES;
     const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === 'object' ? { ...DEFAULT_GOVERNMENT_MASTER_RATES, ...parsed } : DEFAULT_GOVERNMENT_MASTER_RATES;
+    if (!parsed || typeof parsed !== 'object') return DEFAULT_GOVERNMENT_MASTER_RATES;
+    return {
+      ...DEFAULT_GOVERNMENT_MASTER_RATES,
+      ...parsed,
+      lightPrintRates: {
+        ...DEFAULT_GOVERNMENT_MASTER_RATES.lightPrintRates,
+        ...(parsed.lightPrintRates || {}),
+        base50: {
+          ...DEFAULT_GOVERNMENT_MASTER_RATES.lightPrintRates.base50,
+          ...(parsed.lightPrintRates?.base50 || {}),
+        },
+        extra10: {
+          ...DEFAULT_GOVERNMENT_MASTER_RATES.lightPrintRates.extra10,
+          ...(parsed.lightPrintRates?.extra10 || {}),
+        },
+        typesetDiscount: {
+          ...DEFAULT_GOVERNMENT_MASTER_RATES.lightPrintRates.typesetDiscount,
+          ...(parsed.lightPrintRates?.typesetDiscount || {}),
+        },
+        coverSheets: {
+          ...DEFAULT_GOVERNMENT_MASTER_RATES.lightPrintRates.coverSheets,
+          ...(parsed.lightPrintRates?.coverSheets || {}),
+        },
+      },
+    };
   } catch (e) {
     return DEFAULT_GOVERNMENT_MASTER_RATES;
   }

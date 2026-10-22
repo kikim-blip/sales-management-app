@@ -55,6 +55,41 @@ export const GOVERNMENT_STD_RATES = {
   defaultManageRate: 5,   // 일반관리비율 5% (최대 14%)
   defaultProfitRate: 10,  // 이윤율 10% (최대 25%)
   defaultContractRate: 88,// 낙찰하한율/사정율 88%
+  // 경인쇄(마스터인쇄) 고시 기준단가 (조달청/공공 표준)
+  lightPrintRates: {
+    base50: {
+      '8절_백상지': 16750,
+      '8절_중질지': 15270,
+      '8절_신문용지': 15080,
+      '10절_백상지': 12150,
+      '16절_백상지': 8920,
+      '16절_중질지': 8120,
+      '16절_신문용지': 8070,
+      '25절_백상지': 5580,
+      '32절_백상지': 4190,
+    },
+    extra10: {
+      '8절': 183,
+      '10절': 157,
+      '16절': 101,
+      '25절': 80,
+      '32절': 55,
+    },
+    typesetDiscount: {
+      '8절': 4420,
+      '10절': 3500,
+      '16절': 2450,
+      '25절': 1530,
+      '32절': 1240,
+    },
+    coverSheets: {
+      base8_10: 5,     // 8절/10절 기본 5매
+      base16_32: 3,    // 16절 이하 기본 3매
+      artPaper: 2.5,   // 아트지/레자크지 가산 2.5매
+      extraColor: 2.5, // 1도 초과 추가 1색도당 2.5매
+      coating: 5.0,    // 코팅 가산 5.0매
+    },
+  },
 };
 
 /**
@@ -290,6 +325,165 @@ export function calculateGovernmentOffsetPart({
 }
 
 /**
+ * 경인쇄(마스터인쇄) 조달청 공공 표준 원가 산출 엔진
+ * (조달청 및 공공기관 유인물 표준 인쇄원가 계산 기준 준수)
+ */
+export function calculateGovernmentLightPrint({
+  quantity = 1000,
+  paperCut = '국배판(A4)',
+  cover = {},
+  body = {},
+  options = {},
+  masterRates = null,
+}) {
+  const master = masterRates || GOVERNMENT_STD_RATES;
+  const lightRates = master.lightPrintRates || GOVERNMENT_STD_RATES.lightPrintRates;
+  const qty = Math.max(1, Number(quantity) || 1000);
+
+  // 1. 절수 파악 (8절, 10절, 16절, 25절, 32절)
+  let cutKey = '16절';
+  if (paperCut.includes('8절') || paperCut.includes('A3') || paperCut.includes('B4') || paperCut.includes('타블로이드')) {
+    cutKey = '8절';
+  } else if (paperCut.includes('10절')) {
+    cutKey = '10절';
+  } else if (paperCut.includes('25절')) {
+    cutKey = '25절';
+  } else if (paperCut.includes('32절') || paperCut.includes('A5') || paperCut.includes('B6')) {
+    cutKey = '32절';
+  } else {
+    cutKey = '16절';
+  }
+
+  // 2. 50부 초과 10부마다 스텝 계산
+  const extraSteps = qty >= 50 ? Math.floor((qty - 50) / 10) : 0;
+
+  // 3. 표지 요금 계산
+  // - 표지는 8절 백상지 기준단가 및 10부당 단가 적용
+  const coverBasePrice50 = Number(lightRates?.base50?.['8절_백상지']) || 16750;
+  const coverExtra10Price = Number(lightRates?.extra10?.['8절']) || 183;
+
+  // 표지 기본매수: 8절/10절 5매, 16절/25절/32절 3매
+  const baseCoverSheets = (cutKey === '8절' || cutKey === '10절')
+    ? Number(lightRates?.coverSheets?.base8_10 ?? 5)
+    : Number(lightRates?.coverSheets?.base16_32 ?? 3);
+
+  // 아트지/레자크지 가산 2.5매
+  const coverPaper = cover.paperName || '아트지';
+  const isArtOrLeather = coverPaper.includes('아트') || coverPaper.includes('스노우') || coverPaper.includes('랑데뷰') || coverPaper.includes('아르떼') || coverPaper.includes('레자크');
+  const artSheets = isArtOrLeather ? Number(lightRates?.coverSheets?.artPaper ?? 2.5) : 0;
+
+  // 색도 가산: 기본 1도 외 추가 1도당 2.5매
+  const colorCount = Number(cover.colorCount) || (cover.color === '4도' ? 4 : cover.color === '2도' ? 2 : 1);
+  const extraColors = Math.max(0, colorCount - 1);
+  const extraColorSheets = extraColors * Number(lightRates?.coverSheets?.extraColor ?? 2.5);
+
+  // 코팅 가산 5.0매
+  const hasCoating = Boolean(options.hasCoating);
+  const coatingSheets = hasCoating ? Number(lightRates?.coverSheets?.coating ?? 5.0) : 0;
+
+  const extraSheets = artSheets + extraColorSheets + coatingSheets;
+  const totalCoverSheets = baseCoverSheets + extraSheets;
+
+  const cover50Cost = Math.round(coverBasePrice50 * totalCoverSheets);
+  const cover10Cost = Math.round(coverExtra10Price * extraSteps * totalCoverSheets);
+  const totalCoverCost = cover50Cost + cover10Cost;
+
+  // 산출내역 설명 텍스트
+  const extraParts = [];
+  if (artSheets > 0) extraParts.push(`${artSheets}매(${coverPaper})`);
+  if (extraColorSheets > 0) extraParts.push(`(${extraColors}색도×${lightRates?.coverSheets?.extraColor ?? 2.5}매)`);
+  if (coatingSheets > 0) extraParts.push(`${coatingSheets}매(코팅)`);
+  const extraSheetsDesc = extraParts.length > 0 ? extraParts.join('+') : '0매(추가없음)';
+
+  // 4. 본문 요금 계산
+  const bodyPaper = (body.paperName || '백상지').includes('신문') ? '신문용지' : (body.paperName || '').includes('중질') ? '중질지' : '백상지';
+  const bodyKey = `${cutKey}_${bodyPaper}`;
+  const bodyBasePrice50 = Number(lightRates?.base50?.[bodyKey]) || Number(lightRates?.base50?.[`${cutKey}_백상지`]) || (cutKey === '8절' ? 15370 : 8920);
+  const bodyExtra10Price = Number(lightRates?.extra10?.[cutKey]) || (cutKey === '8절' ? 183 : 101);
+
+  const bodyPages = Math.max(0, Number(body.pages) || 64);
+  const body50Cost = Math.round(bodyBasePrice50 * bodyPages);
+  const body10Cost = Math.round(bodyExtra10Price * extraSteps * bodyPages);
+  const totalBodyCost = body50Cost + body10Cost;
+
+  // 5. 기본사항 소계
+  const basicTotal = totalCoverCost + totalBodyCost;
+
+  // 6. 계산가감: 조판생략 감액
+  // 사용자가 한글/PDF/디스켓 등 파일을 제공한 경우 조판생략 감액 적용 (기본값: true)
+  const hasTypesetDiscount = options.hasTypesetDiscount ?? true;
+  const unitDiscount = Number(lightRates?.typesetDiscount?.[cutKey]) || 2450;
+  const typesetDiscountCost = hasTypesetDiscount ? Math.round(unitDiscount * bodyPages) : 0;
+  const discountAmount = -typesetDiscountCost;
+
+  // 7. 기타추가
+  const extraCost = Number(options.extraCost || 0);
+
+  // 8. 소계 (공급가액 = 1.기본사항 + 2.계산가감 + 3.기타추가)
+  const subtotal = Math.max(0, basicTotal + discountAmount + extraCost);
+
+  // 9. 부가가치세 (소계의 10%)
+  const vat = Math.round(subtotal * 0.1);
+
+  // 10. 합계 (예정가격 = 소계 + 부가세)
+  const targetTotal = subtotal + vat;
+
+  // 11. 계약금액 (천원단위 이하 절사)
+  const contractAmount = Math.floor(targetTotal / 1000) * 1000;
+  const perBookTargetPrice = Math.round(targetTotal / qty);
+  const perBookContractPrice = Math.round(contractAmount / qty);
+
+  return {
+    isLightPrint: true,
+    printType: '경인쇄',
+    cutKey,
+    qty,
+    extraSteps,
+    // 표지
+    coverBasePrice50,
+    coverExtra10Price,
+    baseCoverSheets,
+    artSheets,
+    extraColorSheets,
+    coatingSheets,
+    extraSheets,
+    totalCoverSheets,
+    extraSheetsDesc,
+    cover50Cost,
+    cover10Cost,
+    totalCoverCost,
+    // 본문
+    bodyPages,
+    bodyPaper,
+    bodyBasePrice50,
+    bodyExtra10Price,
+    body50Cost,
+    body10Cost,
+    totalBodyCost,
+    // 기본사항 합계
+    basicTotal,
+    // 계산가감
+    hasTypesetDiscount,
+    unitDiscount,
+    typesetDiscountCost,
+    discountAmount,
+    // 기타추가
+    extraCost,
+    // 총계
+    subtotal,
+    step11_supplyPrice: subtotal,
+    vat,
+    step12_vat: vat,
+    targetTotal,
+    step13_targetTotal: targetTotal,
+    contractAmount,
+    step14_contractAmount: contractAmount,
+    perBookTargetPrice,
+    perBookContractPrice,
+  };
+}
+
+/**
  * 조달청 공공 표준 인쇄원가 종합 계산 (14단계 법정 산식)
  */
 export function calculateGovernmentCost({
@@ -375,6 +569,79 @@ export function calculateGovernmentCost({
     printCost: 0,
     totalCost: 0,
   };
+
+  // ── 경인쇄(마스터인쇄) 전용 조달 공공 산식 분기 ──
+  if (isLightPrint && !isSingleLeaf) {
+    const light = calculateGovernmentLightPrint({
+      quantity: qty,
+      paperCut,
+      cover: {
+        paperName: cover.paperName || '아트지',
+        colorCount: cover.colorCount || 4,
+        color: cover.color || '4도',
+      },
+      body: {
+        paperName: body.paperName || '백상지',
+        pages: body.pages ?? 64,
+      },
+      options: {
+        hasCoating: options.hasCoating,
+        hasTypesetDiscount: options.hasTypesetDiscount,
+        extraCost: options.extraCost,
+      },
+      masterRates: master,
+    });
+
+    const totalPages = (cover.pages ?? 4) + (body.pages ?? 64);
+
+    return {
+      quantity: qty,
+      totalPages,
+      printType: '경인쇄',
+      bindingType: general.bindingType || '무사무선',
+      paperCut,
+      isLightPrint: true,
+      lightReport: light,
+
+      // 파트별 세부 데이터 (규격서 및 공통 표에서 참조)
+      coverCalc,
+      bodyCalc,
+      supplementCalc: null,
+
+      // 경인쇄 전용 요금 집계
+      light_basicTotal: light.basicTotal,
+      light_totalCoverCost: light.totalCoverCost,
+      light_totalBodyCost: light.totalBodyCost,
+      light_discountAmount: light.discountAmount,
+      light_typesetDiscountCost: light.typesetDiscountCost,
+      light_unitDiscount: light.unitDiscount,
+      light_extraCost: light.extraCost,
+
+      // 14단계 호환 필드 (총액 일치)
+      step1_paperCost: 0,
+      step2_typesetCost: 0,
+      step3_ctpCost: 0,
+      step4_printCost: light.basicTotal,
+      step5_bindingCost: 0,
+      step6_extraCost: light.discountAmount + light.extraCost,
+      step7_subtotal: light.subtotal,
+      step8_manageCost: 0,
+      manageRate: 0,
+      step9_manufacturingTotal: light.subtotal,
+      step10_profitCost: 0,
+      profitRate: 0,
+      profitBase: 0,
+      step11_supplyPrice: light.subtotal,
+      step12_vat: light.vat,
+      step13_targetTotal: light.targetTotal,
+      step14_contractAmount: light.contractAmount,
+      contractRate: 100,
+
+      // 권당 단가
+      perBookTargetPrice: light.perBookTargetPrice,
+      perBookContractPrice: light.perBookContractPrice,
+    };
+  }
 
   // 3. 화보/부속 계산 (책자/화보집 옵션 시)
   let supplementCalc = null;

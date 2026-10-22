@@ -2,6 +2,7 @@
 import React, { useState, useRef } from 'react';
 import { X, Printer, Download, FileText, CheckCircle2, Building, ShieldCheck } from 'lucide-react';
 import { exportEstimateDetailToExcel } from '../../services/printEstimateStorage';
+import { calculateGovernmentLightPrint } from '../../utils/printCalculators/governmentCostCalculator';
 
 export default function GovernmentCostModal({ estimate, onClose }) {
   const [activeDocTab, setActiveDocTab] = useState('costSheet'); // 'costSheet' | 'specDoc' | 'commercial'
@@ -10,8 +11,29 @@ export default function GovernmentCostModal({ estimate, onClose }) {
   if (!estimate) return null;
 
   const gov = estimate.governmentReport || {};
+  const isLightPrint = (estimate.printType || '').includes('경인쇄') || (estimate.printType || '').includes('마스터');
   const isOffset = (estimate.printType || '옵셋인쇄').includes('옵셋');
   const isDigital = (estimate.printType || '').includes('디지털');
+
+  const light = gov.lightReport || (isLightPrint ? calculateGovernmentLightPrint({
+    quantity: estimate.quantity,
+    paperCut: estimate.paperCut,
+    cover: {
+      paperName: estimate.coverPaperName,
+      colorCount: estimate.coverColor === '4도' ? 4 : estimate.coverColor === '2도' ? 2 : 1,
+      color: estimate.coverColor,
+    },
+    body: {
+      paperName: estimate.bodyPaperName,
+      pages: estimate.bodyPages,
+    },
+    options: {
+      hasCoating: estimate.hasCoating,
+      hasTypesetDiscount: estimate.hasTypesetDiscount ?? true,
+      extraCost: estimate.discountOrAdd || 0,
+    }
+  }) : null);
+
   const todayStr = estimate.regDate || new Date().toISOString().slice(0, 10);
   const deliveryDateStr = estimate.deliveryDate || '-';
   const proofDateStr = estimate.proofDate || '-';
@@ -201,8 +223,137 @@ export default function GovernmentCostModal({ estimate, onClose }) {
                   </tbody>
                 </table>
 
-                {/* 2. 14단계 법정 원가 산출내역 테이블 */}
-                <table className="w-full border-collapse border-2 border-black text-xs my-3">
+                {/* 2. 원가 산출내역 테이블 (경인쇄 전용 vs 옵셋 14단계) */}
+                {isLightPrint && light ? (
+                  /* ── 🏛️ 경인쇄(마스터인쇄) 전용 조달 공공 산출 테이블 (jne.go.kr / 공공 기준 완전 일치) ── */
+                  <table className="w-full border-collapse border-2 border-black text-xs my-3">
+                    <thead>
+                      <tr className="bg-sky-50/80 font-bold border-b border-black text-center">
+                        <th className="border border-black py-2 px-2 w-24 bg-blue-100/60">항목</th>
+                        <th colSpan="6" className="border border-black py-2 px-3 text-left">산 출 내 역</th>
+                        <th className="border border-black py-2 px-3 w-28 text-right bg-blue-100/60">금액(원)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-black text-[11px] leading-relaxed">
+                      {/* 1. 기본사항 */}
+                      <tr>
+                        <td className="border border-black py-2.5 px-2 text-center font-bold bg-slate-50 align-top">
+                          1. 기본사항
+                        </td>
+                        <td colSpan="6" className="border border-black py-2.5 px-3 space-y-1.5 font-sans">
+                          <div className="font-bold text-slate-800">▒▒ 표&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;지 ▒▒▒▒▒▒▒▒</div>
+                          <div>
+                            □ 50부까지 요금: {light.coverBasePrice50.toLocaleString()}원 × &#123;{light.baseCoverSheets}매(기본) + {light.extraSheets}매(추가색도)&#125; = {light.cover50Cost.toLocaleString()}원
+                            <div className="pl-3 text-[10px] text-slate-600">※ 추가색도 {light.extraSheets}매 산출내역: {light.extraSheetsDesc}</div>
+                          </div>
+                          <div>
+                            □ 10부마다 요금: {light.extraSteps > 0 ? `${light.coverExtra10Price.toLocaleString()}원 × ${light.extraSteps}스텝(10부) × ${light.totalCoverSheets}매 = ${light.cover10Cost.toLocaleString()}원` : '-'}
+                          </div>
+                          <div className="font-bold">
+                            □ 표지 요금: {light.cover50Cost.toLocaleString()}원 + {light.cover10Cost.toLocaleString()}원 = <span className="text-blue-700">{light.totalCoverCost.toLocaleString()}원</span>
+                          </div>
+
+                          <div className="border-t border-dotted border-slate-300 my-1.5 pt-1.5">
+                            <div className="font-bold text-slate-800">▒▒ 본문흑백 ▒▒▒▒▒▒▒▒</div>
+                            <div>
+                              □ 50부까지 요금: {light.bodyBasePrice50.toLocaleString()}원 × {light.bodyPages}면 = {light.body50Cost.toLocaleString()}원
+                            </div>
+                            <div>
+                              □ 10부마다 요금: {light.extraSteps > 0 ? `${light.bodyExtra10Price.toLocaleString()}원 × ${light.extraSteps}스텝(10부) × ${light.bodyPages}면 = ${light.body10Cost.toLocaleString()}원` : '-'}
+                            </div>
+                            <div className="font-bold">
+                              □ 본문흑백 요금: {light.body50Cost.toLocaleString()}원 + {light.body10Cost.toLocaleString()}원 = <span className="text-blue-700">{light.totalBodyCost.toLocaleString()}원</span>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="border border-black py-2.5 px-3 text-right font-bold align-bottom">
+                          {light.basicTotal.toLocaleString()}
+                        </td>
+                      </tr>
+
+                      {/* 2. 계산가감 */}
+                      <tr>
+                        <td className="border border-black py-2.5 px-2 text-center font-bold bg-slate-50 align-top">
+                          2. 계산가감
+                        </td>
+                        <td colSpan="6" className="border border-black py-2.5 px-3 space-y-1">
+                          <div>□ 조판생략: 글자의 크기나 행간간격의 조정, 규격 등 변환을 요하는 파일을 제공할 때</div>
+                          <div>□ 조판생략 감액: -{light.unitDiscount.toLocaleString()}원 × 흑백{light.bodyPages}면 = {light.discountAmount.toLocaleString()}원</div>
+                        </td>
+                        <td className="border border-black py-2.5 px-3 text-right font-bold align-bottom text-rose-700">
+                          {light.discountAmount.toLocaleString()}
+                        </td>
+                      </tr>
+
+                      {/* 3. 기타추가 */}
+                      <tr>
+                        <td className="border border-black py-2 px-2 text-center font-bold bg-slate-50">
+                          3. 기타추가
+                        </td>
+                        <td colSpan="6" className="border border-black py-2 px-3 text-slate-500">
+                          {light.extraCost > 0 ? `특수 후가공 실비: ${light.extraCost.toLocaleString()}원` : '-'}
+                        </td>
+                        <td className="border border-black py-2 px-3 text-right font-bold">
+                          {light.extraCost > 0 ? light.extraCost.toLocaleString() : '0'}
+                        </td>
+                      </tr>
+
+                      {/* 4. 소계 */}
+                      <tr className="bg-slate-50 font-bold">
+                        <td className="border border-black py-2 px-2 text-center font-bold">
+                          4. 소계
+                        </td>
+                        <td colSpan="6" className="border border-black py-2 px-3">
+                          1+2+3 (순제조원가 / 공급가액)
+                        </td>
+                        <td className="border border-black py-2 px-3 text-right font-bold text-slate-900">
+                          {light.subtotal.toLocaleString()}
+                        </td>
+                      </tr>
+
+                      {/* 5. 부가세 */}
+                      <tr>
+                        <td className="border border-black py-2 px-2 text-center font-bold bg-slate-50">
+                          5. 부가세
+                        </td>
+                        <td colSpan="6" className="border border-black py-2 px-3">
+                          4 × 10% (부가가치세)
+                        </td>
+                        <td className="border border-black py-2 px-3 text-right font-bold">
+                          {light.vat.toLocaleString()}
+                        </td>
+                      </tr>
+
+                      {/* 6. 합계 */}
+                      <tr className="bg-blue-50 font-bold text-sm">
+                        <td className="border border-black py-2.5 px-2 text-center font-black">
+                          6. 합계
+                        </td>
+                        <td colSpan="6" className="border border-black py-2 px-3 text-blue-900">
+                          4+5 (예정가격)
+                        </td>
+                        <td className="border border-black py-2.5 px-3 text-right font-black text-blue-900 text-sm">
+                          {light.targetTotal.toLocaleString()}
+                        </td>
+                      </tr>
+
+                      {/* 7. 계약금액 */}
+                      <tr className="bg-teal-100 font-bold text-sm">
+                        <td className="border border-black py-2.5 px-2 text-center font-black text-teal-900">
+                          7. 계약금액
+                        </td>
+                        <td colSpan="6" className="border border-black py-2 px-3 text-teal-900">
+                          6 × 100% (조달청 고시 기준, 천원단위 이하 절사)
+                        </td>
+                        <td className="border border-black py-2.5 px-3 text-right font-black text-teal-950 text-base">
+                          ₩ {light.contractAmount.toLocaleString()}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                ) : (
+                  /* ── 🏛️ 옵셋/디지털 14단계 법정 원가 산출내역 테이블 ── */
+                  <table className="w-full border-collapse border-2 border-black text-xs my-3">
                   <thead>
                     <tr className="bg-sky-50/80 font-bold border-b border-black text-center">
                       <th className="border border-black py-2 px-2 w-20 bg-blue-100/60">항목</th>
@@ -429,6 +580,7 @@ export default function GovernmentCostModal({ estimate, onClose }) {
 
                   </tbody>
                 </table>
+                )}
 
                 {/* 하단 공문서 안내 문구 */}
                 <div className="mt-6 text-[11px] text-slate-500 leading-relaxed border-t border-slate-300 pt-3">

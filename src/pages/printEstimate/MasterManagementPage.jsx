@@ -1,6 +1,6 @@
 // src/pages/printEstimate/MasterManagementPage.jsx
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Edit2, RotateCcw, Save, Check, FileSpreadsheet, Layers, Sliders, ShieldCheck, Building2 } from 'lucide-react';
+import { Plus, Trash2, Edit2, RotateCcw, Save, Check, FileSpreadsheet, Layers, Sliders, ShieldCheck, Building2, Printer } from 'lucide-react';
 import {
   getMasterPapers, saveMasterPaper, deleteMasterPaper,
   getMasterProcesses, saveMasterProcess, deleteMasterProcess,
@@ -124,6 +124,19 @@ export default function MasterManagementPage() {
     setGovRates(prev => ({
       ...prev,
       digitalUnitPrice: { ...(prev.digitalUnitPrice || {}), [key]: Number(val) || 0 }
+    }));
+  };
+
+  const handleUpdateGovLightRate = (section, key, val) => {
+    setGovRates(prev => ({
+      ...prev,
+      lightPrintRates: {
+        ...(prev.lightPrintRates || {}),
+        [section]: {
+          ...((prev.lightPrintRates && prev.lightPrintRates[section]) || {}),
+          [key]: Number(val) || 0,
+        }
+      }
     }));
   };
 
@@ -594,6 +607,205 @@ export default function MasterManagementPage() {
                         className="w-full p-2 border border-slate-300 rounded-lg bg-white font-black text-right text-teal-800"
                       />
                       <span className="font-bold text-slate-500">%</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 5. 경인쇄(마스터인쇄) 고시 기준단가 (조달청/공공 표준) */}
+            <div className="md:col-span-2 border border-amber-300 rounded-xl p-5 bg-amber-50/40 space-y-5">
+              <div className="font-black text-amber-950 text-sm pb-2 border-b border-amber-200 flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center space-x-2">
+                  <span className="p-1 bg-amber-600 text-white rounded">
+                    <Printer className="w-4 h-4" />
+                  </span>
+                  <span>5. 경인쇄(마스터인쇄) 조달청 공공 표준 고시 기준단가 설정</span>
+                </div>
+                <span className="text-[11px] font-normal text-amber-800">
+                  50부 기본단가 / 10부 초과단가 / 원고 파일 조판생략 감액 / 표지 매수 가산 기준
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                {/* 5-1. 50부까지 기본단가 */}
+                <div className="bg-white p-3.5 rounded-xl border border-amber-200 space-y-3">
+                  <div className="font-bold text-slate-800 pb-1.5 border-b border-slate-100 flex items-center justify-between">
+                    <span>□ 50부 기본단가 (원)</span>
+                    <span className="text-[10px] text-slate-500">지종 및 절수별</span>
+                  </div>
+                  <div className="space-y-2 text-[11px]">
+                    {[
+                      { key: '8절_백상지', label: '8절 백상지 (표지/본문)' },
+                      { key: '8절_중질지', label: '8절 중질지 (갱지)' },
+                      { key: '8절_신문용지', label: '8절 신문용지' },
+                      { key: '10절_백상지', label: '10절 백상지' },
+                      { key: '16절_백상지', label: '16절 백상지 (A4/B5 본문)' },
+                      { key: '16절_중질지', label: '16절 중질지' },
+                      { key: '16절_신문용지', label: '16절 신문용지' },
+                      { key: '25절_백상지', label: '25절 백상지' },
+                      { key: '32절_백상지', label: '32절 백상지' },
+                    ].map(item => (
+                      <div key={item.key} className="flex items-center justify-between gap-2">
+                        <label className="text-slate-600 font-medium truncate">{item.label}</label>
+                        <div className="w-28 flex items-center space-x-1">
+                          <input
+                            type="number"
+                            value={govRates.lightPrintRates?.base50?.[item.key] ?? 0}
+                            onChange={e => handleUpdateGovLightRate('base50', item.key, e.target.value)}
+                            className="w-full p-1.5 border border-slate-300 rounded text-right font-bold text-amber-900"
+                          />
+                          <span className="text-slate-400 text-[10px]">원</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 5-2. 10부마다 가산단가 & 조판감액 */}
+                <div className="space-y-4">
+                  {/* 10부마다 초과 가산단가 */}
+                  <div className="bg-white p-3.5 rounded-xl border border-amber-200 space-y-2.5">
+                    <div className="font-bold text-slate-800 pb-1.5 border-b border-slate-100 flex items-center justify-between">
+                      <span>□ 10부마다 초과단가 (원)</span>
+                      <span className="text-[10px] text-slate-500">50부 초과 시</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-[11px]">
+                      {['8절', '10절', '16절', '25절', '32절'].map(cut => (
+                        <div key={cut} className="flex items-center justify-between gap-1">
+                          <span className="font-bold text-slate-600">{cut}</span>
+                          <div className="w-20 flex items-center space-x-1">
+                            <input
+                              type="number"
+                              value={govRates.lightPrintRates?.extra10?.[cut] ?? 0}
+                              onChange={e => handleUpdateGovLightRate('extra10', cut, e.target.value)}
+                              className="w-full p-1 border border-slate-300 rounded text-right font-bold text-amber-900 text-xs"
+                            />
+                            <span className="text-slate-400 text-[10px]">원</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* 원고 파일 제공 시 조판생략 감액단가 */}
+                  <div className="bg-white p-3.5 rounded-xl border border-rose-200 space-y-2.5">
+                    <div className="font-bold text-rose-900 pb-1.5 border-b border-rose-100 flex items-center justify-between">
+                      <span>□ 조판생략 감액단가 (면당)</span>
+                      <span className="text-[10px] text-rose-600 font-bold">감액(-)</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-[11px]">
+                      {['8절', '10절', '16절', '25절', '32절'].map(cut => (
+                        <div key={cut} className="flex items-center justify-between gap-1">
+                          <span className="font-bold text-slate-600">{cut}</span>
+                          <div className="w-20 flex items-center space-x-1">
+                            <input
+                              type="number"
+                              value={govRates.lightPrintRates?.typesetDiscount?.[cut] ?? 0}
+                              onChange={e => handleUpdateGovLightRate('typesetDiscount', cut, e.target.value)}
+                              className="w-full p-1 border border-rose-300 rounded text-right font-bold text-rose-700 text-xs"
+                            />
+                            <span className="text-slate-400 text-[10px]">원</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-[10px] text-rose-600 mt-1">
+                      ※ 원고(한글/PDF) 제공 시 본문 면수에 곱하여 소계에서 차감됩니다.
+                    </p>
+                  </div>
+                </div>
+
+                {/* 5-3. 표지 배수 가산 기준 */}
+                <div className="bg-white p-3.5 rounded-xl border border-amber-200 space-y-3">
+                  <div className="font-bold text-slate-800 pb-1.5 border-b border-slate-100 flex items-center justify-between">
+                    <span>□ 표지 배수 가산 기준 (매)</span>
+                    <span className="text-[10px] text-slate-500">고시 규정 매수</span>
+                  </div>
+                  <div className="space-y-3 text-[11px]">
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-slate-700 font-bold">8절 / 10절 기본매수</label>
+                        <div className="w-20 flex items-center space-x-1">
+                          <input
+                            type="number"
+                            step="0.5"
+                            value={govRates.lightPrintRates?.coverSheets?.base8_10 ?? 5}
+                            onChange={e => handleUpdateGovLightRate('coverSheets', 'base8_10', e.target.value)}
+                            className="w-full p-1 border border-slate-300 rounded text-right font-bold text-amber-900"
+                          />
+                          <span className="text-slate-400 text-[10px]">매</span>
+                        </div>
+                      </div>
+                      <p className="text-[10px] text-slate-400">8절/10절 표지의 고시 기본 환산 매수</p>
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-slate-700 font-bold">16절 이하 기본매수</label>
+                        <div className="w-20 flex items-center space-x-1">
+                          <input
+                            type="number"
+                            step="0.5"
+                            value={govRates.lightPrintRates?.coverSheets?.base16_32 ?? 3}
+                            onChange={e => handleUpdateGovLightRate('coverSheets', 'base16_32', e.target.value)}
+                            className="w-full p-1 border border-slate-300 rounded text-right font-bold text-amber-900"
+                          />
+                          <span className="text-slate-400 text-[10px]">매</span>
+                        </div>
+                      </div>
+                      <p className="text-[10px] text-slate-400">A4, B5, 16절 이하 표지 고시 기본 매수</p>
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-slate-700 font-bold">아트지/레자크지 가산</label>
+                        <div className="w-20 flex items-center space-x-1">
+                          <input
+                            type="number"
+                            step="0.5"
+                            value={govRates.lightPrintRates?.coverSheets?.artPaper ?? 2.5}
+                            onChange={e => handleUpdateGovLightRate('coverSheets', 'artPaper', e.target.value)}
+                            className="w-full p-1 border border-slate-300 rounded text-right font-bold text-amber-900"
+                          />
+                          <span className="text-slate-400 text-[10px]">매</span>
+                        </div>
+                      </div>
+                      <p className="text-[10px] text-slate-400">백상지 외 고급 표지지 사용 시 가산</p>
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-slate-700 font-bold">추가 1도당 가산매수</label>
+                        <div className="w-20 flex items-center space-x-1">
+                          <input
+                            type="number"
+                            step="0.5"
+                            value={govRates.lightPrintRates?.coverSheets?.extraColor ?? 2.5}
+                            onChange={e => handleUpdateGovLightRate('coverSheets', 'extraColor', e.target.value)}
+                            className="w-full p-1 border border-slate-300 rounded text-right font-bold text-amber-900"
+                          />
+                          <span className="text-slate-400 text-[10px]">매</span>
+                        </div>
+                      </div>
+                      <p className="text-[10px] text-slate-400">1도 초과 추가 색도당 (2도: +2.5매, 4도: +7.5매)</p>
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-slate-700 font-bold">표지 코팅 가산매수</label>
+                        <div className="w-20 flex items-center space-x-1">
+                          <input
+                            type="number"
+                            step="0.5"
+                            value={govRates.lightPrintRates?.coverSheets?.coating ?? 5.0}
+                            onChange={e => handleUpdateGovLightRate('coverSheets', 'coating', e.target.value)}
+                            className="w-full p-1 border border-slate-300 rounded text-right font-bold text-amber-900"
+                          />
+                          <span className="text-slate-400 text-[10px]">매</span>
+                        </div>
+                      </div>
+                      <p className="text-[10px] text-slate-400">라미네이팅 표지 코팅 시 고시 가산 매수</p>
                     </div>
                   </div>
                 </div>
