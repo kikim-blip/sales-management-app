@@ -36,7 +36,7 @@ export default function PrintEstimatePage() {
             </span>
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 mt-1">
-            제판(CTP), 인쇄, 제본, 후가공, 용지 등 6대 공정 자동 원가 계산 및 견적서 버전 관리
+            조달·공공기관 표준인쇄원가(14단계) 및 사기업 실무 견적(6대 공정) 자동 원가 계산 및 견적서 버전 관리
           </p>
         </div>
 
