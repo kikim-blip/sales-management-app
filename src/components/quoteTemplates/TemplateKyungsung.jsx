@@ -16,7 +16,9 @@ export default function TemplateKyungsung({
   const custName = customer?.name || quote.customer_name || '거래처';
   const custDept = quote.dept || customer?.dept || '';
 
-  const shouldShowContact = quote.hide_contact_person ? false : (quote.show_contact_person !== undefined ? quote.show_contact_person : true);
+  const shouldShowContact = quote.show_contact_on_estimate !== undefined
+    ? (quote.show_contact_on_estimate === 1 || quote.show_contact_on_estimate === true)
+    : (quote.hide_contact_person ? false : (quote.show_contact_person !== undefined ? quote.show_contact_person : true));
   const explicitContact = quote.client_contact_person !== undefined ? quote.client_contact_person : quote.contact_person;
   const custContact = shouldShowContact ? (explicitContact !== undefined ? explicitContact : (customer?.contact_person || '')) : '';
   const custPhone = shouldShowContact ? (quote.client_phone || quote.phone || (explicitContact !== undefined ? '' : (customer?.phone || customer?.mobile || ''))) : '';

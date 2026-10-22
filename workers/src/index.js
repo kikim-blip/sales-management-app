@@ -24,6 +24,30 @@ function error(message, status = 400) {
   });
 }
 
+// 견적 세부 품목 요약 텍스트 생성기 (AppSheet 및 단일 셀 호환)
+function generateEstimateSummary(items, defaultTitle = '') {
+  if (!items) return defaultTitle;
+  let list = items;
+  if (typeof list === 'string') {
+    try {
+      list = JSON.parse(list);
+    } catch (_) {
+      return defaultTitle;
+    }
+  }
+  if (!Array.isArray(list) || list.length === 0) return defaultTitle;
+  
+  const first = list[0];
+  const name = first.name || defaultTitle || '품목';
+  const spec = first.spec ? ` ${first.spec}` : '';
+  const pages = (first.pages && Number(first.pages) > 0) ? ` ${first.pages}p` : '';
+  const qty = (first.quantity && Number(first.quantity) > 0) ? ` ${first.quantity}${first.unit || '부'}` : '';
+  const firstSummary = `${name}${spec}${pages}${qty}`.trim();
+
+  if (list.length === 1) return firstSummary;
+  return `${firstSummary} 외 ${list.length - 1}건`;
+}
+
 async function ensureSchemaUpgrades(db) {
   const jobOrderCols = [
     ["estimate_items", "TEXT DEFAULT '[]'"],
@@ -40,6 +64,9 @@ async function ensureSchemaUpgrades(db) {
     ["tax", "REAL DEFAULT 0"],
     ["total_price", "REAL DEFAULT 0"],
     ["hide_contact_person", "INTEGER DEFAULT 0"],
+    ["show_contact_on_estimate", "INTEGER DEFAULT 1"],
+    ["summary_text", "TEXT DEFAULT ''"],
+    ["version", "INTEGER DEFAULT 1"],
   ];
   for (const [col, type] of jobOrderCols) {
     try {
@@ -53,6 +80,9 @@ async function ensureSchemaUpgrades(db) {
     ["discount_amount", "REAL DEFAULT 0"],
     ["custom_supply_price", "REAL DEFAULT NULL"],
     ["hide_contact_person", "INTEGER DEFAULT 0"],
+    ["show_contact_on_estimate", "INTEGER DEFAULT 1"],
+    ["summary_text", "TEXT DEFAULT ''"],
+    ["version", "INTEGER DEFAULT 1"],
   ];
   for (const [col, type] of salesCols) {
     try {
@@ -316,6 +346,12 @@ async function getSales(db, url) {
 async function createSale(db, request) {
   const body = await request.json();
   const id = body.id || generateId('SALE');
+  const summaryText = generateEstimateSummary(body.estimate_items, body.title || '');
+  const showContact = body.show_contact_on_estimate !== undefined
+    ? (body.show_contact_on_estimate ? 1 : 0)
+    : (body.hide_contact_person !== undefined ? (body.hide_contact_person ? 0 : 1) : 1);
+  const itemsStr = typeof body.estimate_items === 'string' ? body.estimate_items : JSON.stringify(body.estimate_items || []);
+
   await db.prepare(
     `INSERT OR REPLACE INTO sales
      (id, reg_date, receipt_date, delivery_date, delivery_time, customer_id, title, content, note,
@@ -331,8 +367,28 @@ async function createSale(db, request) {
          body.calendar_synced?1:0, body.superthread_synced?1:0,
          body.dept||'', body.team||'', body.sales_manager||'',
          body.contact_person||'', body.phone||'', body.mobile||'', body.email||'',
-         body.estimate_type||'', body.estimate_date||'', body.valid_days||'', body.payment_terms||'', body.estimate_note||'', body.estimate_items||'[]'
+         body.estimate_type||'', body.estimate_date||'', body.valid_days||'', body.payment_terms||'', body.estimate_note||'', itemsStr
   ).run();
+
+  try {
+    await db.prepare(
+      `UPDATE sales SET
+       supplier_id=?, discount_unit=?, discount_amount=?, custom_supply_price=?,
+       hide_contact_person=?, show_contact_on_estimate=?, summary_text=?,
+       version=1, updated_at=datetime('now','+9 hours')
+       WHERE id=?`
+    ).bind(
+      body.supplier_id || 1,
+      body.discount_unit !== undefined ? String(body.discount_unit) : '0',
+      body.discount_amount || 0,
+      body.custom_supply_price || null,
+      body.hide_contact_person ? 1 : 0,
+      showContact,
+      summaryText,
+      id
+    ).run();
+  } catch (_) {}
+
   const row = await db.prepare('SELECT * FROM sales WHERE id = ?').bind(id).first();
   return json(row, 201);
 }
@@ -341,6 +397,12 @@ async function updateSale(db, id, request) {
   const body = await request.json();
   const existing = await db.prepare('SELECT * FROM sales WHERE id = ?').bind(id).first() || {};
   const merged = { ...existing, ...body };
+
+  const summaryText = generateEstimateSummary(merged.estimate_items, merged.title || '');
+  const showContact = merged.show_contact_on_estimate !== undefined
+    ? (merged.show_contact_on_estimate ? 1 : 0)
+    : (merged.hide_contact_person !== undefined ? (merged.hide_contact_person ? 0 : 1) : 1);
+  const itemsStr = typeof merged.estimate_items === 'string' ? merged.estimate_items : JSON.stringify(merged.estimate_items || []);
 
   await db.prepare(
     `UPDATE sales SET reg_date=?, receipt_date=?, delivery_date=?, delivery_time=?, customer_id=?,
@@ -355,8 +417,28 @@ async function updateSale(db, id, request) {
          merged.tax||0, merged.total_price||0, merged.calendar_synced?1:0,
          merged.superthread_synced?1:0, merged.dept||'', merged.team||'', merged.sales_manager||'',
          merged.contact_person||'', merged.phone||'', merged.mobile||'', merged.email||'',
-         merged.estimate_type||'', merged.estimate_date||'', merged.valid_days||'', merged.payment_terms||'', merged.estimate_note||'', merged.estimate_items||'[]',
+         merged.estimate_type||'', merged.estimate_date||'', merged.valid_days||'', merged.payment_terms||'', merged.estimate_note||'', itemsStr,
          id).run();
+
+  try {
+    await db.prepare(
+      `UPDATE sales SET
+       supplier_id=?, discount_unit=?, discount_amount=?, custom_supply_price=?,
+       hide_contact_person=?, show_contact_on_estimate=?, summary_text=?,
+       version=COALESCE(version, 1) + 1, updated_at=datetime('now','+9 hours')
+       WHERE id=?`
+    ).bind(
+      merged.supplier_id || 1,
+      merged.discount_unit !== undefined ? String(merged.discount_unit) : '0',
+      merged.discount_amount || 0,
+      merged.custom_supply_price || null,
+      merged.hide_contact_person ? 1 : 0,
+      showContact,
+      summaryText,
+      id
+    ).run();
+  } catch (_) {}
+
   const row = await db.prepare('SELECT * FROM sales WHERE id = ?').bind(id).first();
   return json(row);
 }
@@ -448,6 +530,42 @@ async function createJobOrder(db, request) {
          body.copyright_web||'', body.production_progress||'', body.delivery_destination||'',
          body.cover_related||'', body.inner_related||'', body.request_note||'',
          body.editor_name||'', body.designer_name||'', body.status||'의뢰접수').run();
+
+  const summaryText = generateEstimateSummary(body.estimate_items, body.title || '');
+  const showContact = body.show_contact_on_estimate !== undefined
+    ? (body.show_contact_on_estimate ? 1 : 0)
+    : (body.hide_contact_person !== undefined ? (body.hide_contact_person ? 0 : 1) : 1);
+  const itemsStr = typeof body.estimate_items === 'string' ? body.estimate_items : JSON.stringify(body.estimate_items || []);
+
+  try {
+    await db.prepare(
+      `UPDATE job_orders SET
+       estimate_items=?, estimate_date=?, estimate_type=?, valid_days=?, payment_terms=?,
+       estimate_note=?, supplier_id=?, discount_unit=?, discount_amount=?, custom_supply_price=?,
+       supply_price=?, tax=?, total_price=?, hide_contact_person=?, show_contact_on_estimate=?, summary_text=?,
+       version=1, updated_at=datetime('now','+9 hours')
+       WHERE id=? OR code_number=?`
+    ).bind(
+      itemsStr,
+      body.estimate_date || '',
+      body.estimate_type || 'print',
+      body.valid_days || '',
+      body.payment_terms || '',
+      body.estimate_note || '',
+      body.supplier_id || 1,
+      body.discount_unit !== undefined ? String(body.discount_unit) : '0',
+      body.discount_amount || 0,
+      body.custom_supply_price || null,
+      body.supply_price || 0,
+      body.tax || 0,
+      body.total_price || 0,
+      body.hide_contact_person ? 1 : 0,
+      showContact,
+      summaryText,
+      id, id
+    ).run();
+  } catch (_) {}
+
   const row = await db.prepare('SELECT * FROM job_orders WHERE id = ?').bind(id).first();
   return json(row, 201);
 }
@@ -483,35 +601,42 @@ async function updateJobOrder(db, id, request) {
          merged.editor_name||'', merged.designer_name||'',
          merged.status||'의뢰접수', id, id).run();
 
-  // 견적서 관련 컬럼 안전 업데이트
-  if (merged.estimate_items !== undefined || merged.supply_price !== undefined || merged.total_price !== undefined || merged.hide_contact_person !== undefined) {
-    try {
-      await db.prepare(
-        `UPDATE job_orders SET
-         estimate_items=?, estimate_date=?, estimate_type=?, valid_days=?, payment_terms=?,
-         estimate_note=?, supplier_id=?, discount_unit=?, discount_amount=?, custom_supply_price=?,
-         supply_price=?, tax=?, total_price=?, hide_contact_person=?
-         WHERE id=? OR code_number=?`
-      ).bind(
-        typeof merged.estimate_items === 'string' ? merged.estimate_items : JSON.stringify(merged.estimate_items || []),
-        merged.estimate_date || '',
-        merged.estimate_type || 'print',
-        merged.valid_days || '',
-        merged.payment_terms || '',
-        merged.estimate_note || '',
-        merged.supplier_id || 1,
-        merged.discount_unit !== undefined ? String(merged.discount_unit) : '0',
-        merged.discount_amount || 0,
-        merged.custom_supply_price || null,
-        merged.supply_price || 0,
-        merged.tax || 0,
-        merged.total_price || 0,
-        merged.hide_contact_person ? 1 : 0,
-        id, id
-      ).run();
-    } catch (_) {
-      // 컬럼 미존재 시 무시
-    }
+  const summaryText = generateEstimateSummary(merged.estimate_items, merged.title || '');
+  const showContact = merged.show_contact_on_estimate !== undefined
+    ? (merged.show_contact_on_estimate ? 1 : 0)
+    : (merged.hide_contact_person !== undefined ? (merged.hide_contact_person ? 0 : 1) : 1);
+  const itemsStr = typeof merged.estimate_items === 'string' ? merged.estimate_items : JSON.stringify(merged.estimate_items || []);
+
+  // 견적서 및 버전/동시성 관련 컬럼 안전 업데이트
+  try {
+    await db.prepare(
+      `UPDATE job_orders SET
+       estimate_items=?, estimate_date=?, estimate_type=?, valid_days=?, payment_terms=?,
+       estimate_note=?, supplier_id=?, discount_unit=?, discount_amount=?, custom_supply_price=?,
+       supply_price=?, tax=?, total_price=?, hide_contact_person=?, show_contact_on_estimate=?, summary_text=?,
+       version=COALESCE(version, 1) + 1, updated_at=datetime('now','+9 hours')
+       WHERE id=? OR code_number=?`
+    ).bind(
+      itemsStr,
+      merged.estimate_date || '',
+      merged.estimate_type || 'print',
+      merged.valid_days || '',
+      merged.payment_terms || '',
+      merged.estimate_note || '',
+      merged.supplier_id || 1,
+      merged.discount_unit !== undefined ? String(merged.discount_unit) : '0',
+      merged.discount_amount || 0,
+      merged.custom_supply_price || null,
+      merged.supply_price || 0,
+      merged.tax || 0,
+      merged.total_price || 0,
+      merged.hide_contact_person ? 1 : 0,
+      showContact,
+      summaryText,
+      id, id
+    ).run();
+  } catch (_) {
+    // 컬럼 미존재 시 무시
   }
 
   const row = await db.prepare('SELECT * FROM job_orders WHERE id = ? OR code_number = ?').bind(id, id).first();

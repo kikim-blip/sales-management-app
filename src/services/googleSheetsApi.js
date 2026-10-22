@@ -307,6 +307,9 @@ export function parseSales(rows) {
     total_price: Number(String(row[13]).replace(/[^0-9.-]+/g, '')) || 0,
     calendar_synced: row[14] === true || row[14] === 'true' || row[14] === 'Y' || row[14] === '등록완료',
     superthread_synced: row[15] === true || row[15] === 'true' || row[15] === 'Y' || row[15] === 'ST등록완료',
+    summary_text: String(row[16] || ''),
+    estimate_items: row[17] ? String(row[17]) : '[]',
+    show_contact_on_estimate: row[18] !== undefined && row[18] !== '' ? (row[18] === true || row[18] === 'true' || row[18] === '1' || row[18] === 1) : true,
   }));
 }
 
@@ -383,5 +386,8 @@ export function parseJobOrders(rows) {
     editor_name: String(row[41] || ''),
     designer_name: String(row[42] || ''),
     status: '의뢰접수',
+    summary_text: String(row[43] || ''),
+    estimate_items: row[44] ? String(row[44]) : '[]',
+    show_contact_on_estimate: row[45] !== undefined && row[45] !== '' ? (row[45] === true || row[45] === 'true' || row[45] === '1' || row[45] === 1) : true,
   }));
 }

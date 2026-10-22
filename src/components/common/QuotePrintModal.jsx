@@ -190,7 +190,9 @@ export default function QuotePrintModal({ quote, customer, onClose }) {
       XLSX.writeFile(workbook, fileName);
     } else {
       const fileName = `견적서_${currentSupplier.shortName}_${custName}_${quote.title}_${today}.xlsx`;
-      const shouldShowContact = quote.hide_contact_person ? false : (quote.show_contact_person !== undefined ? quote.show_contact_person : true);
+      const shouldShowContact = quote.show_contact_on_estimate !== undefined
+        ? (quote.show_contact_on_estimate === 1 || quote.show_contact_on_estimate === true)
+        : (quote.hide_contact_person ? false : (quote.show_contact_person !== undefined ? quote.show_contact_person : true));
       const explicitContact = quote.client_contact_person !== undefined ? quote.client_contact_person : quote.contact_person;
       const finalContactForPrint = shouldShowContact ? (explicitContact !== undefined ? (explicitContact || '-') : (customer?.contact_person || '-')) : '-';
 

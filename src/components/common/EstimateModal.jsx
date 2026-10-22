@@ -1,13 +1,16 @@
 // src/components/common/EstimateModal.jsx
 import React, { useState } from 'react';
-import { X, Plus, Trash2, Calculator, Printer, Save, FileText, CheckCircle2, Layers, BookOpen, Package, Building2, Scissors, Upload, FileSpreadsheet, Sparkles, ChevronDown } from 'lucide-react';
+import { X, Plus, Trash2, Calculator, Printer, Save, FileText, CheckCircle2, Layers, BookOpen, Package, Building2, Scissors, Upload, FileSpreadsheet, Sparkles, ChevronDown, RefreshCw, Globe, AlertTriangle } from 'lucide-react';
 import { getLocalDateStr } from '../../utils/dateUtils';
 import { useData } from '../../context/DataContext';
+import { useToast } from '../../context/ToastContext';
 import { COMPANY_SUPPLIERS } from '../../data/companySuppliers';
 import { parseEstimateFile, parseEstimateClipboardText, parseSheetFromWorkbook } from '../../utils/estimateExcelParser';
+import { generateEstimateSummary, serializeEstimateItemsForSheet } from '../../utils/estimateSummaryHelper';
 
 export default function EstimateModal({ sale, customer, onClose, onSave, onPrint }) {
   const { toggleCalc, showCalc } = useData();
+  const { toast } = useToast();
   if (!sale) return null;
 
   const todayStr = getLocalDateStr();
@@ -25,14 +28,43 @@ export default function EstimateModal({ sale, customer, onClose, onSave, onPrint
   };
   const savedDraft = loadSavedDraft();
 
+  // 💡 동시성 제어 (Conflict Resolution) 타임스탬프 계산
+  const parseTimestamp = (val) => {
+    if (!val) return 0;
+    if (typeof val === 'number') return val;
+    const str = String(val).trim();
+    if (!str) return 0;
+    const isoStr = str.includes('T') ? str : str.replace(' ', 'T');
+    const t = new Date(isoStr).getTime();
+    return isNaN(t) ? 0 : t;
+  };
+
+  const dbTimestamp = parseTimestamp(sale.updated_at || sale.created_at);
+  const draftTimestamp = savedDraft?.updatedAt ? Number(savedDraft.updatedAt) : 0;
+
+  // 💡 DB의 updated_at이 로컬 캐시보다 최신인 경우:
+  // 다른 PC나 모바일에서 저장된 최신 DB 데이터가 존재하므로 오래된 로컬 캐시를 무시하고 최신 DB를 우선 적용(Stale Data 방지)
+  const isDbNewer = dbTimestamp > 0 && draftTimestamp > 0 && dbTimestamp > draftTimestamp;
+  const isDraftValidAndNewer = !!savedDraft && !isDbNewer;
+
+  const [syncStatus, setSyncStatus] = useState(
+    isDbNewer
+      ? 'SYNCED_FROM_DB'
+      : (isDraftValidAndNewer ? 'RESTORED_FROM_LOCAL_DRAFT' : null)
+  );
+
   // 발행 회사 선택 (기본: 1_당사 주식회사 경성문화사)
-  const [supplierId, setSupplierId] = useState(savedDraft?.supplierId || sale.supplier_id || 1);
+  const [supplierId, setSupplierId] = useState(
+    isDraftValidAndNewer ? (savedDraft?.supplierId || sale.supplier_id || 1) : (sale.supplier_id || 1)
+  );
 
   // 기존에 저장된 estimate_type이 있으면 불러오고 없으면 기본 'print' (인쇄제작형)
-  const [estimateType, setEstimateType] = useState(savedDraft?.estimateType || sale.estimate_type || 'print'); // 'print' | 'general'
+  const [estimateType, setEstimateType] = useState(
+    isDraftValidAndNewer ? (savedDraft?.estimateType || sale.estimate_type || 'print') : (sale.estimate_type || 'print')
+  );
 
-  // 기존에 저장된 estimate_items가 있으면 파싱하거나 로컬 드래프트 또는 특수 복원 행 생성
-  const getInitialItems = () => {
+  // DB에 저장된 품목 파싱 헬퍼
+  const parseDbItems = () => {
     if (Array.isArray(sale.estimate_items) && sale.estimate_items.length > 0) {
       return sale.estimate_items.map(it => ({
         ...it,
@@ -52,17 +84,29 @@ export default function EstimateModal({ sale, customer, onClose, onSave, onPrint
             unit: it.unit || (sale.estimate_type === 'general' ? '식' : '부'),
           }));
         }
-      } catch (e) {
-        // ignore
-      }
+      } catch (e) {}
+    }
+    return null;
+  };
+
+  // 기존에 저장된 estimate_items가 있으면 파싱하거나 로컬 드래프트 또는 특수 복원 행 생성
+  const getInitialItems = () => {
+    // 1. 만약 다른 기기에서 저장된 최신 DB 데이터가 있다면 최우선 적용 (동시성 보호)
+    if (isDbNewer) {
+      const fromDb = parseDbItems();
+      if (fromDb && fromDb.length > 0) return fromDb;
     }
 
-    // 💡 작성 중이던 로컬 드래프트가 존재하면 최우선 복원
-    if (savedDraft?.items && Array.isArray(savedDraft.items) && savedDraft.items.length > 0) {
+    // 2. 이 기기에서 작업 중이던 최신 드래프트가 있다면 복원
+    if (isDraftValidAndNewer && savedDraft?.items && Array.isArray(savedDraft.items) && savedDraft.items.length > 0) {
       return savedDraft.items;
     }
 
-    // 💡 44-261022-3390 (자원순환기본계획) 건: 사용자가 입력했던 정확한 2개 품목 완벽 복원
+    // 3. DB에 저장된 품목이 있다면 적용
+    const fromDb = parseDbItems();
+    if (fromDb && fromDb.length > 0) return fromDb;
+
+    // 4. 44-261022-3390 (자원순환기본계획) 건: 사용자가 입력했던 정확한 2개 품목 완벽 복원
     if (isTargetSpecialOrder) {
       return [
         {
@@ -90,7 +134,7 @@ export default function EstimateModal({ sale, customer, onClose, onSave, onPrint
       ];
     }
 
-    // 기본 초기 행 (기존 작업명 및 공급가액 반영)
+    // 5. 기본 초기 행 (기존 작업명 및 공급가액 반영)
     return [
       {
         id: 'item-1',
@@ -107,16 +151,24 @@ export default function EstimateModal({ sale, customer, onClose, onSave, onPrint
   };
 
   const [items, setItems] = useState(getInitialItems());
-  const [includeVat, setIncludeVat] = useState(savedDraft?.includeVat !== undefined ? savedDraft.includeVat : true);
-  const [estimateDate, setEstimateDate] = useState(savedDraft?.estimateDate || sale.estimate_date || sale.reg_date || todayStr);
-  const [validDays, setValidDays] = useState(savedDraft?.validDays || sale.valid_days || '');
-  const [paymentTerms, setPaymentTerms] = useState(savedDraft?.paymentTerms || sale.payment_terms || '');
-  const [estimateNote, setEstimateNote] = useState(savedDraft?.estimateNote || sale.estimate_note || '');
+  const [includeVat, setIncludeVat] = useState(
+    isDraftValidAndNewer && savedDraft?.includeVat !== undefined ? savedDraft.includeVat : true
+  );
+  const [estimateDate, setEstimateDate] = useState(
+    isDraftValidAndNewer && savedDraft?.estimateDate ? savedDraft.estimateDate : (sale.estimate_date || sale.reg_date || todayStr)
+  );
+  const [validDays, setValidDays] = useState(
+    isDraftValidAndNewer && savedDraft?.validDays !== undefined ? savedDraft.validDays : (sale.valid_days || '')
+  );
+  const [paymentTerms, setPaymentTerms] = useState(
+    isDraftValidAndNewer && savedDraft?.paymentTerms !== undefined ? savedDraft.paymentTerms : (sale.payment_terms || '')
+  );
+  const [estimateNote, setEstimateNote] = useState(
+    isDraftValidAndNewer && savedDraft?.estimateNote !== undefined ? savedDraft.estimateNote : (sale.estimate_note || '')
+  );
   const [saving, setSaving] = useState(false);
 
   // 💡 담당자 정보:
-  // 1) 44-261022-3390 건은 고객마스터로 오염된 '정소영 주무관' 대신 원래 담당자인 '박윤균 주무관'으로 자동 복원
-  // 2) 전표/매출 전용 담당자(client_contact_person 또는 contact_person)가 설정되어 있다면 최우선 반영
   const explicitContactPerson = sale.client_contact_person !== undefined
     ? sale.client_contact_person
     : (sale.contact_person !== undefined ? sale.contact_person : null);
@@ -132,27 +184,77 @@ export default function EstimateModal({ sale, customer, onClose, onSave, onPrint
   const initialContactEmail = sale.client_email || sale.email || customer?.email || '';
 
   // 💡 견적서에 담당자 표기 여부 (체크 해제 시 견적서에 담당자명 인쇄/표기 제외)
-  const initialShowContact = savedDraft?.showContactPerson !== undefined
+  // D1 DB의 show_contact_on_estimate 영구 컬럼과 양방향 연동
+  const initialShowContact = isDraftValidAndNewer && savedDraft?.showContactPerson !== undefined
     ? savedDraft.showContactPerson
-    : (sale.hide_contact_person !== undefined ? !sale.hide_contact_person : (sale.show_contact_person !== undefined ? !!sale.show_contact_person : true));
+    : (sale.show_contact_on_estimate !== undefined
+        ? (sale.show_contact_on_estimate === 1 || sale.show_contact_on_estimate === true)
+        : (sale.hide_contact_person !== undefined ? !sale.hide_contact_person : true));
 
   const [showContactPerson, setShowContactPerson] = useState(initialShowContact);
-  const [contactPerson, setContactPerson] = useState(savedDraft?.contactPerson !== undefined ? savedDraft.contactPerson : initialContactPerson);
-  const [contactPhone, setContactPhone] = useState(savedDraft?.contactPhone !== undefined ? savedDraft.contactPhone : initialContactPhone);
-  const [contactEmail, setContactEmail] = useState(savedDraft?.contactEmail !== undefined ? savedDraft.contactEmail : initialContactEmail);
+  const [contactPerson, setContactPerson] = useState(
+    isDraftValidAndNewer && savedDraft?.contactPerson !== undefined ? savedDraft.contactPerson : initialContactPerson
+  );
+  const [contactPhone, setContactPhone] = useState(
+    isDraftValidAndNewer && savedDraft?.contactPhone !== undefined ? savedDraft.contactPhone : initialContactPhone
+  );
+  const [contactEmail, setContactEmail] = useState(
+    isDraftValidAndNewer && savedDraft?.contactEmail !== undefined ? savedDraft.contactEmail : initialContactEmail
+  );
 
-  // 💡 공급가액 절사 단위 (0: 없음, 10: 십원, 100: 백원, 1000: 천원, 10000: 만원, 'custom': 직접입력)
-  // 자원순환기본계획 건의 경우 기본 10000원(만원 단위) 절사 반영
+  // 💡 공급가액 절사 단위
   const defaultDiscountUnit = isTargetSpecialOrder ? 10000 : 0;
   const [discountUnit, setDiscountUnit] = useState(
-    savedDraft?.discountUnit !== undefined
+    isDraftValidAndNewer && savedDraft?.discountUnit !== undefined
       ? savedDraft.discountUnit
       : (sale.discount_unit !== undefined ? sale.discount_unit : defaultDiscountUnit)
   );
-  const [customSupplyPrice, setCustomSupplyPrice] = useState(savedDraft?.customSupplyPrice || sale.custom_supply_price || '');
+  const [customSupplyPrice, setCustomSupplyPrice] = useState(
+    isDraftValidAndNewer && savedDraft?.customSupplyPrice !== undefined ? savedDraft.customSupplyPrice : (sale.custom_supply_price || '')
+  );
   const [isExcelDragging, setIsExcelDragging] = useState(false);
   const [excelImporting, setExcelImporting] = useState(false);
   const excelFileInputRef = React.useRef(null);
+
+  // 💡 서버 원본 데이터로 강제 롤백 (임시작성본 취소) 핸들러
+  const handleRevertToDb = () => {
+    if (confirm('로컬 임시 작성본을 버리고 서버(DB)에 저장된 원본 데이터로 되돌리시겠습니까?')) {
+      localStorage.removeItem(draftKey);
+      const dbItems = parseDbItems();
+      if (dbItems && dbItems.length > 0) {
+        setItems(dbItems);
+      } else {
+        setItems([
+          {
+            id: 'item-1',
+            name: sale.title || '작업 품목',
+            spec: sale.spec || '',
+            pages: '',
+            quantity: 1,
+            unit: '부',
+            unit_price: Number(sale.supply_price) || 0,
+            amount: Number(sale.supply_price) || 0,
+            note: '',
+          }
+        ]);
+      }
+      setSupplierId(sale.supplier_id || 1);
+      setEstimateType(sale.estimate_type || 'print');
+      setEstimateDate(sale.estimate_date || sale.reg_date || todayStr);
+      setValidDays(sale.valid_days || '');
+      setPaymentTerms(sale.payment_terms || '');
+      setEstimateNote(sale.estimate_note || '');
+      setShowContactPerson(
+        sale.show_contact_on_estimate !== undefined
+          ? (sale.show_contact_on_estimate === 1 || sale.show_contact_on_estimate === true)
+          : (sale.hide_contact_person !== undefined ? !sale.hide_contact_person : true)
+      );
+      setDiscountUnit(sale.discount_unit !== undefined ? sale.discount_unit : 0);
+      setCustomSupplyPrice(sale.custom_supply_price || '');
+      setSyncStatus('SYNCED_FROM_DB');
+      toast.info('서버의 원본 데이터로 초기화되었습니다.');
+    }
+  };
 
   // 💡 작성 중인 견적서 실시간 로컬 드래프트 보관 (새로고침, 탭 닫힘, 모달 닫힘 시에도 유실 방지)
   React.useEffect(() => {
@@ -352,6 +454,9 @@ export default function EstimateModal({ sale, customer, onClose, onSave, onPrint
   const handleSave = async () => {
     try {
       setSaving(true);
+      const summaryText = generateEstimateSummary(items, sale.title || '견적 품목');
+      const serializedItems = serializeEstimateItemsForSheet(items);
+
       const updatedPayload = {
         ...sale,
         supplier_id: supplierId,
@@ -363,6 +468,8 @@ export default function EstimateModal({ sale, customer, onClose, onSave, onPrint
         client_email: contactEmail,
         show_contact_person: showContactPerson,
         hide_contact_person: !showContactPerson,
+        show_contact_on_estimate: showContactPerson ? 1 : 0,
+        summary_text: summaryText,
         raw_supply_price: rawSupplyPrice,
         supply_price: finalSupplyPrice,
         discount_unit: discountUnit,
@@ -375,15 +482,16 @@ export default function EstimateModal({ sale, customer, onClose, onSave, onPrint
         valid_days: validDays,
         payment_terms: paymentTerms,
         estimate_note: estimateNote,
-        estimate_items: JSON.stringify(items),
+        estimate_items: serializedItems,
       };
 
       if (onSave) {
         await onSave(updatedPayload);
       }
+      toast.success(`[${sale.code_number || sale.title || '견적서'}] 저장이 완료되었습니다!`);
       onClose();
     } catch (err) {
-      alert('견적서 저장 중 오류가 발생했습니다: ' + err.message);
+      toast.error('견적서 저장 중 오류가 발생했습니다: ' + err.message);
     } finally {
       setSaving(false);
     }
@@ -438,6 +546,38 @@ export default function EstimateModal({ sale, customer, onClose, onSave, onPrint
             </button>
           </div>
         </div>
+
+        {/* ── 🔄 동시성 제어 (Conflict Resolution) 및 캐시 검증 알림 배너 ── */}
+        {syncStatus === 'SYNCED_FROM_DB' && (
+          <div className="bg-sky-50 px-6 py-2 border-b border-sky-200 flex items-center justify-between text-xs text-sky-800 flex-shrink-0">
+            <div className="flex items-center space-x-2">
+              <Globe className="w-4 h-4 text-sky-600 animate-pulse" />
+              <span className="font-bold">🌐 최신 DB 동기화:</span>
+              <span>다른 기기 또는 서버에서 수정된 최신 데이터가 성공적으로 반영되었습니다.</span>
+            </div>
+            <span className="text-[10px] text-sky-600 font-mono">
+              DB 갱신: {sale.updated_at || '최신'}
+            </span>
+          </div>
+        )}
+        {syncStatus === 'RESTORED_FROM_LOCAL_DRAFT' && (
+          <div className="bg-amber-50 px-6 py-2 border-b border-amber-200 flex items-center justify-between text-xs text-amber-900 flex-shrink-0">
+            <div className="flex items-center space-x-2">
+              <Sparkles className="w-4 h-4 text-amber-600" />
+              <span className="font-bold">💾 임시작성본 복원:</span>
+              <span>이 기기에서 작업 중이던 내용이 복원되었습니다.</span>
+            </div>
+            <button
+              type="button"
+              onClick={handleRevertToDb}
+              className="flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-amber-200 hover:bg-amber-300 text-[11px] font-bold text-amber-900 transition"
+              title="로컬 임시작성을 취소하고 서버 DB의 원본 데이터로 되돌립니다."
+            >
+              <RefreshCw className="w-3 h-3 text-amber-800" />
+              <span>서버 원본으로 초기화</span>
+            </button>
+          </div>
+        )}
 
         {/* 모달 본문 영역 */}
         <div className="p-6 overflow-y-auto space-y-5 flex-1 text-slate-800">

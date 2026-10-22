@@ -1,5 +1,5 @@
 // public/sw.js
-const CACHE_NAME = 'sales-pwa-v16-estimate-draft-contact-restore';
+const CACHE_NAME = 'sales-pwa-v17-concurrency-offline-sync';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();

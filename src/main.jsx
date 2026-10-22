@@ -6,14 +6,17 @@ import App from './App.jsx'
 import './index.css'
 import { GoogleAuthProvider } from './context/GoogleAuthContext.jsx'
 import { DataProvider } from './context/DataContext.jsx'
+import { ToastProvider } from './context/ToastContext.jsx'
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <GoogleAuthProvider>
       <DataProvider>
-        <BrowserRouter>
-          <App />
-        </BrowserRouter>
+        <ToastProvider>
+          <BrowserRouter>
+            <App />
+          </BrowserRouter>
+        </ToastProvider>
       </DataProvider>
     </GoogleAuthProvider>
   </React.StrictMode>,

@@ -4,6 +4,8 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { useGoogleAuth } from './GoogleAuthContext';
 import { sendWebhookEvent } from '../services/webhookService';
 import { getKoreanTimestamp } from '../utils/dateUtils';
+import { enqueueOfflineOperation, flushOfflineSyncQueue } from '../utils/offlineSyncQueue';
+import { generateEstimateSummary, serializeEstimateItemsForSheet } from '../utils/estimateSummaryHelper';
 import {
   fetchAllD1Data,
   createCustomer, updateCustomerApi, deleteCustomerApi,
@@ -308,6 +310,34 @@ export function DataProvider({ children }) {
     };
   }, [isLoggedIn, fetchAllData]);
 
+  // 💡 오프라인 동기화 큐 자동 복구 리스너 (온라인 전환 시 및 주기적 재시도)
+  useEffect(() => {
+    const handleFlush = async () => {
+      const count = await flushOfflineSyncQueue({
+        updateJobOrderApi,
+        updateSaleApi,
+        onSyncedItem: (item) => {
+          if (typeof window !== 'undefined' && window.__SHOW_TOAST__) {
+            window.__SHOW_TOAST__(`[${item.title || item.entityId}] 오프라인 보관 내역이 서버에 자동 반영되었습니다!`, 'success', 4000);
+          }
+        },
+      });
+      if (count > 0) {
+        fetchAllData(true, true);
+      }
+    };
+
+    window.addEventListener('online', handleFlush);
+    const interval = setInterval(() => {
+      if (navigator.onLine) handleFlush();
+    }, 45000);
+
+    return () => {
+      window.removeEventListener('online', handleFlush);
+      clearInterval(interval);
+    };
+  }, [fetchAllData]);
+
   // 💡 구글 로그인 사용자와 사원(staffs) 목록 동기화
   useEffect(() => {
     if (!user?.email || !staffs || staffs.length === 0) return;
@@ -362,7 +392,20 @@ export function DataProvider({ children }) {
   };
 
   const updateJobOrder = async (codeNo, updatedOrder) => {
-    let fullMergedOrder = { code_number: codeNo, ...updatedOrder, _localUpdated: Date.now() };
+    const summaryText = updatedOrder.estimate_items
+      ? generateEstimateSummary(updatedOrder.estimate_items, updatedOrder.title || codeNo)
+      : (updatedOrder.summary_text || '');
+    const serializedItems = updatedOrder.estimate_items
+      ? serializeEstimateItemsForSheet(updatedOrder.estimate_items)
+      : updatedOrder.estimate_items;
+
+    let fullMergedOrder = {
+      code_number: codeNo,
+      ...updatedOrder,
+      estimate_items: serializedItems,
+      summary_text: summaryText,
+      _localUpdated: Date.now()
+    };
 
     // 견적서 품목이 포함되어 있다면 영구 로컬 드래프트에도 즉시 동기화
     if (updatedOrder.estimate_items) {
@@ -382,6 +425,8 @@ export function DataProvider({ children }) {
           contactPerson: updatedOrder.client_contact_person || updatedOrder.contact_person,
           contactPhone: updatedOrder.client_phone || updatedOrder.phone,
           showContactPerson: updatedOrder.show_contact_person !== undefined ? updatedOrder.show_contact_person : !updatedOrder.hide_contact_person,
+          show_contact_on_estimate: updatedOrder.show_contact_on_estimate !== undefined ? updatedOrder.show_contact_on_estimate : 1,
+          summary_text: summaryText,
           updatedAt: Date.now(),
         };
         localStorage.setItem(`estimate_draft_${codeNo}`, JSON.stringify(draftObj));
@@ -391,7 +436,7 @@ export function DataProvider({ children }) {
     // 1. 로컬 즉시 반영 (optimistic update)
     setJobOrders(prev => {
       const existing = prev.find(o => o.code_number === codeNo || o.id === codeNo);
-      fullMergedOrder = { ...existing, ...updatedOrder, code_number: codeNo, _localUpdated: Date.now() };
+      fullMergedOrder = { ...existing, ...updatedOrder, code_number: codeNo, estimate_items: serializedItems, summary_text: summaryText, _localUpdated: Date.now() };
       const next = prev.map(o =>
         (o.code_number === codeNo || o.id === codeNo)
           ? fullMergedOrder
@@ -402,7 +447,7 @@ export function DataProvider({ children }) {
     });
     lastFetchRef.current = Date.now();
 
-    // 2. D1에 저장
+    // 2. D1에 저장 (네트워크 오류 시 오프라인 동기화 큐 안전 보존)
     try {
       await updateJobOrderApi(codeNo, fullMergedOrder);
       if (updatedOrder.status && updatedOrder.status !== fullMergedOrder.previousStatus) {
@@ -417,8 +462,16 @@ export function DataProvider({ children }) {
         addLog('수정', '작업전표', `[${fullMergedOrder.title || codeNo}] 전표 정보 수정 (상태: ${fullMergedOrder.status || '진행중'}${dDateStr}${qtyStr})`, codeNo);
       }
     } catch (err) {
-      console.error('작업전표 D1 수정 에러:', err);
-      throw err;
+      console.warn('작업전표 D1 저장 실패, 오프라인 큐 보관:', err);
+      enqueueOfflineOperation({
+        type: 'UPDATE_JOB_ORDER',
+        entityId: codeNo,
+        payload: fullMergedOrder,
+        title: fullMergedOrder.title || codeNo,
+      });
+      if (typeof window !== 'undefined' && window.__SHOW_TOAST__) {
+        window.__SHOW_TOAST__(`[${fullMergedOrder.title || codeNo}] 네트워크 불안정: 변경사항이 오프라인 큐에 보관되었습니다. 복구 시 자동 반영됩니다.`, 'warning', 5000);
+      }
     }
   };
 
@@ -654,11 +707,24 @@ export function DataProvider({ children }) {
   };
 
   const updateSales = async (id, updatedSale) => {
-    let fullMergedSale = { id, ...updatedSale, _localUpdated: Date.now() };
+    const summaryText = updatedSale.estimate_items
+      ? generateEstimateSummary(updatedSale.estimate_items, updatedSale.title || id)
+      : (updatedSale.summary_text || '');
+    const serializedItems = updatedSale.estimate_items
+      ? serializeEstimateItemsForSheet(updatedSale.estimate_items)
+      : updatedSale.estimate_items;
+
+    let fullMergedSale = {
+      id,
+      ...updatedSale,
+      estimate_items: serializedItems,
+      summary_text: summaryText,
+      _localUpdated: Date.now()
+    };
 
     setSales(prev => {
       const existing = prev.find(s => s.id === id);
-      fullMergedSale = { ...existing, ...updatedSale, id, _localUpdated: Date.now() };
+      fullMergedSale = { ...existing, ...updatedSale, id, estimate_items: serializedItems, summary_text: summaryText, _localUpdated: Date.now() };
       const next = prev.map(s => s.id === id ? fullMergedSale : s);
       saveCache('sales', next);
       return next;
@@ -683,8 +749,16 @@ export function DataProvider({ children }) {
         addLog('수정', '매출/견적', `[${fullMergedSale.title || id}] 매출 정보 수정 (총액: ₩${Number(fullMergedSale.total_price || 0).toLocaleString()}원, 납품일: ${fullMergedSale.delivery_date || '-'})`, id);
       }
     } catch (err) {
-      console.error('매출 D1 수정 에러:', err);
-      throw err;
+      console.warn('매출 D1 저장 실패, 오프라인 큐 보관:', err);
+      enqueueOfflineOperation({
+        type: 'UPDATE_SALE',
+        entityId: id,
+        payload: fullMergedSale,
+        title: fullMergedSale.title || id,
+      });
+      if (typeof window !== 'undefined' && window.__SHOW_TOAST__) {
+        window.__SHOW_TOAST__(`[${fullMergedSale.title || id}] 네트워크 불안정: 변경사항이 오프라인 큐에 보관되었습니다. 복구 시 자동 반영됩니다.`, 'warning', 5000);
+      }
     }
   };
 
