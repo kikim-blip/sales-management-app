@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   Plus, Search, Download, Printer, Edit2, Trash2, GitBranch,
-  CheckCircle
+  CheckCircle, FileText, ShieldCheck, Building2
 } from 'lucide-react';
 import {
   getEstimates,
@@ -12,12 +12,15 @@ import {
   exportEstimatesToExcel
 } from '../../services/printEstimateStorage';
 import EstimatePrintViewModal from './EstimatePrintViewModal';
+import GovernmentCostModal from './GovernmentCostModal';
 
 export default function EstimateListPage({ onNewEstimate, onSelectEstimate }) {
   const [estimates, setEstimates] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [modeFilter, setModeFilter] = useState('ALL'); // 'ALL' | 'COMMERCIAL' | 'GOVERNMENT'
   const [printEstimate, setPrintEstimate] = useState(null);
+  const [printGovEstimate, setPrintGovEstimate] = useState(null);
 
   const loadEstimates = () => {
     setEstimates(getEstimates());
@@ -64,16 +67,21 @@ export default function EstimateListPage({ onNewEstimate, onSelectEstimate }) {
         (statusFilter === 'FINAL' && e.isFinal) ||
         e.status === statusFilter;
 
-      return matchSearch && matchStatus;
+      const matchMode =
+        modeFilter === 'ALL' ||
+        (modeFilter === 'GOVERNMENT' && e.costingMode === 'GOVERNMENT') ||
+        (modeFilter === 'COMMERCIAL' && (e.costingMode === 'COMMERCIAL' || !e.costingMode));
+
+      return matchSearch && matchStatus && matchMode;
     });
-  }, [estimates, searchTerm, statusFilter]);
+  }, [estimates, searchTerm, statusFilter, modeFilter]);
 
   return (
     <div className="space-y-5">
       {/* 상단 검색 및 툴바 */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-        <div className="flex flex-1 items-center space-x-3">
-          <div className="relative flex-1 max-w-md">
+        <div className="flex flex-1 flex-wrap items-center gap-3">
+          <div className="relative flex-1 min-w-[200px] max-w-md">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
@@ -83,6 +91,16 @@ export default function EstimateListPage({ onNewEstimate, onSelectEstimate }) {
               className="w-full pl-9 pr-3 py-2 text-xs border border-slate-300 rounded-xl bg-slate-50 focus:bg-white focus:border-sky-500 font-medium"
             />
           </div>
+
+          <select
+            value={modeFilter}
+            onChange={e => setModeFilter(e.target.value)}
+            className="text-xs p-2 border border-slate-300 rounded-xl bg-white font-medium text-slate-700"
+          >
+            <option value="ALL">계산 모드 전체</option>
+            <option value="COMMERCIAL">🏢 인쇄소 실무 모드</option>
+            <option value="GOVERNMENT">🏛️ 조달·공공 표준 모드</option>
+          </select>
 
           <select
             value={statusFilter}
@@ -122,7 +140,7 @@ export default function EstimateListPage({ onNewEstimate, onSelectEstimate }) {
             <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
               <tr>
                 <th className="p-3 text-center w-12">No</th>
-                <th className="p-3">견적번호 / 버전</th>
+                <th className="p-3">견적번호 / 모드</th>
                 <th className="p-3">거래처명</th>
                 <th className="p-3">품명 (인쇄물 제목)</th>
                 <th className="p-3 text-center">수량 / 규격</th>
@@ -148,12 +166,21 @@ export default function EstimateListPage({ onNewEstimate, onSelectEstimate }) {
 
                     <td className="p-3">
                       <div className="font-bold text-slate-800">{item.estimateNo}</div>
-                      <div className="flex items-center space-x-1 mt-0.5">
-                        <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-slate-100 text-slate-600">
+                      <div className="flex items-center space-x-1.5 mt-1">
+                        {item.costingMode === 'GOVERNMENT' ? (
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-teal-100 text-teal-800 border border-teal-200">
+                            조달·공공
+                          </span>
+                        ) : (
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                            사기업실무
+                          </span>
+                        )}
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600">
                           {item.version || 1}차
                         </span>
                         {item.isFinal && (
-                          <span className="px-1.5 py-0.2 rounded text-[10px] font-black bg-emerald-100 text-emerald-700">
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-emerald-100 text-emerald-700">
                             최종확정
                           </span>
                         )}
@@ -222,9 +249,19 @@ export default function EstimateListPage({ onNewEstimate, onSelectEstimate }) {
                           <Edit2 className="w-3.5 h-3.5" />
                         </button>
                         <button
-                          onClick={() => setPrintEstimate(item)}
-                          className="p-1.5 text-slate-500 hover:text-sky-600 hover:bg-slate-100 rounded-lg"
-                          title="A4 인쇄"
+                          onClick={() => {
+                            if (item.costingMode === 'GOVERNMENT') {
+                              setPrintGovEstimate(item);
+                            } else {
+                              setPrintEstimate(item);
+                            }
+                          }}
+                          className={`p-1.5 rounded-lg transition ${
+                            item.costingMode === 'GOVERNMENT'
+                              ? 'text-teal-600 hover:text-teal-800 hover:bg-teal-50'
+                              : 'text-slate-500 hover:text-sky-600 hover:bg-slate-100'
+                          }`}
+                          title={item.costingMode === 'GOVERNMENT' ? '공공 원가계산서 / 규격서 인쇄' : 'A4 상업 견적서 인쇄'}
                         >
                           <Printer className="w-3.5 h-3.5" />
                         </button>
@@ -261,13 +298,22 @@ export default function EstimateListPage({ onNewEstimate, onSelectEstimate }) {
         </div>
       </div>
 
-      {/* 인쇄 모달 */}
+      {/* 인쇄 모달 (사기업 실무 견적서) */}
       {printEstimate && (
         <EstimatePrintViewModal
           estimate={printEstimate}
           onClose={() => setPrintEstimate(null)}
         />
       )}
+
+      {/* 🏛️ 인쇄 모달 (조달·교육청 공공 원가계산서 / 규격서) */}
+      {printGovEstimate && (
+        <GovernmentCostModal
+          estimate={printGovEstimate}
+          onClose={() => setPrintGovEstimate(null)}
+        />
+      )}
     </div>
   );
 }
+

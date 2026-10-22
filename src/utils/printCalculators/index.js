@@ -6,3 +6,5 @@ export * from './bindingCalculator';
 export * from './finishingCalculator';
 export * from './paperCalculator';
 export * from './multiPartCalculator';
+export * from './governmentCostCalculator';
+

@@ -220,6 +220,7 @@ export function exportEstimatesToExcel(estimates = []) {
   const rows = estimates.map((item, index) => ({
     'No': index + 1,
     '견적번호': item.estimateNo || '',
+    '계산모드': item.costingMode === 'GOVERNMENT' ? '조달·교육청 표준원가' : '사기업 실무견적',
     '버전': `${item.version || 1}차${item.isFinal ? ' (최종확정)' : ''}`,
     '거래처명': item.clientName ? `${item.clientName}${item.clientDept ? ` (${item.clientDept})` : ''}` : '',
     '담당자': item.contactName || '',
@@ -240,7 +241,7 @@ export function exportEstimatesToExcel(estimates = []) {
 
   const worksheet = XLSX.utils.json_to_sheet(rows);
   worksheet['!cols'] = [
-    { wch: 5 }, { wch: 16 }, { wch: 14 }, { wch: 18 }, { wch: 12 },
+    { wch: 5 }, { wch: 16 }, { wch: 18 }, { wch: 14 }, { wch: 18 }, { wch: 12 },
     { wch: 24 }, { wch: 18 }, { wch: 12 }, { wch: 8 }, { wch: 10 },
     { wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 15 }, { wch: 10 },
     { wch: 10 }, { wch: 12 }, { wch: 10 },
@@ -260,12 +261,13 @@ export function exportEstimateDetailToExcel(estimate) {
     ['인쇄 견적서'],
     [],
     ['견적번호', estimate.estimateNo, '작성일자', estimate.createdAt ? estimate.createdAt.slice(0, 10) : ''],
+    ['계산모드', estimate.costingMode === 'GOVERNMENT' ? '조달·교육청 표준원가' : '사기업 실무견적', '버전', `${estimate.version || 1}차${estimate.isFinal ? ' (최종)' : ''}`],
     ['거래처명', estimate.clientName ? `${estimate.clientName}${estimate.clientDept ? ` (${estimate.clientDept})` : ''}` : '', '담당자', estimate.contactName || ''],
-    ['품명', estimate.productName, '버전', `${estimate.version || 1}차${estimate.isFinal ? ' (최종)' : ''}`],
+    ['품명', estimate.productName, '제본방식', estimate.bindingType || ''],
     ['수량', `${(estimate.quantity || 0).toLocaleString()} ${estimate.unit || '부'}`, '부당 단가', `${(estimate.unitPrice || 0).toLocaleString()}원`],
-    ['규격', `${estimate.sizeWidth}×${estimate.sizeHeight}mm`, '절수', estimate.paperCut || ''],
-    ['페이지', `${estimate.pages}면`, '색도', estimate.colors || ''],
-    ['제본방식', estimate.bindingType || '', '용지종류', estimate.paperType || ''],
+    ['규격', `${estimate.sizeWidth || 0}×${estimate.sizeHeight || 0}mm`, '절수', estimate.paperCut || ''],
+    ['페이지', `${estimate.pages || 0}면`, '색도', estimate.colors || ''],
+    ['용지종류', estimate.paperType || '', '비고', estimate.notes || ''],
     [],
     ['공급가액', estimate.subtotal || 0],
     ['부가가치세 (10%)', estimate.vat || 0],

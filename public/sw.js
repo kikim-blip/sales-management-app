@@ -1,5 +1,5 @@
 // public/sw.js
-const CACHE_NAME = 'sales-pwa-v8-searchable-customers-sticky-sidebar';
+const CACHE_NAME = 'sales-pwa-v9-separate-gov-commercial-costing';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();

@@ -2,7 +2,8 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import {
   Save, Download, ArrowLeft, Check,
-  FileCheck2, ShoppingCart, Printer, Search, X
+  FileCheck2, ShoppingCart, Printer, Search, X,
+  ShieldCheck, Building2, Calculator, Info, FileText
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { useGoogleAuth } from '../../context/GoogleAuthContext';
@@ -13,16 +14,28 @@ import {
   exportEstimateDetailToExcel
 } from '../../services/printEstimateStorage';
 import { calculateFullCost } from '../../utils/printCalculators/multiPartCalculator';
+import { calculateGovernmentCost, GOVERNMENT_STD_RATES } from '../../utils/printCalculators/governmentCostCalculator';
 import EstimatePrintViewModal from './EstimatePrintViewModal';
+import GovernmentCostModal from './GovernmentCostModal';
 
 export default function EstimateFormPage({ initialEstimate = null, onBack, onSaved }) {
   const { customers, contacts, addJobOrder, addSales } = useData();
   const { user } = useGoogleAuth();
   const [papers] = useState(() => getMasterPapers());
 
+  // ── 0. 계산 모드 분리 ('COMMERCIAL' 사기업 실무 vs 'GOVERNMENT' 조달·교육청 표준원가) ──
+  const [costingMode, setCostingMode] = useState(initialEstimate?.costingMode || 'COMMERCIAL');
+
+  // 조달·공공 표준 원가 법정 가산율
+  const [manageRate, setManageRate] = useState(initialEstimate?.manageRate ?? GOVERNMENT_STD_RATES.defaultManageRate); // 기본 5%
+  const [profitRate, setProfitRate] = useState(initialEstimate?.profitRate ?? GOVERNMENT_STD_RATES.defaultProfitRate); // 기본 10%
+  const [contractRate, setContractRate] = useState(initialEstimate?.contractRate ?? GOVERNMENT_STD_RATES.defaultContractRate); // 기본 88%
+  const [showGovPrintModal, setShowGovPrintModal] = useState(false);
+
   // ── 1. 기본 선택 정보 ──
   const [estimateNo] = useState(initialEstimate?.estimateNo || '');
   const [regDate, setRegDate] = useState(initialEstimate?.regDate || new Date().toISOString().slice(0, 10));
+
   const [proofDate, setProofDate] = useState(initialEstimate?.proofDate || '');
   const [deliveryDate, setDeliveryDate] = useState(initialEstimate?.deliveryDate || '');
   const [writerTitle, setWriterTitle] = useState(initialEstimate?.writerTitle || '담당자');
@@ -257,6 +270,77 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
     hasCoating, coatingType, isBetaPrint, isSpotColor, hasFoil, hasDiecut,
     deliveryCost, packagingCost, discountOrAdd
   ]);
+
+  // ── 🏛️ 조달청 / 교육청 공인 표준원가 실시간 연산 엔진 (14단계 법정 산식) ──
+  const governmentReport = useMemo(() => {
+    return calculateGovernmentCost({
+      general: {
+        quantity,
+        paperCut,
+        printType,
+        printCategory,
+        bindingType,
+      },
+      cover: {
+        pages: coverPages,
+        blankPages: coverBlankPages,
+        typesetPages: coverTypesetPages,
+        typesetRate: coverTypesetRate,
+        typesetUnitPrice: 25000,
+        colorCount: coverColor === '4도' ? 4 : coverColor === '2도' ? 2 : coverColor === '5도' ? 5 : 1,
+        isDoubleSided: coverSide === '양면',
+        paperUnitPrice: coverUnitPrice,
+        paperWeight: coverWeight,
+      },
+      body: {
+        pages: bodyPages,
+        blankPages: bodyBlankPages,
+        typesetPages: bodyTypesetPages,
+        typesetRate: bodyTypesetRate,
+        typesetUnitPrice: 15390,
+        colorCount: bodyColor === '4도' ? 4 : bodyColor === '2도' ? 2 : 1,
+        isDoubleSided: bodySide === '양면',
+        paperUnitPrice: bodyUnitPrice,
+        paperWeight: bodyWeight,
+      },
+      supplement: {
+        pages: suppPages,
+        colorCount: suppColor === '4도' ? 4 : 2,
+        isDoubleSided: suppSide === '양면',
+        paperUnitPrice: suppUnitPrice,
+        paperWeight: suppWeight,
+      },
+      options: {
+        hasCoating,
+        coatingType,
+        hasSupplement,
+        isBetaPrint,
+        isSpotColor,
+        hasFoil,
+        foilCost: 120000,
+        hasDiecut,
+        diecutCost: 200000,
+      },
+      rates: {
+        manageRate,
+        profitRate,
+        contractRate,
+      },
+    });
+  }, [
+    quantity, paperCut, printType, printCategory, bindingType,
+    coverPages, coverBlankPages, coverTypesetPages, coverTypesetRate, coverColor, coverSide, coverUnitPrice, coverWeight,
+    bodyPages, bodyBlankPages, bodyTypesetPages, bodyTypesetRate, bodyColor, bodySide, bodyUnitPrice, bodyWeight,
+    hasSupplement, suppPages, suppColor, suppSide, suppUnitPrice, suppWeight,
+    hasCoating, coatingType, isBetaPrint, isSpotColor, hasFoil, hasDiecut,
+    manageRate, profitRate, contractRate
+  ]);
+
+  // 현재 선택된 모드에 따른 최종 견적 총액 및 공급가
+  const activeSubtotal = costingMode === 'GOVERNMENT' ? governmentReport.step11_supplyPrice : costReport.subtotal;
+  const activeVat = costingMode === 'GOVERNMENT' ? governmentReport.step12_vat : costReport.vat;
+  const activeTotalAmount = costingMode === 'GOVERNMENT' ? governmentReport.step14_contractAmount : costReport.totalAmount;
+  const activeUnitPrice = costingMode === 'GOVERNMENT' ? governmentReport.perBookContractPrice : costReport.perBookPrice;
 
   // ── 견적서 항목 리스트 컴파일 (인쇄 / 엑셀 / 전표 연동용) ──
   const compileDetailedItems = useCallback(() => {
@@ -501,6 +585,7 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
       id: initialEstimate?.id,
       groupId: initialEstimate?.groupId,
       version: initialEstimate?.version || 1,
+      costingMode,
       estimateNo,
       regDate,
       proofDate,
@@ -559,14 +644,20 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
       deliveryCost,
       packagingCost,
       notes,
-      subtotal: costReport.subtotal,
-      vat: costReport.vat,
-      totalAmount: costReport.totalAmount,
-      unitPrice: costReport.perBookPrice,
+      manageRate,
+      profitRate,
+      contractRate,
+      subtotal: activeSubtotal,
+      vat: activeVat,
+      totalAmount: activeTotalAmount,
+      targetTotal: costingMode === 'GOVERNMENT' ? governmentReport.step13_targetTotal : costReport.totalAmount,
+      unitPrice: activeUnitPrice,
       status: isDraft ? '임시저장' : (initialEstimate?.status || '작성완료'),
       authorName: writerName || user?.userName || '영업담당',
       items,
       pages: totalPages,
+      governmentReport: costingMode === 'GOVERNMENT' ? governmentReport : null,
+      commercialReport: costReport,
     };
 
     let saved = null;
@@ -575,7 +666,7 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
       triggerToast(`${saved.version}차 견적으로 신규 저장되었습니다!`);
     } else {
       saved = saveEstimate(estimateData);
-      triggerToast('인쇄 원가 견적서가 안전하게 저장되었습니다.');
+      triggerToast(costingMode === 'GOVERNMENT' ? '🏛️ 조달·교육청 표준원가 견적서가 저장되었습니다.' : '🏢 인쇄소 실무 견적서가 저장되었습니다.');
     }
 
     if (onSaved) onSaved(saved);
@@ -608,8 +699,10 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
       binding_type: `${bindingType} (${bindingDirection})`,
       paper_spec: `표지: ${coverPaperName} ${coverWeight}g / 본문: ${bodyPaperName} ${bodyWeight}g`,
       post_process: hasCoating ? coatingType : '없음',
-      order_price: costReport.totalAmount,
-      special_notes: `[인쇄원가계산서 연계]\n부당단가: ${costReport.perBookPrice.toLocaleString()}원\n${notes || ''}`,
+      order_price: activeTotalAmount,
+      special_notes: costingMode === 'GOVERNMENT'
+        ? `[조달·교육청 표준원가 연계 - 계약금액 ₩${activeTotalAmount.toLocaleString()}]\n예정가격: ₩${governmentReport.step13_targetTotal.toLocaleString()}원 / 권당: ₩${activeUnitPrice.toLocaleString()}원\n${notes || ''}`
+        : `[인쇄원가계산서 연계]\n부당단가: ${activeUnitPrice.toLocaleString()}원\n${notes || ''}`,
       status: '접수완료',
       author: writerName || user?.userName || '영업담당',
     };
@@ -631,7 +724,7 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
       return;
     }
 
-    if (!window.confirm(`[${productName}] 총 ₩${costReport.totalAmount.toLocaleString()}원을 매출관리 DB에 등록하시겠습니까?`)) {
+    if (!window.confirm(`[${productName}] 총 ₩${activeTotalAmount.toLocaleString()}원을 매출관리 DB에 등록하시겠습니까?`)) {
       return;
     }
 
@@ -642,14 +735,14 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
       product_name: productName,
       spec: `${paperCut} ${totalPages}p ${bindingType}`,
       quantity,
-      unit_price: costReport.perBookPrice,
-      supply_amount: costReport.subtotal,
-      vat: costReport.vat,
-      total_amount: costReport.totalAmount,
+      unit_price: activeUnitPrice,
+      supply_amount: activeSubtotal,
+      vat: activeVat,
+      total_amount: activeTotalAmount,
       contact_person: contactName || '',
       manager: writerName || user?.userName || '영업담당',
       status: '미수',
-      remarks: `[인쇄원가계산 연계]`,
+      remarks: costingMode === 'GOVERNMENT' ? `[조달·교육청 표준원가 연계]` : `[인쇄원가계산 연계]`,
     };
 
     try {
@@ -672,6 +765,164 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
         </div>
       )}
 
+      {/* ── 계산 모드 선택 스위처 (사기업 실무 vs 공공·조달 표준원가) ── */}
+      <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div>
+          <div className="flex items-center space-x-2">
+            <span className="text-xs font-black text-slate-500 uppercase tracking-wider">인쇄 견적 계산 엔진 분리</span>
+            <span className={`px-2.5 py-0.5 rounded-full text-xs font-black ${
+              costingMode === 'GOVERNMENT'
+                ? 'bg-teal-100 text-teal-800 ring-1 ring-teal-300'
+                : 'bg-blue-100 text-blue-800 ring-1 ring-blue-300'
+            }`}>
+              {costingMode === 'GOVERNMENT' ? '🏛️ 조달·교육청 표준원가 모드 활성' : '🏢 인쇄소 실무 견적 모드 활성'}
+            </span>
+          </div>
+          <p className="text-xs text-slate-600 mt-1">
+            {costingMode === 'GOVERNMENT'
+              ? '조달청 고시 및 전남교육청(print.jne.go.kr) 기준 14단계 공인 원가계산 (일반관리비 5%, 법정이윤 10%, 낙찰하한율 88%, 원가계산서/규격서 공문서 출력)'
+              : '비피앤피 / 갑우문화사 상업 인쇄소 6대 실무 공정(CTP 판당 6,500원, 인쇄/제본/코팅 실무원가, 마진율 비교) 기반 견적서 산출'}
+          </p>
+        </div>
+
+        {/* 모드 전환 토글 탭 */}
+        <div className="flex items-center bg-slate-100 p-1.5 rounded-2xl self-start md:self-auto border border-slate-200">
+          <button
+            type="button"
+            onClick={() => setCostingMode('COMMERCIAL')}
+            className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl text-xs font-black transition-all ${
+              costingMode === 'COMMERCIAL'
+                ? 'bg-white text-blue-700 shadow-md ring-1 ring-blue-200'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <Building2 className="w-4 h-4 text-blue-600" />
+            <span>🏢 인쇄소 실무 견적 (사기업)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setCostingMode('GOVERNMENT')}
+            className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl text-xs font-black transition-all ${
+              costingMode === 'GOVERNMENT'
+                ? 'bg-teal-600 text-white shadow-md ring-1 ring-teal-700'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <ShieldCheck className="w-4 h-4 text-teal-200" />
+            <span>🏛️ 조달·교육청 표준원가 (공공기관)</span>
+          </button>
+        </div>
+      </div>
+
+      {/* ── 🏛️ 조달·공공 표준 원가 법정 가산율 패널 (공공기관 모드 활성화 시 표시) ── */}
+      {costingMode === 'GOVERNMENT' && (
+        <div className="bg-gradient-to-r from-teal-50 via-teal-50/70 to-emerald-50 rounded-2xl border-2 border-teal-300 p-5 space-y-4 shadow-sm animate-in fade-in">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-3 border-b border-teal-200 gap-2">
+            <div className="flex items-center space-x-2">
+              <span className="p-1.5 bg-teal-600 text-white rounded-lg">
+                <ShieldCheck className="w-4 h-4" />
+              </span>
+              <div>
+                <span className="text-sm font-black text-teal-950">
+                  조달청 및 전라남도교육청 인쇄요금 원가계산 기준 (2018. 3. 1.)
+                </span>
+                <span className="text-xs text-teal-700 ml-2 hidden sm:inline">
+                  (국가를 당사자로 하는 계약에 관한 법률 시행규칙 제6조)
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center space-x-2">
+              <button
+                type="button"
+                onClick={() => setShowGovPrintModal(true)}
+                className="flex items-center space-x-1.5 px-3 py-1.5 text-xs font-black rounded-lg bg-teal-700 text-white hover:bg-teal-800 shadow-sm transition"
+              >
+                <FileText className="w-3.5 h-3.5" />
+                <span>공공 원가계산서 / 규격서 인쇄</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 text-xs">
+            <div className="bg-white p-3 rounded-xl border border-teal-200 shadow-2xs">
+              <div className="flex justify-between items-center mb-1">
+                <label className="font-bold text-slate-700">일반관리비율 (Manage Rate)</label>
+                <span className="font-black text-teal-800">{manageRate}%</span>
+              </div>
+              <input
+                type="number"
+                min={0}
+                max={14}
+                step={0.5}
+                value={manageRate}
+                onChange={e => setManageRate(Number(e.target.value))}
+                className="w-full p-1.5 border border-slate-300 rounded-lg text-right font-black text-teal-700 text-xs"
+              />
+              <span className="text-[10px] text-slate-500 mt-1 block">순제조원가의 14% 한도 (기본 5%)</span>
+            </div>
+
+            <div className="bg-white p-3 rounded-xl border border-teal-200 shadow-2xs">
+              <div className="flex justify-between items-center mb-1">
+                <label className="font-bold text-slate-700">이윤율 (Profit Rate)</label>
+                <span className="font-black text-teal-800">{profitRate}%</span>
+              </div>
+              <input
+                type="number"
+                min={0}
+                max={25}
+                step={0.5}
+                value={profitRate}
+                onChange={e => setProfitRate(Number(e.target.value))}
+                className="w-full p-1.5 border border-slate-300 rounded-lg text-right font-black text-teal-700 text-xs"
+              />
+              <span className="text-[10px] text-slate-500 mt-1 block">(순제조+관리비 - 용지대)의 25% 이내 (기본 10%)</span>
+            </div>
+
+            <div className="bg-white p-3 rounded-xl border border-teal-200 shadow-2xs">
+              <div className="flex justify-between items-center mb-1">
+                <label className="font-bold text-slate-700">낙찰하한율 / 사정율 (Contract)</label>
+                <span className="font-black text-teal-800">{contractRate}%</span>
+              </div>
+              <input
+                type="number"
+                min={50}
+                max={100}
+                step={0.1}
+                value={contractRate}
+                onChange={e => setContractRate(Number(e.target.value))}
+                className="w-full p-1.5 border border-slate-300 rounded-lg text-right font-black text-teal-700 text-xs"
+              />
+              <span className="text-[10px] text-slate-500 mt-1 block">조달청 일반인쇄 계약율 (기본 88%, 천원절사)</span>
+            </div>
+
+            <div className="bg-white p-3 rounded-xl border border-teal-200 shadow-2xs">
+              <label className="font-bold text-slate-700 block mb-1">작성자 직급 / 직위</label>
+              <input
+                type="text"
+                value={writerTitle}
+                onChange={e => setWriterTitle(e.target.value)}
+                placeholder="예: 주무관, 담당자, 과장"
+                className="w-full p-1.5 border border-slate-300 rounded-lg text-xs font-semibold"
+              />
+              <span className="text-[10px] text-slate-500 mt-1 block">공문서 상단 작성자 날인 직명</span>
+            </div>
+          </div>
+
+          <div className="bg-teal-100/70 p-2.5 rounded-xl text-[11px] text-teal-950 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+            <div className="flex items-center space-x-1.5">
+              <Info className="w-4 h-4 text-teal-700 shrink-0" />
+              <span>
+                <strong>법정 이윤 산출 규칙:</strong> 국가계약법령에 따라 용지비(<strong>{governmentReport.step1_paperCost.toLocaleString()}원</strong>)를 공제한 순가공비 및 관리비(<strong>{governmentReport.profitBase.toLocaleString()}원</strong>)에 대해 이윤({profitRate}%)이 적용됩니다.
+              </span>
+            </div>
+            <span className="font-black text-teal-900 shrink-0">
+              법정이윤: ₩ {governmentReport.step10_profitCost.toLocaleString()}원
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* 헤더 바 */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
         <div className="flex items-center space-x-3">
@@ -687,14 +938,20 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
           <div>
             <div className="flex items-center space-x-2">
               <h2 className="text-lg font-black text-slate-900 tracking-tight">
-                인쇄원가계산 프로그램 ({printType})
+                인쇄원가계산 ({costingMode === 'GOVERNMENT' ? '🏛️ 조달·교육청 표준' : '🏢 인쇄소 실무'}) - {printType}
               </h2>
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-sky-100 text-sky-800">
-                표지/내지 분리 정밀원가
+              <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                costingMode === 'GOVERNMENT'
+                  ? 'bg-teal-100 text-teal-800'
+                  : 'bg-sky-100 text-sky-800'
+              }`}>
+                {costingMode === 'GOVERNMENT' ? '조달 공인 14단계 원가' : '표지/내지 분리 실무원가'}
               </span>
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
-              조달청·교육청 표준 인쇄원가 계산 방식 및 비피앤피/갑우문화사 실무 계산 엔진 적용
+              {costingMode === 'GOVERNMENT'
+                ? '전라남도교육청 및 조달청 인쇄요금 표준기준에 따른 엄격한 법정 예정가격 및 계약금액 산출'
+                : '비피앤피/갑우문화사 인쇄소 6대 실무 공정(CTP, 인쇄, 제본, 후가공, 용지) 원가 산출'}
             </p>
           </div>
         </div>
@@ -708,7 +965,7 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
               sizeWidth: 0, sizeHeight: 0, paperCut, pages: totalPages,
               colors: `표지 ${coverColor} / 본문 ${bodyColor}`, bindingType,
               paperType: `표지: ${coverPaperName} / 본문: ${bodyPaperName}`,
-              subtotal: costReport.subtotal, vat: costReport.vat, totalAmount: costReport.totalAmount, unitPrice: costReport.perBookPrice,
+              subtotal: activeSubtotal, vat: activeVat, totalAmount: activeTotalAmount, unitPrice: activeUnitPrice,
               items: compileDetailedItems(), notes
             })}
             className="flex items-center space-x-1 px-3 py-2 text-xs font-bold rounded-xl border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition shadow-sm"
@@ -717,14 +974,25 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
             <span>엑셀</span>
           </button>
 
-          <button
-            type="button"
-            onClick={() => setShowPrintModal(true)}
-            className="flex items-center space-x-1 px-3 py-2 text-xs font-bold rounded-xl border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 transition shadow-sm"
-          >
-            <Printer className="w-3.5 h-3.5" />
-            <span>A4 인쇄</span>
-          </button>
+          {costingMode === 'GOVERNMENT' ? (
+            <button
+              type="button"
+              onClick={() => setShowGovPrintModal(true)}
+              className="flex items-center space-x-1.5 px-3 py-2 text-xs font-bold rounded-xl border border-teal-300 bg-teal-50 text-teal-800 hover:bg-teal-100 transition shadow-sm"
+            >
+              <FileText className="w-3.5 h-3.5 text-teal-700" />
+              <span>공공 원가계산서/규격서</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowPrintModal(true)}
+              className="flex items-center space-x-1 px-3 py-2 text-xs font-bold rounded-xl border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 transition shadow-sm"
+            >
+              <Printer className="w-3.5 h-3.5" />
+              <span>A4 견적서 인쇄</span>
+            </button>
+          )}
 
           <button
             type="button"
@@ -738,19 +1006,10 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
           <button
             type="button"
             onClick={handleConvertToSale}
-            className="flex items-center space-x-1 px-3 py-2 text-xs font-bold rounded-xl border border-purple-300 bg-purple-50 text-purple-700 hover:bg-purple-100 transition shadow-sm"
+            className="flex items-center space-x-1 px-3 py-2 text-xs font-bold rounded-xl border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition shadow-sm"
           >
             <ShoppingCart className="w-3.5 h-3.5" />
             <span>매출 등록</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => handleSave(false)}
-            className="flex items-center space-x-1.5 px-4 py-2 text-xs font-black rounded-xl bg-sky-600 hover:bg-sky-700 text-white transition shadow-sm"
-          >
-            <Save className="w-3.5 h-3.5" />
-            <span>견적서 저장</span>
           </button>
         </div>
       </div>
@@ -1643,119 +1902,334 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
         </div>
       </div>
 
-      {/* ── 7. 공정별 세부 산출 내역표 (원가 집계 테이블) ── */}
+      {/* ── 7. 공정별 세부 산출 내역표 (원가 집계 테이블 - 모드별 분기) ── */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
         <div className="text-xs font-black text-slate-800 uppercase tracking-wider pb-2 border-b border-slate-100 flex items-center justify-between">
-          <span>■ 공정별 원가 산출 상세 내역</span>
-          <span className="text-[11px] font-normal text-slate-500">인쇄소 및 조달 원가 항목 집계</span>
+          <span>
+            {costingMode === 'GOVERNMENT'
+              ? '■ 🏛️ 조달청·교육청 표준 인쇄원가 14단계 법정 산출 상세표'
+              : '■ 🏢 인쇄소 상업 실무 견적 공정별 원가 상세표'}
+          </span>
+          <span className="text-[11px] font-normal text-slate-500">
+            {costingMode === 'GOVERNMENT'
+              ? '국가를 당사자로 하는 계약에 관한 법률 시행규칙 제6조 적용'
+              : '비피앤피 / 갑우문화사 실무 견적 기준'}
+          </span>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs text-center border border-slate-200 rounded-lg">
-            <thead className="bg-slate-50 text-slate-700 font-bold border-b border-slate-200">
-              <tr>
-                <th className="p-2 w-10">No</th>
-                <th className="p-2 w-24">구분</th>
-                <th className="p-2 text-left">세부 항목명</th>
-                <th className="p-2">규격 / 산출 기준</th>
-                <th className="p-2 w-16">수량</th>
-                <th className="p-2 w-12">단위</th>
-                <th className="p-2 text-right w-24">단가</th>
-                <th className="p-2 text-right w-28">금액</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {compileDetailedItems().map((it, idx) => (
-                <tr key={idx} className="hover:bg-slate-50/70">
-                  <td className="p-2 text-slate-400">{idx + 1}</td>
-                  <td className="p-2 font-semibold text-slate-600">{it.category}</td>
-                  <td className="p-2 text-left font-bold text-slate-800">{it.name}</td>
-                  <td className="p-2 text-slate-500 text-[11px]">{it.spec}</td>
-                  <td className="p-2 font-medium">{it.quantity?.toLocaleString()}</td>
-                  <td className="p-2 text-slate-500">{it.unit}</td>
-                  <td className="p-2 text-right">{it.unitPrice?.toLocaleString()}원</td>
-                  <td className="p-2 text-right font-bold text-slate-900">{it.amount?.toLocaleString()}원</td>
+        {costingMode === 'GOVERNMENT' ? (
+          /* 🏛️ 공공·조달 14단계 법정 원가 집계 테이블 */
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs border border-slate-300 rounded-lg">
+              <thead className="bg-teal-50 text-teal-900 font-bold border-b border-teal-200 text-center">
+                <tr>
+                  <th className="p-2 w-16">단계</th>
+                  <th className="p-2 w-28 text-left">법정 원가 항목</th>
+                  <th className="p-2 text-left">산출 공식 및 공인 기준</th>
+                  <th className="p-2 w-28 text-right">금액 (원)</th>
+                  <th className="p-2 w-28 text-right">비고 / 법정요율</th>
                 </tr>
-              ))}
-            </tbody>
-            <tfoot className="bg-slate-50 font-bold border-t border-slate-300">
-              <tr>
-                <td colSpan={7} className="p-2.5 text-right text-slate-700">공급가액 합계</td>
-                <td className="p-2.5 text-right text-slate-900">{costReport.subtotal.toLocaleString()}원</td>
-              </tr>
-              <tr>
-                <td colSpan={7} className="p-2 text-right text-slate-700">부가가치세 (10%)</td>
-                <td className="p-2 text-right text-slate-900">{costReport.vat.toLocaleString()}원</td>
-              </tr>
-              <tr className="bg-sky-50 text-sky-900 text-sm font-black border-t-2 border-slate-400">
-                <td colSpan={7} className="p-3 text-right">총 인쇄 견적금액 (부당 {costReport.perBookPrice.toLocaleString()}원)</td>
-                <td className="p-3 text-right text-sky-700">{costReport.totalAmount.toLocaleString()}원</td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-[11px]">
+                {/* 1. 용지료 */}
+                <tr className="hover:bg-slate-50/70">
+                  <td className="p-2.5 text-center font-bold text-slate-500">1</td>
+                  <td className="p-2.5 font-bold text-slate-800">1. 용지료</td>
+                  <td className="p-2.5 text-slate-600">
+                    표지({governmentReport.coverCalc?.totalReams}R) + 본문({governmentReport.bodyCalc?.totalReams}R)
+                    {governmentReport.supplementCalc ? ` + 화보(${governmentReport.supplementCalc.totalReams}R)` : ''} (손지율 포함)
+                  </td>
+                  <td className="p-2.5 text-right font-bold text-slate-900">{governmentReport.step1_paperCost.toLocaleString()}원</td>
+                  <td className="p-2.5 text-right text-slate-500">직접재료비</td>
+                </tr>
+
+                {/* 2. 조판료 */}
+                <tr className="hover:bg-slate-50/70">
+                  <td className="p-2.5 text-center font-bold text-slate-500">2</td>
+                  <td className="p-2.5 font-bold text-slate-800">2. 조판료</td>
+                  <td className="p-2.5 text-slate-600">
+                    표지({governmentReport.coverCalc?.typesetPages}p×{governmentReport.coverCalc?.typesetRate}%) + 본문({governmentReport.bodyCalc?.typesetPages}p×{governmentReport.bodyCalc?.typesetRate}%) 전자조판료
+                  </td>
+                  <td className="p-2.5 text-right font-bold text-slate-900">{governmentReport.step2_typesetCost.toLocaleString()}원</td>
+                  <td className="p-2.5 text-right text-slate-500">기본 15,390원/p</td>
+                </tr>
+
+                {/* 3. 인쇄판료 */}
+                <tr className="hover:bg-slate-50/70">
+                  <td className="p-2.5 text-center font-bold text-slate-500">3</td>
+                  <td className="p-2.5 font-bold text-slate-800">3. 인쇄판료 (CTP)</td>
+                  <td className="p-2.5 text-slate-600">
+                    총 {(governmentReport.coverCalc?.plates || 0) + (governmentReport.bodyCalc?.plates || 0) + (governmentReport.supplementCalc?.plates || 0)}판 (대수 × 면수 × 색도수) × 공인 판당단가 {governmentReport.coverCalc?.plateUnitPrice?.toLocaleString()}원
+                  </td>
+                  <td className="p-2.5 text-right font-bold text-slate-900">{governmentReport.step3_ctpCost.toLocaleString()}원</td>
+                  <td className="p-2.5 text-right text-slate-500">조달 CTP 단가</td>
+                </tr>
+
+                {/* 4. 인쇄료 */}
+                <tr className="hover:bg-slate-50/70">
+                  <td className="p-2.5 text-center font-bold text-slate-500">4</td>
+                  <td className="p-2.5 font-bold text-slate-800">4. 인쇄료</td>
+                  <td className="p-2.5 text-slate-600">
+                    기준통수 × 통당단가 × 인쇄면수 × 할증(지질, 특수별색, 베다바탕 가산율)
+                  </td>
+                  <td className="p-2.5 text-right font-bold text-slate-900">{governmentReport.step4_printCost.toLocaleString()}원</td>
+                  <td className="p-2.5 text-right text-slate-500">통수 구간제</td>
+                </tr>
+
+                {/* 5. 제본료 */}
+                <tr className="hover:bg-slate-50/70">
+                  <td className="p-2.5 text-center font-bold text-slate-500">5</td>
+                  <td className="p-2.5 font-bold text-slate-800">5. 제본료</td>
+                  <td className="p-2.5 text-slate-600">
+                    {bindingType} : {quantity.toLocaleString()}부 × {Math.max(100, governmentReport.totalPages)}면(100면 기본) × 면당 0.825원
+                  </td>
+                  <td className="p-2.5 text-right font-bold text-slate-900">{governmentReport.step5_bindingCost.toLocaleString()}원</td>
+                  <td className="p-2.5 text-right text-slate-500">공인 단가</td>
+                </tr>
+
+                {/* 6. 기타추가 */}
+                <tr className="hover:bg-slate-50/70">
+                  <td className="p-2.5 text-center font-bold text-slate-500">6</td>
+                  <td className="p-2.5 font-bold text-slate-800">6. 기타추가</td>
+                  <td className="p-2.5 text-slate-600">
+                    표지 코팅({governmentReport.coatingCost.toLocaleString()}원) + 박({governmentReport.foilCost.toLocaleString()}원) + 톰슨({governmentReport.diecutCost.toLocaleString()}원)
+                  </td>
+                  <td className="p-2.5 text-right font-bold text-slate-900">{governmentReport.step6_extraCost.toLocaleString()}원</td>
+                  <td className="p-2.5 text-right text-slate-500">후가공 실비</td>
+                </tr>
+
+                {/* 7. 소계 (순제조원가) */}
+                <tr className="bg-slate-100 font-bold border-t border-b border-slate-300">
+                  <td className="p-2.5 text-center text-slate-700">7</td>
+                  <td className="p-2.5 text-slate-900 font-black">7. 순제조원가 (소계)</td>
+                  <td className="p-2.5 text-slate-700">직접비 합계 (1 + 2 + 3 + 4 + 5 + 6)</td>
+                  <td className="p-2.5 text-right font-black text-slate-950 text-xs">{governmentReport.step7_subtotal.toLocaleString()}원</td>
+                  <td className="p-2.5 text-right text-slate-700 font-bold">순제조비</td>
+                </tr>
+
+                {/* 8. 일반관리비 */}
+                <tr className="hover:bg-slate-50/70">
+                  <td className="p-2.5 text-center font-bold text-slate-500">8</td>
+                  <td className="p-2.5 font-bold text-teal-800">8. 일반관리비</td>
+                  <td className="p-2.5 text-teal-900">
+                    순제조원가({governmentReport.step7_subtotal.toLocaleString()}원) × {manageRate}% (법정한도 14% 이내)
+                  </td>
+                  <td className="p-2.5 text-right font-bold text-teal-900">{governmentReport.step8_manageCost.toLocaleString()}원</td>
+                  <td className="p-2.5 text-right font-semibold text-teal-800">법정 {manageRate}%</td>
+                </tr>
+
+                {/* 9. 계 */}
+                <tr className="bg-slate-50 font-bold">
+                  <td className="p-2.5 text-center text-slate-600">9</td>
+                  <td className="p-2.5 text-slate-800 font-bold">9. 계 (소계 + 일반관리비)</td>
+                  <td className="p-2.5 text-slate-600">순제조원가(7) + 일반관리비(8)</td>
+                  <td className="p-2.5 text-right font-bold text-slate-900">{governmentReport.step9_manufacturingTotal.toLocaleString()}원</td>
+                  <td className="p-2.5 text-right text-slate-600">총제조원가</td>
+                </tr>
+
+                {/* 10. 이윤 */}
+                <tr className="hover:bg-teal-50/50 bg-teal-50/30">
+                  <td className="p-2.5 text-center font-bold text-teal-800">10</td>
+                  <td className="p-2.5 font-black text-teal-900">10. 이윤 (법정산식)</td>
+                  <td className="p-2.5 text-teal-900">
+                    (총제조원가 9 - 용지비 1: {governmentReport.profitBase.toLocaleString()}원) × {profitRate}% (법정한도 25% 이내)
+                  </td>
+                  <td className="p-2.5 text-right font-black text-teal-900">{governmentReport.step10_profitCost.toLocaleString()}원</td>
+                  <td className="p-2.5 text-right font-bold text-rose-700">용지비 공제 적용</td>
+                </tr>
+
+                {/* 11. 공급가액 */}
+                <tr className="bg-slate-50 font-bold">
+                  <td className="p-2.5 text-center text-slate-600">11</td>
+                  <td className="p-2.5 text-slate-900 font-bold">11. 공급가액</td>
+                  <td className="p-2.5 text-slate-600">총제조원가(9) + 법정이윤(10)</td>
+                  <td className="p-2.5 text-right font-bold text-slate-900">{governmentReport.step11_supplyPrice.toLocaleString()}원</td>
+                  <td className="p-2.5 text-right text-slate-600">과세표준액</td>
+                </tr>
+
+                {/* 12. 부가가치세 */}
+                <tr className="hover:bg-slate-50/70">
+                  <td className="p-2.5 text-center font-bold text-slate-500">12</td>
+                  <td className="p-2.5 font-bold text-slate-800">12. 부가가치세</td>
+                  <td className="p-2.5 text-slate-600">공급가액(11) × 10%</td>
+                  <td className="p-2.5 text-right font-bold text-slate-900">{governmentReport.step12_vat.toLocaleString()}원</td>
+                  <td className="p-2.5 text-right text-slate-500">VAT 10%</td>
+                </tr>
+
+                {/* 13. 합계 (예정가격) */}
+                <tr className="bg-blue-50/80 font-bold border-t border-b border-blue-200">
+                  <td className="p-3 text-center text-blue-900 font-black">13</td>
+                  <td className="p-3 text-blue-950 font-black text-xs">13. 예정가격 (합계)</td>
+                  <td className="p-3 text-blue-900 font-semibold">공급가액(11) + 부가가치세(12) (권당 {governmentReport.perBookTargetPrice.toLocaleString()}원)</td>
+                  <td className="p-3 text-right font-black text-blue-900 text-sm">{governmentReport.step13_targetTotal.toLocaleString()}원</td>
+                  <td className="p-3 text-right text-blue-800 font-bold">관공서 예정가</td>
+                </tr>
+
+                {/* 14. 계약금액 / 낙찰금액 */}
+                <tr className="bg-teal-100/90 font-bold border-t-2 border-teal-500">
+                  <td className="p-3.5 text-center text-teal-950 font-black text-sm">14</td>
+                  <td className="p-3.5 text-teal-950 font-black text-sm">14. 최종 계약금액</td>
+                  <td className="p-3.5 text-teal-950 font-bold">
+                    예정가격(13) × {contractRate}% 낙찰하한율 (천원 단위 이하 절사 반영)
+                  </td>
+                  <td className="p-3.5 text-right font-black text-teal-950 text-base">
+                    ₩ {governmentReport.step14_contractAmount.toLocaleString()}원
+                  </td>
+                  <td className="p-3.5 text-right font-black text-teal-900">
+                    부당 {governmentReport.perBookContractPrice.toLocaleString()}원
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          /* 🏢 사기업 실무 견적 공정별 내역 테이블 */
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs text-center border border-slate-200 rounded-lg">
+              <thead className="bg-slate-50 text-slate-700 font-bold border-b border-slate-200">
+                <tr>
+                  <th className="p-2 w-10">No</th>
+                  <th className="p-2 w-24">구분</th>
+                  <th className="p-2 text-left">세부 항목명</th>
+                  <th className="p-2">규격 / 산출 기준</th>
+                  <th className="p-2 w-16">수량</th>
+                  <th className="p-2 w-12">단위</th>
+                  <th className="p-2 text-right w-24">단가</th>
+                  <th className="p-2 text-right w-28">금액</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {compileDetailedItems().map((it, idx) => (
+                  <tr key={idx} className="hover:bg-slate-50/70">
+                    <td className="p-2 text-slate-400">{idx + 1}</td>
+                    <td className="p-2 font-semibold text-slate-600">{it.category}</td>
+                    <td className="p-2 text-left font-bold text-slate-800">{it.name}</td>
+                    <td className="p-2 text-slate-500 text-[11px]">{it.spec}</td>
+                    <td className="p-2 font-medium">{it.quantity?.toLocaleString()}</td>
+                    <td className="p-2 text-slate-500">{it.unit}</td>
+                    <td className="p-2 text-right">{it.unitPrice?.toLocaleString()}원</td>
+                    <td className="p-2 text-right font-bold text-slate-900">{it.amount?.toLocaleString()}원</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot className="bg-slate-50 font-bold border-t border-slate-300">
+                <tr>
+                  <td colSpan={7} className="p-2.5 text-right text-slate-700">공급가액 합계</td>
+                  <td className="p-2.5 text-right text-slate-900">{costReport.subtotal.toLocaleString()}원</td>
+                </tr>
+                <tr>
+                  <td colSpan={7} className="p-2 text-right text-slate-700">부가가치세 (10%)</td>
+                  <td className="p-2 text-right text-slate-900">{costReport.vat.toLocaleString()}원</td>
+                </tr>
+                <tr className="bg-sky-50 text-sky-900 text-sm font-black border-t-2 border-slate-400">
+                  <td colSpan={7} className="p-3 text-right">총 인쇄 견적금액 (부당 {costReport.perBookPrice.toLocaleString()}원)</td>
+                  <td className="p-3 text-right text-sky-700">{costReport.totalAmount.toLocaleString()}원</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* ── 하단 고정 종합 견적 바 ── */}
-      <div className="fixed bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur-md border-t border-slate-200 shadow-2xl py-3 px-4 sm:px-8">
+      <div className={`fixed bottom-0 left-0 right-0 z-30 backdrop-blur-md border-t shadow-2xl py-3 px-4 sm:px-8 transition-colors ${
+        costingMode === 'GOVERNMENT'
+          ? 'bg-slate-900/95 border-teal-500 text-white'
+          : 'bg-white/95 border-slate-200 text-slate-900'
+      }`}>
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center md:justify-between gap-3">
           <div className="flex flex-wrap items-center gap-4 sm:gap-8">
             <div>
-              <span className="text-[11px] text-slate-500 block font-medium">공급가액</span>
-              <span className="text-sm font-bold text-slate-800">
-                ₩ {costReport.subtotal.toLocaleString()}
+              <span className={`text-[11px] block font-medium ${costingMode === 'GOVERNMENT' ? 'text-slate-400' : 'text-slate-500'}`}>
+                {costingMode === 'GOVERNMENT' ? '공급가액 (11단계)' : '공급가액'}
+              </span>
+              <span className={`text-sm font-bold ${costingMode === 'GOVERNMENT' ? 'text-teal-300' : 'text-slate-800'}`}>
+                ₩ {activeSubtotal.toLocaleString()}
               </span>
             </div>
 
             <div>
-              <span className="text-[11px] text-slate-500 block font-medium">부가세 (10%)</span>
-              <span className="text-sm font-bold text-slate-600">
-                ₩ {costReport.vat.toLocaleString()}
+              <span className={`text-[11px] block font-medium ${costingMode === 'GOVERNMENT' ? 'text-slate-400' : 'text-slate-500'}`}>
+                부가세 (10%)
+              </span>
+              <span className={`text-sm font-bold ${costingMode === 'GOVERNMENT' ? 'text-slate-300' : 'text-slate-600'}`}>
+                ₩ {activeVat.toLocaleString()}
               </span>
             </div>
 
-            <div className="pl-3 border-l border-slate-200">
-              <span className="text-[11px] text-slate-500 block font-medium">부당 단가</span>
-              <span className="text-base font-black text-sky-600">
-                {costReport.perBookPrice.toLocaleString()} <span className="text-xs font-bold text-slate-500">원/부</span>
+            <div className="pl-3 border-l border-slate-400/40">
+              <span className={`text-[11px] block font-medium ${costingMode === 'GOVERNMENT' ? 'text-slate-400' : 'text-slate-500'}`}>
+                {costingMode === 'GOVERNMENT' ? '계약 부당단가' : '부당 단가'}
+              </span>
+              <span className={`text-base font-black ${costingMode === 'GOVERNMENT' ? 'text-emerald-400' : 'text-sky-600'}`}>
+                {activeUnitPrice.toLocaleString()} <span className="text-xs font-bold text-slate-400">원/부</span>
               </span>
             </div>
 
-            <div className="pl-3 border-l border-slate-200">
-              <span className="text-[11px] text-slate-500 block font-bold text-sky-800">최종 견적합계 (VAT포함)</span>
-              <span className="text-xl sm:text-2xl font-black text-sky-700">
-                ₩ {costReport.totalAmount.toLocaleString()}
+            <div className="pl-3 border-l border-slate-400/40">
+              <span className={`text-[11px] block font-bold ${costingMode === 'GOVERNMENT' ? 'text-teal-300' : 'text-sky-800'}`}>
+                {costingMode === 'GOVERNMENT' ? '최종 계약금액 (88% 낙찰하한율, 절사)' : '최종 견적합계 (VAT포함)'}
               </span>
+              <div className="flex items-baseline space-x-2">
+                <span className={`text-xl sm:text-2xl font-black ${costingMode === 'GOVERNMENT' ? 'text-teal-300' : 'text-sky-700'}`}>
+                  ₩ {activeTotalAmount.toLocaleString()}
+                </span>
+                {costingMode === 'GOVERNMENT' && (
+                  <span className="text-xs text-slate-400">
+                    (예정가격: ₩{governmentReport.step13_targetTotal.toLocaleString()})
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 
           <div className="flex items-center space-x-2">
+            {costingMode === 'GOVERNMENT' ? (
+              <button
+                type="button"
+                onClick={() => setShowGovPrintModal(true)}
+                className="flex items-center space-x-1.5 px-3 py-2 text-xs font-bold rounded-xl border border-teal-500 bg-teal-800/60 hover:bg-teal-700 text-teal-200 transition"
+              >
+                <FileText className="w-4 h-4" />
+                <span>공문서 규격서</span>
+              </button>
+            ) : null}
+
             <button
               type="button"
               onClick={() => handleSave(true)}
-              className="px-3 py-2 text-xs font-bold rounded-xl border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 transition"
+              className={`px-3 py-2 text-xs font-bold rounded-xl border transition ${
+                costingMode === 'GOVERNMENT'
+                  ? 'border-slate-600 bg-slate-800 text-slate-300 hover:bg-slate-700'
+                  : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+              }`}
             >
               임시저장
             </button>
             <button
               type="button"
               onClick={() => handleSave(false)}
-              className="flex items-center space-x-1.5 px-5 py-2.5 text-xs font-black rounded-xl bg-sky-600 hover:bg-sky-700 text-white transition shadow-md"
+              className={`flex items-center space-x-1.5 px-5 py-2.5 text-xs font-black rounded-xl transition shadow-md ${
+                costingMode === 'GOVERNMENT'
+                  ? 'bg-teal-500 hover:bg-teal-600 text-slate-950 font-black'
+                  : 'bg-sky-600 hover:bg-sky-700 text-white'
+              }`}
             >
               <Save className="w-4 h-4" />
-              <span>견적서 확정 저장</span>
+              <span>{costingMode === 'GOVERNMENT' ? '🏛️ 조달 표준원가 확정 저장' : '🏢 견적서 확정 저장'}</span>
             </button>
           </div>
         </div>
       </div>
 
-      {/* 인쇄 모달 */}
+      {/* 인쇄 모달 (사기업 실무 견적) */}
       {showPrintModal && (
         <EstimatePrintViewModal
           estimate={{
             estimateNo: estimateNo || 'EST-DRAFT',
             version: initialEstimate?.version || 1,
             isFinal: initialEstimate?.isFinal || false,
+            costingMode,
             clientName,
             clientDept,
             contactName,
@@ -1771,18 +2245,73 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
             bindingType: `${bindingType} (${bindingDirection})`,
             paperType: `표지: ${coverPaperName} ${coverWeight}g / 본문: ${bodyPaperName} ${bodyWeight}g`,
             finishingOptions: hasCoating ? coatingType : '없음',
-            subtotal: costReport.subtotal,
-            vat: costReport.vat,
-            totalAmount: costReport.totalAmount,
-            unitPrice: costReport.perBookPrice,
+            subtotal: activeSubtotal,
+            vat: activeVat,
+            totalAmount: activeTotalAmount,
+            unitPrice: activeUnitPrice,
             notes,
             items: compileDetailedItems(),
             authorName: writerName || user?.userName || '영업담당',
             createdAt: regDate,
+            governmentReport: costingMode === 'GOVERNMENT' ? governmentReport : null,
           }}
           onClose={() => setShowPrintModal(false)}
         />
       )}
+
+      {/* 🏛️ 조달청·교육청 공공 인쇄원가계산서 / 규격서 모달 */}
+      {showGovPrintModal && (
+        <GovernmentCostModal
+          estimate={{
+            estimateNo: estimateNo || 'EST-GOV-DRAFT',
+            version: initialEstimate?.version || 1,
+            isFinal: initialEstimate?.isFinal || false,
+            costingMode: 'GOVERNMENT',
+            clientName,
+            clientDept,
+            contactName,
+            phone,
+            productName,
+            quantity,
+            paperCut,
+            printType,
+            bindingType,
+            coverPaperName,
+            coverWeight,
+            coverUnitPrice,
+            coverPages,
+            coverColor,
+            coverSide,
+            bodyPaperName,
+            bodyWeight,
+            bodyUnitPrice,
+            bodyPages,
+            bodyColor,
+            bodySide,
+            hasSupplement,
+            suppPaperName,
+            suppWeight,
+            suppUnitPrice,
+            suppPages,
+            suppColor,
+            suppSide,
+            hasCoating,
+            coatingType,
+            hasFoil,
+            hasDiecut,
+            notes,
+            regDate,
+            proofDate,
+            deliveryDate,
+            writerTitle,
+            writerName,
+            totalAmount: governmentReport.step14_contractAmount,
+            governmentReport,
+          }}
+          onClose={() => setShowGovPrintModal(false)}
+        />
+      )}
+
     </div>
   );
 }
