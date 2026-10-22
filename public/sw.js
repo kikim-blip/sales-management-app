@@ -1,5 +1,5 @@
 // public/sw.js
-const CACHE_NAME = 'sales-pwa-v5-force-update';
+const CACHE_NAME = 'sales-pwa-v6-print-estimate';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
