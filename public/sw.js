@@ -1,5 +1,5 @@
 // public/sw.js
-const CACHE_NAME = 'sales-pwa-v9-separate-gov-commercial-costing';
+const CACHE_NAME = 'sales-pwa-v10-printestimate-deep-integration';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();

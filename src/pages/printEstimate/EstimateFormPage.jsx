@@ -3,7 +3,9 @@ import React, { useState, useMemo, useCallback } from 'react';
 import {
   Save, Download, ArrowLeft, Check,
   FileCheck2, ShoppingCart, Printer, Search, X,
-  ShieldCheck, Building2, Calculator, Info, FileText
+  ShieldCheck, Building2, Calculator, Info, FileText,
+  Plus, Trash2, ChevronDown, ChevronUp, AlertCircle, Sparkles,
+  TrendingDown, TrendingUp, Layers, BookOpen, Package, Truck, Wrench
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { useGoogleAuth } from '../../context/GoogleAuthContext';
@@ -13,8 +15,15 @@ import {
   createEstimateVersion,
   exportEstimateDetailToExcel
 } from '../../services/printEstimateStorage';
-import { calculateFullCost } from '../../utils/printCalculators/multiPartCalculator';
-import { calculateGovernmentCost, GOVERNMENT_STD_RATES } from '../../utils/printCalculators/governmentCostCalculator';
+import {
+  calculateFullCost,
+  calculateDeviation,
+  calculateDamjiCost
+} from '../../utils/printCalculators/multiPartCalculator';
+import {
+  calculateGovernmentCost,
+  GOVERNMENT_STD_RATES
+} from '../../utils/printCalculators/governmentCostCalculator';
 import EstimatePrintViewModal from './EstimatePrintViewModal';
 import GovernmentCostModal from './GovernmentCostModal';
 
@@ -52,49 +61,92 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
 
   // ── 2. 규격 선택 정보 ──
-  const [printType, setPrintType] = useState(initialEstimate?.printType || '옵셋인쇄'); // 옵셋인쇄 | 경인쇄 | 시험지인쇄 | 디지털인쇄
-  const [printCategory, setPrintCategory] = useState(initialEstimate?.printCategory || '책자'); // 책자 | 화보집 | 리플렛 | 포스터 | 전단
+  const [printType, setPrintType] = useState(initialEstimate?.printType || '옵셋인쇄');
+  const [printCategory, setPrintCategory] = useState(initialEstimate?.printCategory || '책자');
   const [quantity, setQuantity] = useState(initialEstimate?.quantity || 1000);
   const [paperCut, setPaperCut] = useState(initialEstimate?.paperCut || '국배판(A4)');
-  const [bindingType, setBindingType] = useState(initialEstimate?.bindingType || '무사무선'); // 무사무선 | 중철 | 양장 | 스프링 | 좌철
+
+  // 용지대 포함 여부 (kkch1012/PrintEstimate includePaper 플래그: true면 자사 구입, false면 거래처 입고/사급)
+  const [includePaper, setIncludePaper] = useState(initialEstimate?.includePaper ?? true);
+
+  // 제본 방식 상세 (PrintEstimate 4종 무선 산식: 무선단본, 무선 2탑, 무선날개, 책속책, 중철, 양장, 스프링)
+  const [bindingType, setBindingType] = useState(initialEstimate?.bindingType || '무선제본');
+  const [bindingDetailType, setBindingDetailType] = useState(
+    initialEstimate?.bindingDetailType ||
+    (initialEstimate?.bindingType?.includes('2탑') ? '무선 2탑 제본' :
+     initialEstimate?.bindingType?.includes('날개') ? '무선날개제본' :
+     initialEstimate?.bindingType?.includes('책속책') ? '책속책제본' :
+     initialEstimate?.bindingType?.includes('중철') ? '중철제본' :
+     initialEstimate?.bindingType?.includes('양장') ? '양장제본' : '무선제본')
+  );
   const [bindingDirection, setBindingDirection] = useState(initialEstimate?.bindingDirection || '좌철');
 
-  // 옵션 선택 체크박스
+  // 출판사 제본 댐지대 (정합비: 부수 / 7.5 × 110원)
+  const [hasDamji, setHasDamji] = useState(initialEstimate?.hasDamji ?? false);
+
+  // 2탑 제본 / 무선날개 / 책속책 세부 면수
+  const [cover2Pages, setCover2Pages] = useState(initialEstimate?.cover2Pages ?? 4); // 2탑 해설 표지
+  const [body2Pages, setBody2Pages] = useState(initialEstimate?.body2Pages ?? 0);   // 2탑 해설 본문
+  const [adPages, setAdPages] = useState(initialEstimate?.adPages ?? 2);           // 무선날개 광고/날개면
+  const [innerCoverPages, setInnerCoverPages] = useState(initialEstimate?.innerCoverPages ?? 4); // 책속책 속표지
+  const [innerBodyPages, setInnerBodyPages] = useState(initialEstimate?.innerBodyPages ?? 0);   // 책속책 속본문
+
+  // 무선제본 계수 및 기본단가 미세조정 (실무 기본값: 계수 0.8 / 기본 130원)
+  const [bindingCoefficient, setBindingCoefficient] = useState(initialEstimate?.bindingCoefficient ?? 0.8);
+  const [bindingBasePrice, setBindingBasePrice] = useState(initialEstimate?.bindingBasePrice ?? 130);
+
+  // ── 3. 후가공 옵션 체크박스 및 단가 (PrintEstimate 비피앤피/갑우문화사 실무단가 기준) ──
   const [hasCoating, setHasCoating] = useState(initialEstimate?.hasCoating ?? true);
   const [coatingType, setCoatingType] = useState(initialEstimate?.coatingType || '무광코팅');
+
+  // 박 가공
+  const [hasHoloFoil, setHasHoloFoil] = useState(initialEstimate?.hasHoloFoil ?? false); // 홀박 (30원/부)
+  const [holoFoilUnitPrice, setHoloFoilUnitPrice] = useState(initialEstimate?.holoFoilUnitPrice ?? 30);
+
+  const [hasHotFoil, setHasHotFoil] = useState(initialEstimate?.hasHotFoil ?? initialEstimate?.hasFoil ?? false); // 열박 (기본 10만 + 부당가)
+  const [hotFoilBasePrice, setHotFoilBasePrice] = useState(initialEstimate?.hotFoilBasePrice ?? 100000);
+  const [hotFoilUnitPrice, setHotFoilUnitPrice] = useState(initialEstimate?.hotFoilUnitPrice ?? 0);
+
+  // 판대 / 목형
+  const [hasDie, setHasDie] = useState(initialEstimate?.hasDie ?? initialEstimate?.hasDiecut ?? false); // 목형대 (200,000원)
+  const [hasCopper, setHasCopper] = useState(initialEstimate?.hasCopper ?? false); // 형압 동판대 (35,000원)
+  const [hasResin, setHasResin] = useState(initialEstimate?.hasResin ?? false);   // 수지판대 (60,000원)
+
+  // 톰슨 / 에폭시 / 미니필라스 / 스티커
+  const [hasThomson, setHasThomson] = useState(initialEstimate?.hasThomson ?? false); // 톰슨 타발 (26,000원/R)
+  const [hasEpoxy, setHasEpoxy] = useState(initialEstimate?.hasEpoxy ?? false); // 에폭시 (130원/장)
+  const [hasMinipillar, setHasMinipillar] = useState(initialEstimate?.hasMinipillar ?? false); // 미니필라스 (95원/장)
+  const [hasStickerMerge, setHasStickerMerge] = useState(initialEstimate?.hasStickerMerge ?? false); // 스티커정합 (10원/부)
+
+  // 특수 인쇄 옵션
+  const [isBetaPrint, setIsBetaPrint] = useState(initialEstimate?.isBetaPrint || false);
+  const [isSpotColor, setIsSpotColor] = useState(initialEstimate?.isSpotColor || false);
   const [hasCoverSpecial, setHasCoverSpecial] = useState(initialEstimate?.hasCoverSpecial || false);
   const [hasSupplement, setHasSupplement] = useState(initialEstimate?.hasSupplement || false);
-  const [hasAddBody, setHasAddBody] = useState(initialEstimate?.hasAddBody || false);
-  const [isProcessGuide, setIsProcessGuide] = useState(initialEstimate?.isProcessGuide || false);
-  const [isPrimaryPrint, setIsPrimaryPrint] = useState(initialEstimate?.isPrimaryPrint || false);
-  const [isSpotColor, setIsSpotColor] = useState(initialEstimate?.isSpotColor || false);
-  const [isBetaPrint, setIsBetaPrint] = useState(initialEstimate?.isBetaPrint || false);
-  const [hasFoil, setHasFoil] = useState(initialEstimate?.hasFoil || false);
-  const [hasDiecut, setHasDiecut] = useState(initialEstimate?.hasDiecut || false);
 
-  // ── 3. 표지 선택정보 ──
+  // ── 4. 표지 선택정보 ──
   const [coverPaperName, setCoverPaperName] = useState(initialEstimate?.coverPaperName || '아트지');
   const [coverWeight, setCoverWeight] = useState(initialEstimate?.coverWeight || 200);
   const [coverUnitPrice, setCoverUnitPrice] = useState(initialEstimate?.coverUnitPrice || 94000);
   const [coverPages, setCoverPages] = useState(initialEstimate?.coverPages ?? 4);
   const [coverColor, setCoverColor] = useState(initialEstimate?.coverColor || '4도');
-  const [coverSide, setCoverSide] = useState(initialEstimate?.coverSide || '단면'); // 단면 | 양면
+  const [coverSide, setCoverSide] = useState(initialEstimate?.coverSide || '단면');
   const [coverTypesetPages, setCoverTypesetPages] = useState(initialEstimate?.coverTypesetPages ?? 1);
   const [coverBlankPages, setCoverBlankPages] = useState(initialEstimate?.coverBlankPages ?? 0);
   const [coverTypesetRate, setCoverTypesetRate] = useState(initialEstimate?.coverTypesetRate ?? 0);
 
-  // ── 4. 본문 선택정보 ──
+  // ── 5. 본문 선택정보 ──
   const [bodyPaperName, setBodyPaperName] = useState(initialEstimate?.bodyPaperName || '백상지');
   const [bodyWeight, setBodyWeight] = useState(initialEstimate?.bodyWeight || 80);
   const [bodyUnitPrice, setBodyUnitPrice] = useState(initialEstimate?.bodyUnitPrice || 46136);
   const [bodyPages, setBodyPages] = useState(initialEstimate?.bodyPages ?? 64);
   const [bodyColor, setBodyColor] = useState(initialEstimate?.bodyColor || '1도');
-  const [bodySide, setBodySide] = useState(initialEstimate?.bodySide || '양면'); // 양면 | 단면
+  const [bodySide, setBodySide] = useState(initialEstimate?.bodySide || '양면');
   const [bodyTypesetPages, setBodyTypesetPages] = useState(initialEstimate?.bodyTypesetPages ?? 0);
   const [bodyBlankPages, setBodyBlankPages] = useState(initialEstimate?.bodyBlankPages ?? 0);
   const [bodyTypesetRate, setBodyTypesetRate] = useState(initialEstimate?.bodyTypesetRate ?? 0);
 
-  // ── 5. 화보/부속 선택정보 (화보사용 옵션 시 활성화) ──
+  // ── 6. 화보/부속 선택정보 ──
   const [suppPaperName, setSuppPaperName] = useState(initialEstimate?.suppPaperName || '스노우지');
   const [suppWeight, setSuppWeight] = useState(initialEstimate?.suppWeight || 120);
   const [suppUnitPrice, setSuppUnitPrice] = useState(initialEstimate?.suppUnitPrice || 57000);
@@ -102,12 +154,30 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
   const [suppColor, setSuppColor] = useState(initialEstimate?.suppColor || '4도');
   const [suppSide, setSuppSide] = useState(initialEstimate?.suppSide || '양면');
 
-  // ── 6. 기타 선택정보 ──
+  // ── 7. 기타 선택정보 ──
   const [discountOrAdd, setDiscountOrAdd] = useState(initialEstimate?.discountOrAdd || 0);
   const [discountReason, setDiscountReason] = useState(initialEstimate?.discountReason || '');
   const [deliveryCost, setDeliveryCost] = useState(initialEstimate?.deliveryCost ?? 50000);
-  const [packagingCost, setPackagingCost] = useState(initialEstimate?.packagingCost ?? 20000);
+  const [packagingCost, setPackagingCost] = useState(initialEstimate?.packagingCost ?? (Math.ceil((initialEstimate?.quantity || 1000) / 50) * 1000));
   const [notes, setNotes] = useState(initialEstimate?.notes || '');
+
+  // ── 8. 사용자 정의 추가 항목 (각 카테고리별 커스텀 아이템) ──
+  const [customItems, setCustomItems] = useState(() => {
+    if (Array.isArray(initialEstimate?.customItems)) return initialEstimate.customItems;
+    if (Array.isArray(initialEstimate?.items)) {
+      return initialEstimate.items.filter(it => it.isCustom);
+    }
+    return [];
+  });
+
+  // 커스텀 항목 추가 모달 상태
+  const [showCustomModal, setShowCustomModal] = useState(false);
+  const [customCategory, setCustomCategory] = useState('OTHER');
+  const [customName, setCustomName] = useState('');
+  const [customSpec, setCustomSpec] = useState('');
+  const [customQty, setCustomQty] = useState(1);
+  const [customUnit, setCustomUnit] = useState('식');
+  const [customPrice, setCustomPrice] = useState(0);
 
   // UI 상태
   const [showPrintModal, setShowPrintModal] = useState(false);
@@ -119,7 +189,7 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
     setTimeout(() => setToastMsg(''), 3000);
   };
 
-  // ── 거래처 실시간 검색 결과 (고객사명, 과/부서명, 담당자명, 연락처 통합 매칭) ──
+  // ── 거래처 실시간 검색 결과 (과명, 이름, 전화번호 즉시 매칭) ──
   const customerSearchResults = useMemo(() => {
     if (!customerSearchInput.trim()) return [];
     const q = customerSearchInput.trim().toLowerCase();
@@ -185,7 +255,7 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
     setShowCustomerDropdown(false);
   };
 
-  // ── 표지 지종 변경 시 단가 자동 매칭 ──
+  // ── 표지/본문 지종 변경 시 단가 자동 매칭 ──
   const handleCoverPaperChange = (name) => {
     setCoverPaperName(name);
     const found = papers.find(p => p.name.includes(name) || p.type.includes(name));
@@ -195,7 +265,6 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
     }
   };
 
-  // ── 본문 지종 변경 시 단가 자동 매칭 ──
   const handleBodyPaperChange = (name) => {
     setBodyPaperName(name);
     const found = papers.find(p => p.name.includes(name) || p.type.includes(name));
@@ -205,10 +274,29 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
     }
   };
 
-  // ── 총 면수 자동 계산 ──
-  const totalPages = coverPages + bodyPages + (hasSupplement ? suppPages : 0);
+  // ── 제본 방식 변경 시 계수/기본단가 자동 설정 ──
+  const handleBindingDetailChange = (type) => {
+    setBindingDetailType(type);
+    setBindingType(type);
+    if (type === '무선 2탑 제본' || type === '무선제본') {
+      setBindingCoefficient(0.8);
+      setBindingBasePrice(130);
+    } else if (type === '무선날개제본') {
+      setBindingCoefficient(0.45);
+      setBindingBasePrice(30);
+    } else if (type === '책속책제본') {
+      setBindingCoefficient(0.35);
+      setBindingBasePrice(35);
+    }
+  };
 
-  // ── 정밀 멀티파트 원가 실시간 계산 ──
+  // ── 총 면수 자동 계산 ──
+  const totalPages = coverPages + bodyPages +
+    (hasSupplement ? suppPages : 0) +
+    (bindingDetailType === '무선 2탑 제본' ? body2Pages : 0) +
+    (bindingDetailType === '책속책제본' ? innerBodyPages : 0);
+
+  // ── 🏢 사기업 실무 견적 정밀 계산 엔진 (PrintEstimate 6대 공정) ──
   const costReport = useMemo(() => {
     return calculateFullCost({
       general: {
@@ -217,7 +305,13 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
         printType,
         printCategory,
         bindingType,
+        bindingDetailType,
+        bindingDirection,
+        includePaper,
+        hasDamji,
         ctpUnitPrice: 6500,
+        bindingCoefficient,
+        bindingBasePrice,
       },
       cover: {
         pages: coverPages,
@@ -227,6 +321,8 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
         typesetUnitPrice: 25000,
         colorCount: coverColor === '4도' ? 4 : coverColor === '2도' ? 2 : coverColor === '5도' ? 5 : 1,
         isDoubleSided: coverSide === '양면',
+        paperName: coverPaperName,
+        paperWeight: coverWeight,
         paperUnitPrice: coverUnitPrice,
       },
       body: {
@@ -237,13 +333,37 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
         typesetUnitPrice: 15000,
         colorCount: bodyColor === '4도' ? 4 : bodyColor === '2도' ? 2 : 1,
         isDoubleSided: bodySide === '양면',
+        paperName: bodyPaperName,
+        paperWeight: bodyWeight,
         paperUnitPrice: bodyUnitPrice,
       },
       supplement: {
         pages: suppPages,
         colorCount: suppColor === '4도' ? 4 : 2,
         isDoubleSided: suppSide === '양면',
+        paperName: suppPaperName,
+        paperWeight: suppWeight,
         paperUnitPrice: suppUnitPrice,
+      },
+      body2: {
+        pages: body2Pages,
+        colorCount: 1,
+        isDoubleSided: true,
+        paperName: bodyPaperName,
+        paperWeight: bodyWeight,
+        paperUnitPrice: bodyUnitPrice,
+      },
+      cover2: {
+        pages: cover2Pages,
+      },
+      ad: {
+        pages: adPages,
+      },
+      innerCover: {
+        pages: innerCoverPages,
+      },
+      innerBody: {
+        pages: innerBodyPages,
       },
       options: {
         hasCoating,
@@ -251,24 +371,44 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
         hasSupplement,
         isBetaPrint,
         isSpotColor,
-        hasFoil,
-        foilCost: 120000,
-        hasDiecut,
-        diecutCost: 200000,
+        hasHoloFoil,
+        holoFoilUnitPrice,
+        hasHotFoil,
+        hotFoilBasePrice,
+        hotFoilUnitPrice,
+        hasDie,
+        dieCost: 200000,
+        hasCopper,
+        copperCost: 35000,
+        hasResin,
+        resinCost: 60000,
+        hasThomson,
+        thomsonUnitPrice: 26000,
+        hasEpoxy,
+        epoxyUnitPrice: 130,
+        hasMinipillar,
+        minipillarUnitPrice: 95,
+        hasStickerMerge,
       },
       extra: {
         deliveryCost,
         packagingCost,
         discountOrAdd,
+        discountReason,
       },
+      customItems,
     });
   }, [
-    quantity, paperCut, printType, printCategory, bindingType,
-    coverPages, coverBlankPages, coverTypesetPages, coverTypesetRate, coverColor, coverSide, coverUnitPrice,
-    bodyPages, bodyBlankPages, bodyTypesetPages, bodyTypesetRate, bodyColor, bodySide, bodyUnitPrice,
-    hasSupplement, suppPages, suppColor, suppSide, suppUnitPrice,
-    hasCoating, coatingType, isBetaPrint, isSpotColor, hasFoil, hasDiecut,
-    deliveryCost, packagingCost, discountOrAdd
+    quantity, paperCut, printType, printCategory, bindingType, bindingDetailType, bindingDirection,
+    includePaper, hasDamji, bindingCoefficient, bindingBasePrice,
+    coverPages, coverBlankPages, coverTypesetPages, coverTypesetRate, coverColor, coverSide, coverPaperName, coverWeight, coverUnitPrice,
+    bodyPages, bodyBlankPages, bodyTypesetPages, bodyTypesetRate, bodyColor, bodySide, bodyPaperName, bodyWeight, bodyUnitPrice,
+    hasSupplement, suppPages, suppColor, suppSide, suppPaperName, suppWeight, suppUnitPrice,
+    body2Pages, cover2Pages, adPages, innerCoverPages, innerBodyPages,
+    hasCoating, coatingType, isBetaPrint, isSpotColor,
+    hasHoloFoil, holoFoilUnitPrice, hasHotFoil, hotFoilBasePrice, hotFoilUnitPrice,
+    hasDie, hasCopper, hasResin, hasThomson, hasEpoxy, hasMinipillar, hasStickerMerge,
+    deliveryCost, packagingCost, discountOrAdd, discountReason, customItems
   ]);
 
   // ── 🏛️ 조달청 / 교육청 공인 표준원가 실시간 연산 엔진 (14단계 법정 산식) ──
@@ -316,10 +456,10 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
         hasSupplement,
         isBetaPrint,
         isSpotColor,
-        hasFoil,
-        foilCost: 120000,
-        hasDiecut,
-        diecutCost: 200000,
+        hasFoil: hasHotFoil || hasHoloFoil,
+        foilCost: hotFoilCostEstimate(hotFoilBasePrice, hotFoilUnitPrice, quantity, hasHoloFoil),
+        hasDiecut: hasDie || hasThomson,
+        diecutCost: (hasDie ? 200000 : 0) + (hasThomson ? 50000 : 0),
       },
       rates: {
         manageRate,
@@ -332,246 +472,60 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
     coverPages, coverBlankPages, coverTypesetPages, coverTypesetRate, coverColor, coverSide, coverUnitPrice, coverWeight,
     bodyPages, bodyBlankPages, bodyTypesetPages, bodyTypesetRate, bodyColor, bodySide, bodyUnitPrice, bodyWeight,
     hasSupplement, suppPages, suppColor, suppSide, suppUnitPrice, suppWeight,
-    hasCoating, coatingType, isBetaPrint, isSpotColor, hasFoil, hasDiecut,
+    hasCoating, coatingType, isBetaPrint, isSpotColor, hasHotFoil, hasHoloFoil, hotFoilBasePrice, hotFoilUnitPrice, hasDie, hasThomson,
     manageRate, profitRate, contractRate
   ]);
 
-  // 현재 선택된 모드에 따른 최종 견적 총액 및 공급가
+  function hotFoilCostEstimate(base, perUnit, q, holo) {
+    let sum = 0;
+    if (base) sum += base;
+    if (perUnit) sum += perUnit * q;
+    if (holo) sum += 30 * q;
+    return sum || 120000;
+  }
+
+  // 현재 모드에 따른 최종 총액 및 부당단가
   const activeSubtotal = costingMode === 'GOVERNMENT' ? governmentReport.step11_supplyPrice : costReport.subtotal;
   const activeVat = costingMode === 'GOVERNMENT' ? governmentReport.step12_vat : costReport.vat;
   const activeTotalAmount = costingMode === 'GOVERNMENT' ? governmentReport.step14_contractAmount : costReport.totalAmount;
   const activeUnitPrice = costingMode === 'GOVERNMENT' ? governmentReport.perBookContractPrice : costReport.perBookPrice;
 
-  // ── 견적서 항목 리스트 컴파일 (인쇄 / 엑셀 / 전표 연동용) ──
-  const compileDetailedItems = useCallback(() => {
-    const items = [];
-    const c = costReport;
+  // ── 커스텀 항목 추가 핸들러 ──
+  const handleOpenAddCustomModal = (category) => {
+    setCustomCategory(category);
+    setCustomName('');
+    setCustomSpec('');
+    setCustomQty(1);
+    setCustomUnit('식');
+    setCustomPrice(0);
+    setShowCustomModal(true);
+  };
 
-    // 1. 조판/편집비
-    if (c.totalTypesetCost > 0) {
-      items.push({
-        category: '조판/편집',
-        name: '기획 조판 및 편집료',
-        spec: `표지 ${coverTypesetPages}p(${coverTypesetRate}%) + 본문 ${bodyTypesetPages}p(${bodyTypesetRate}%)`,
-        quantity: 1,
-        unit: '식',
-        unitPrice: c.totalTypesetCost,
-        amount: c.totalTypesetCost,
-        formula: '조판면수 × 면당단가 × 편집율',
-      });
+  const handleSaveCustomItem = () => {
+    if (!customName.trim()) {
+      alert('항목명을 입력해주세요.');
+      return;
     }
+    const newItem = {
+      id: `custom_${Date.now()}`,
+      category: customCategory,
+      name: customName.trim(),
+      spec: customSpec.trim(),
+      quantity: Number(customQty) || 1,
+      unit: customUnit || '식',
+      unitPrice: Number(customPrice) || 0,
+      amount: (Number(customQty) || 1) * (Number(customPrice) || 0),
+      isCustom: true,
+    };
+    setCustomItems(prev => [...prev, newItem]);
+    setShowCustomModal(false);
+    triggerToast(`[${newItem.name}] 항목이 추가되었습니다.`);
+  };
 
-    // 2. 제판 (CTP)
-    items.push({
-      category: '제판(CTP)',
-      name: '표지 CTP 출력',
-      spec: `${c.coverCalc.signatures}대 × ${c.coverCalc.effectiveColors}도 (${c.coverCalc.totalPlates}판)`,
-      quantity: c.coverCalc.totalPlates,
-      unit: '판',
-      unitPrice: 6500,
-      amount: c.coverCalc.ctpCost,
-      formula: `${c.coverCalc.signatures}대 × ${c.coverCalc.effectiveColors}도 × 6,500원`,
-    });
-
-    if (bodyPages > 0) {
-      items.push({
-        category: '제판(CTP)',
-        name: '본문 CTP 출력',
-        spec: `${c.bodyCalc.signatures}대 × ${c.bodyCalc.effectiveColors}도 (${c.bodyCalc.totalPlates}판)`,
-        quantity: c.bodyCalc.totalPlates,
-        unit: '판',
-        unitPrice: 6500,
-        amount: c.bodyCalc.ctpCost,
-        formula: `${c.bodyCalc.signatures}대 × ${c.bodyCalc.effectiveColors}도 × 6,500원`,
-      });
-    }
-
-    if (hasSupplement && c.supplementCalc) {
-      items.push({
-        category: '제판(CTP)',
-        name: '화보 CTP 출력',
-        spec: `${c.supplementCalc.signatures}대 × ${c.supplementCalc.effectiveColors}도 (${c.supplementCalc.totalPlates}판)`,
-        quantity: c.supplementCalc.totalPlates,
-        unit: '판',
-        unitPrice: 6500,
-        amount: c.supplementCalc.ctpCost,
-        formula: `${c.supplementCalc.signatures}대 × ${c.supplementCalc.effectiveColors}도 × 6,500원`,
-      });
-    }
-
-    // 3. 인쇄비
-    items.push({
-      category: '인쇄비',
-      name: `표지 인쇄 (${coverColor} ${coverSide})`,
-      spec: `${c.coverCalc.totalReams.toFixed(2)}R (손지 ${c.coverCalc.wasteRate}%)`,
-      quantity: parseFloat(c.coverCalc.totalReams.toFixed(2)),
-      unit: 'R',
-      unitPrice: Math.round(c.coverCalc.printCost / Math.max(0.01, c.coverCalc.totalReams)),
-      amount: c.coverCalc.printCost,
-      formula: `${c.coverCalc.totalReams.toFixed(2)}R × 인쇄비`,
-    });
-
-    if (bodyPages > 0) {
-      items.push({
-        category: '인쇄비',
-        name: `본문 인쇄 (${bodyColor} ${bodySide})`,
-        spec: `${c.bodyCalc.totalReams.toFixed(2)}R (손지 ${c.bodyCalc.wasteRate}%)`,
-        quantity: parseFloat(c.bodyCalc.totalReams.toFixed(2)),
-        unit: 'R',
-        unitPrice: Math.round(c.bodyCalc.printCost / Math.max(0.01, c.bodyCalc.totalReams)),
-        amount: c.bodyCalc.printCost,
-        formula: `${c.bodyCalc.totalReams.toFixed(2)}R × 인쇄비`,
-      });
-    }
-
-    if (hasSupplement && c.supplementCalc) {
-      items.push({
-        category: '인쇄비',
-        name: `화보 인쇄 (${suppColor} ${suppSide})`,
-        spec: `${c.supplementCalc.totalReams.toFixed(2)}R`,
-        quantity: parseFloat(c.supplementCalc.totalReams.toFixed(2)),
-        unit: 'R',
-        unitPrice: Math.round(c.supplementCalc.printCost / Math.max(0.01, c.supplementCalc.totalReams)),
-        amount: c.supplementCalc.printCost,
-        formula: '',
-      });
-    }
-
-    // 4. 용지대
-    items.push({
-      category: '용지대',
-      name: `표지 용지 (${coverPaperName} ${coverWeight}g)`,
-      spec: `${c.coverCalc.totalReams.toFixed(2)}R`,
-      quantity: parseFloat(c.coverCalc.totalReams.toFixed(2)),
-      unit: 'R',
-      unitPrice: coverUnitPrice,
-      amount: c.coverCalc.paperCost,
-      formula: `${c.coverCalc.totalReams.toFixed(2)}R × ${coverUnitPrice.toLocaleString()}원`,
-    });
-
-    if (bodyPages > 0) {
-      items.push({
-        category: '용지대',
-        name: `본문 용지 (${bodyPaperName} ${bodyWeight}g)`,
-        spec: `${c.bodyCalc.totalReams.toFixed(2)}R`,
-        quantity: parseFloat(c.bodyCalc.totalReams.toFixed(2)),
-        unit: 'R',
-        unitPrice: bodyUnitPrice,
-        amount: c.bodyCalc.paperCost,
-        formula: `${c.bodyCalc.totalReams.toFixed(2)}R × ${bodyUnitPrice.toLocaleString()}원`,
-      });
-    }
-
-    if (hasSupplement && c.supplementCalc) {
-      items.push({
-        category: '용지대',
-        name: `화보 용지 (${suppPaperName} ${suppWeight}g)`,
-        spec: `${c.supplementCalc.totalReams.toFixed(2)}R`,
-        quantity: parseFloat(c.supplementCalc.totalReams.toFixed(2)),
-        unit: 'R',
-        unitPrice: suppUnitPrice,
-        amount: c.supplementCalc.paperCost,
-        formula: '',
-      });
-    }
-
-    // 5. 제본비
-    items.push({
-      category: '제본비',
-      name: `${bindingType} (${bindingDirection})`,
-      spec: `총 ${totalPages}p × ${quantity.toLocaleString()}부`,
-      quantity,
-      unit: '부',
-      unitPrice: c.bindingUnitPrice,
-      amount: c.bindingCost,
-      formula: `부당 ${c.bindingUnitPrice}원 × ${quantity}부`,
-    });
-
-    // 6. 후가공
-    if (hasCoating && c.coatingCost > 0) {
-      items.push({
-        category: '후가공',
-        name: `표지 ${coatingType}`,
-        spec: `${c.coverCalc.totalReams.toFixed(2)}R`,
-        quantity: parseFloat(c.coverCalc.totalReams.toFixed(2)),
-        unit: 'R',
-        unitPrice: Math.round(c.coatingCost / Math.max(0.01, c.coverCalc.totalReams)),
-        amount: c.coatingCost,
-        formula: '',
-      });
-    }
-    if (hasFoil) {
-      items.push({
-        category: '후가공',
-        name: '표지 박 가공 (금박/은박)',
-        spec: '동판 제작 및 열박',
-        quantity: 1,
-        unit: '식',
-        unitPrice: 120000,
-        amount: 120000,
-        formula: '',
-      });
-    }
-    if (hasDiecut) {
-      items.push({
-        category: '후가공',
-        name: '톰슨(도무송) 타발',
-        spec: '목형 제작 및 가공',
-        quantity: 1,
-        unit: '식',
-        unitPrice: 200000,
-        amount: 200000,
-        formula: '',
-      });
-    }
-
-    // 7. 기타 및 운송비
-    if (deliveryCost > 0) {
-      items.push({
-        category: '운송/포장',
-        name: '화물/용달 납품 배송비',
-        spec: '지정 장소 직납',
-        quantity: 1,
-        unit: '식',
-        unitPrice: deliveryCost,
-        amount: deliveryCost,
-        formula: '',
-      });
-    }
-    if (packagingCost > 0) {
-      items.push({
-        category: '운송/포장',
-        name: '밴딩 및 박스 포장비',
-        spec: `${Math.ceil(quantity / 50)} BOX`,
-        quantity: Math.ceil(quantity / 50),
-        unit: '박스',
-        unitPrice: 1000,
-        amount: packagingCost,
-        formula: '',
-      });
-    }
-    if (discountOrAdd !== 0) {
-      items.push({
-        category: '기타가감',
-        name: discountReason || '조정 가감금액',
-        spec: '합의 조정',
-        quantity: 1,
-        unit: '식',
-        unitPrice: discountOrAdd,
-        amount: discountOrAdd,
-        formula: '',
-      });
-    }
-
-    return items;
-  }, [
-    costReport, coverPages, bodyPages, hasSupplement, coverTypesetPages, coverTypesetRate,
-    bodyTypesetPages, bodyTypesetRate, coverColor, coverSide, bodyColor, bodySide,
-    coverPaperName, coverWeight, coverUnitPrice, bodyPaperName, bodyWeight, bodyUnitPrice,
-    suppPaperName, suppWeight, suppUnitPrice, suppColor, suppSide,
-    bindingType, bindingDirection, totalPages, quantity,
-    hasCoating, coatingType, hasFoil, hasDiecut, deliveryCost, packagingCost, discountOrAdd, discountReason
-  ]);
+  const handleDeleteCustomItem = (id) => {
+    setCustomItems(prev => prev.filter(it => it.id !== id));
+    triggerToast('항목이 삭제되었습니다.');
+  };
 
   // ── 저장 핸들러 ──
   const handleSave = (isDraft = false) => {
@@ -580,7 +534,7 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
       return;
     }
 
-    const items = compileDetailedItems();
+    const items = costReport.allItems;
     const estimateData = {
       id: initialEstimate?.id,
       groupId: initialEstimate?.groupId,
@@ -602,19 +556,36 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
       printCategory,
       quantity,
       paperCut,
+      includePaper,
       bindingType,
+      bindingDetailType,
       bindingDirection,
+      hasDamji,
+      bindingCoefficient,
+      bindingBasePrice,
+      cover2Pages,
+      body2Pages,
+      adPages,
+      innerCoverPages,
+      innerBodyPages,
       hasCoating,
       coatingType,
+      hasHoloFoil,
+      holoFoilUnitPrice,
+      hasHotFoil,
+      hotFoilBasePrice,
+      hotFoilUnitPrice,
+      hasDie,
+      hasCopper,
+      hasResin,
+      hasThomson,
+      hasEpoxy,
+      hasMinipillar,
+      hasStickerMerge,
+      isBetaPrint,
+      isSpotColor,
       hasCoverSpecial,
       hasSupplement,
-      hasAddBody,
-      isProcessGuide,
-      isPrimaryPrint,
-      isSpotColor,
-      isBetaPrint,
-      hasFoil,
-      hasDiecut,
       coverPaperName,
       coverWeight,
       coverUnitPrice,
@@ -655,6 +626,7 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
       status: isDraft ? '임시저장' : (initialEstimate?.status || '작성완료'),
       authorName: writerName || user?.userName || '영업담당',
       items,
+      customItems,
       pages: totalPages,
       governmentReport: costingMode === 'GOVERNMENT' ? governmentReport : null,
       commercialReport: costReport,
@@ -666,7 +638,7 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
       triggerToast(`${saved.version}차 견적으로 신규 저장되었습니다!`);
     } else {
       saved = saveEstimate(estimateData);
-      triggerToast(costingMode === 'GOVERNMENT' ? '🏛️ 조달·교육청 표준원가 견적서가 저장되었습니다.' : '🏢 인쇄소 실무 견적서가 저장되었습니다.');
+      triggerToast(costingMode === 'GOVERNMENT' ? '🏛️ 조달·교육청 표준원가 견적서가 저장되었습니다.' : '🏢 비피앤피/갑우문화사 실무 견적서가 저장되었습니다.');
     }
 
     if (onSaved) onSaved(saved);
@@ -696,13 +668,15 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
       size_spec: paperCut,
       pages: totalPages,
       color_spec: `표지: ${coverColor}(${coverSide}) / 본문: ${bodyColor}(${bodySide})`,
-      binding_type: `${bindingType} (${bindingDirection})`,
-      paper_spec: `표지: ${coverPaperName} ${coverWeight}g / 본문: ${bodyPaperName} ${bodyWeight}g`,
+      binding_type: `${bindingDetailType} (${bindingDirection})`,
+      paper_spec: includePaper
+        ? `표지: ${coverPaperName} ${coverWeight}g / 본문: ${bodyPaperName} ${bodyWeight}g`
+        : `거래처 사급/입고 (표지: ${coverPaperName} / 본문: ${bodyPaperName})`,
       post_process: hasCoating ? coatingType : '없음',
       order_price: activeTotalAmount,
       special_notes: costingMode === 'GOVERNMENT'
         ? `[조달·교육청 표준원가 연계 - 계약금액 ₩${activeTotalAmount.toLocaleString()}]\n예정가격: ₩${governmentReport.step13_targetTotal.toLocaleString()}원 / 권당: ₩${activeUnitPrice.toLocaleString()}원\n${notes || ''}`
-        : `[인쇄원가계산서 연계]\n부당단가: ${activeUnitPrice.toLocaleString()}원\n${notes || ''}`,
+        : `[실무 인쇄 견적서 연계]\n부당단가: ${activeUnitPrice.toLocaleString()}원 (용지대: ${includePaper ? '포함' : '거래처 사급/입고'})\n${notes || ''}`,
       status: '접수완료',
       author: writerName || user?.userName || '영업담당',
     };
@@ -733,7 +707,7 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
       client_name: clientDept ? `${clientName} (${clientDept})` : (clientName || '일반거래처'),
       client_id: clientId || '',
       product_name: productName,
-      spec: `${paperCut} ${totalPages}p ${bindingType}`,
+      spec: `${paperCut} ${totalPages}p ${bindingDetailType}`,
       quantity,
       unit_price: activeUnitPrice,
       supply_amount: activeSubtotal,
@@ -742,7 +716,7 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
       contact_person: contactName || '',
       manager: writerName || user?.userName || '영업담당',
       status: '미수',
-      remarks: costingMode === 'GOVERNMENT' ? `[조달·교육청 표준원가 연계]` : `[인쇄원가계산 연계]`,
+      remarks: costingMode === 'GOVERNMENT' ? `[조달·교육청 표준원가 연계]` : `[실무 인쇄 견적 연계]`,
     };
 
     try {
@@ -753,6 +727,25 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
     } catch (e) {
       alert('매출 등록 중 오류가 발생했습니다: ' + e.message);
     }
+  };
+
+  // ── 편차율 렌더 뱃지 헬퍼 ──
+  const renderDeviationBadge = (dev) => {
+    if (dev === undefined || dev === null || dev === 0) return null;
+    if (dev < 0) {
+      return (
+        <span className="inline-flex items-center text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+          <TrendingDown className="w-3 h-3 mr-0.5" />
+          표준대비 {dev}%
+        </span>
+      );
+    }
+    return (
+      <span className="inline-flex items-center text-[10px] font-bold text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200">
+        <TrendingUp className="w-3 h-3 mr-0.5" />
+        표준대비 +{dev}%
+      </span>
+    );
   };
 
   return (
@@ -775,13 +768,13 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
                 ? 'bg-teal-100 text-teal-800 ring-1 ring-teal-300'
                 : 'bg-blue-100 text-blue-800 ring-1 ring-blue-300'
             }`}>
-              {costingMode === 'GOVERNMENT' ? '🏛️ 조달·교육청 표준원가 모드 활성' : '🏢 인쇄소 실무 견적 모드 활성'}
+              {costingMode === 'GOVERNMENT' ? '🏛️ 조달·교육청 표준원가 모드 활성' : '🏢 비피앤피 / 갑우문화사 실무 견적 모드 활성'}
             </span>
           </div>
           <p className="text-xs text-slate-600 mt-1">
             {costingMode === 'GOVERNMENT'
               ? '조달청 고시 및 전남교육청(print.jne.go.kr) 기준 14단계 공인 원가계산 (일반관리비 5%, 법정이윤 10%, 낙찰하한율 88%, 원가계산서/규격서 공문서 출력)'
-              : '비피앤피 / 갑우문화사 상업 인쇄소 6대 실무 공정(CTP 판당 6,500원, 인쇄/제본/코팅 실무원가, 마진율 비교) 기반 견적서 산출'}
+              : '비피앤피 / 갑우문화사 6대 실무 공정(CTP 6,500원, 실무 4종 무선산식, 댐지대, 용지대 사급/포함 토글, 후가공 세부 단가) 기반 견적서 산출'}
           </p>
         </div>
 
@@ -797,7 +790,7 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
             }`}
           >
             <Building2 className="w-4 h-4 text-blue-600" />
-            <span>🏢 인쇄소 실무 견적 (사기업)</span>
+            <span>🏢 사기업 실무견적 (PrintEstimate)</span>
           </button>
 
           <button
@@ -938,20 +931,20 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
           <div>
             <div className="flex items-center space-x-2">
               <h2 className="text-lg font-black text-slate-900 tracking-tight">
-                인쇄원가계산 ({costingMode === 'GOVERNMENT' ? '🏛️ 조달·교육청 표준' : '🏢 인쇄소 실무'}) - {printType}
+                인쇄 견적서 작성 ({costingMode === 'GOVERNMENT' ? '🏛️ 조달·교육청 표준' : '🏢 사기업 실무견적'})
               </h2>
               <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
                 costingMode === 'GOVERNMENT'
                   ? 'bg-teal-100 text-teal-800'
                   : 'bg-sky-100 text-sky-800'
               }`}>
-                {costingMode === 'GOVERNMENT' ? '조달 공인 14단계 원가' : '표지/내지 분리 실무원가'}
+                {costingMode === 'GOVERNMENT' ? '조달 공인 14단계 원가' : '비피앤피/갑우문화사 6대 실무공정'}
               </span>
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
               {costingMode === 'GOVERNMENT'
                 ? '전라남도교육청 및 조달청 인쇄요금 표준기준에 따른 엄격한 법정 예정가격 및 계약금액 산출'
-                : '비피앤피/갑우문화사 인쇄소 6대 실무 공정(CTP, 인쇄, 제본, 후가공, 용지) 원가 산출'}
+                : 'CTP 판당 6,500원 고정, 무선 실무 4종 산식, 댐지대, 용지대 사급/포함 토글, 후가공 세부 단가 적용'}
             </p>
           </div>
         </div>
@@ -963,10 +956,10 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
             onClick={() => exportEstimateDetailToExcel({
               estimateNo, clientName, contactName, productName, quantity, unit: '부',
               sizeWidth: 0, sizeHeight: 0, paperCut, pages: totalPages,
-              colors: `표지 ${coverColor} / 본문 ${bodyColor}`, bindingType,
-              paperType: `표지: ${coverPaperName} / 본문: ${bodyPaperName}`,
+              colors: `표지 ${coverColor} / 본문 ${bodyColor}`, bindingType: bindingDetailType,
+              paperType: includePaper ? `표지: ${coverPaperName} / 본문: ${bodyPaperName}` : `거래처 사급/입고 (0원)`,
               subtotal: activeSubtotal, vat: activeVat, totalAmount: activeTotalAmount, unitPrice: activeUnitPrice,
-              items: compileDetailedItems(), notes
+              items: costReport.allItems, notes
             })}
             className="flex items-center space-x-1 px-3 py-2 text-xs font-bold rounded-xl border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition shadow-sm"
           >
@@ -1014,7 +1007,7 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
         </div>
       </div>
 
-      {/* ── 1. 기본 선택 정보 (이미지 2 상단 형태) ── */}
+      {/* ── 1. 기본 선택 정보 ── */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
         <div className="text-xs font-black text-slate-800 uppercase tracking-wider pb-2 border-b border-slate-100 flex items-center justify-between">
           <span className="flex items-center space-x-2">
@@ -1177,7 +1170,6 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
             </div>
           </div>
 
-          {/* 4단 상세 입력 필드 (자동 채워짐 & 직접 편집 가능) */}
           <div>
             <label className="font-bold text-slate-600 block mb-1">
               거래처명 (고객사) <span className="text-rose-500">*</span>
@@ -1225,7 +1217,6 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
             />
           </div>
 
-          {/* 인쇄명 */}
           <div className="sm:col-span-4">
             <label className="font-bold text-slate-700 block mb-1">
               인쇄명 (품명) <span className="text-rose-500">*</span>
@@ -1242,15 +1233,32 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
         </div>
       </div>
 
-      {/* ── 2. 규격 선택 정보 (이미지 2의 두 번째 박스) ── */}
+      {/* ── 2. 규격 및 실무 공정 핵심 옵션 (PrintEstimate 정밀 반영) ── */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
-        <div className="text-xs font-black text-slate-800 uppercase tracking-wider pb-2 border-b border-slate-100 flex items-center space-x-2">
-          <span className="w-2.5 h-2.5 rounded-full bg-indigo-600"></span>
-          <span>규격 선택 정보</span>
+        <div className="text-xs font-black text-slate-800 uppercase tracking-wider pb-2 border-b border-slate-100 flex items-center justify-between">
+          <span className="flex items-center space-x-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-indigo-600"></span>
+            <span>규격 및 실무 공정 선택 (PrintEstimate 기준)</span>
+          </span>
+          {/* 용지대 포함/사급 토글 스위치 (PrintEstimate includePaper 플래그) */}
+          <label className="flex items-center space-x-2 cursor-pointer bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-300 hover:bg-sky-50 transition">
+            <input
+              type="checkbox"
+              checked={includePaper}
+              onChange={e => setIncludePaper(e.target.checked)}
+              className="w-4 h-4 rounded text-sky-600 focus:ring-sky-500"
+            />
+            <span className="text-xs font-black">
+              {includePaper ? (
+                <span className="text-emerald-700 font-black">✓ 용지대 포함 (자사 구입 인쇄)</span>
+              ) : (
+                <span className="text-amber-700 font-black">✕ 용지대 제외 (거래처 입고/사급 0원)</span>
+              )}
+            </span>
+          </label>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-          {/* 인쇄 방식 라디오 */}
           <div className="flex items-center space-x-3 p-2 bg-slate-50 rounded-xl border border-slate-200">
             <span className="font-bold text-slate-600 w-20">인쇄 방식:</span>
             {['옵셋인쇄', '경인쇄', '시험지인쇄', '디지털인쇄'].map(t => (
@@ -1268,7 +1276,6 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
             ))}
           </div>
 
-          {/* 인쇄물 종류 라디오 */}
           <div className="flex items-center space-x-3 p-2 bg-slate-50 rounded-xl border border-slate-200">
             <span className="font-bold text-slate-600 w-20">인쇄물 종류:</span>
             {['책자', '화보집', '리플렛', '포스터', '전단'].map(c => (
@@ -1308,7 +1315,7 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
               onChange={e => setPaperCut(e.target.value)}
               className="w-full p-2 border border-slate-300 rounded-lg bg-white font-bold text-slate-800"
             >
-              <option value="국배판(A4)">국배판 (A4 / 10절)</option>
+              <option value="국배판(A4)">국배판 (A4 / 국8절)</option>
               <option value="4×6배판(B5)">4×6배판 (B5 / 16절)</option>
               <option value="국판(A5)">국판 (A5 / 국16절)</option>
               <option value="크라운판(18절)">크라운판 (18절)</option>
@@ -1320,24 +1327,25 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
           <div>
             <label className="font-bold text-slate-600 block mb-1">총 면수 (Page)</label>
             <div className="p-2 bg-slate-100 rounded-lg border border-slate-200 font-black text-slate-900 text-center">
-              {totalPages} <span className="text-[11px] font-normal text-slate-500">Page (표지 {coverPages}p + 본문 {bodyPages}p{hasSupplement ? ` + 화보 ${suppPages}p` : ''})</span>
+              {totalPages} <span className="text-[11px] font-normal text-slate-500">Page</span>
             </div>
           </div>
 
           <div>
-            <label className="font-bold text-slate-600 block mb-1">제본 형태</label>
+            <label className="font-bold text-slate-600 block mb-1">제본 형태 (실무 4종 산식)</label>
             <div className="flex space-x-1">
               <select
-                value={bindingType}
-                onChange={e => setBindingType(e.target.value)}
+                value={bindingDetailType}
+                onChange={e => handleBindingDetailChange(e.target.value)}
                 className="w-2/3 p-2 border border-slate-300 rounded-lg bg-white font-bold text-slate-800"
               >
-                <option value="무사무선">무사무선 (일반)</option>
-                <option value="무선날개">무선 날개</option>
-                <option value="중철제본">중철</option>
-                <option value="환양장">환양장(하드커버)</option>
+                <option value="무선제본">무선제본 (단본)</option>
+                <option value="무선 2탑 제본">무선 2탑 제본 (본책+해설)</option>
+                <option value="무선날개제본">무선날개제본</option>
+                <option value="책속책제본">책속책제본</option>
+                <option value="중철제본">중철제본</option>
+                <option value="양장제본">양장제본 (하드커버)</option>
                 <option value="와이어스프링">와이어 스프링</option>
-                <option value="접지(리플렛)">접지</option>
               </select>
               <select
                 value={bindingDirection}
@@ -1352,10 +1360,107 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
           </div>
         </div>
 
-        {/* 옵션 선택 체크박스 바 (이미지 2의 '옵션선택') */}
-        <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2 text-xs">
-          <div className="font-bold text-slate-700 flex items-center justify-between">
-            <span>■ 옵션 선택:</span>
+        {/* 제본 세부 설정 (2탑 / 날개 / 책속책 파라미터 및 댐지대) */}
+        <div className="p-3 bg-indigo-50/70 rounded-xl border border-indigo-200 text-xs space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="font-bold text-indigo-950 flex items-center space-x-1.5">
+              <BookOpen className="w-4 h-4 text-indigo-600" />
+              <span>실무 제본 산식: <strong>{costReport.sections.binding.formula}</strong></span>
+            </span>
+            {/* 댐지대 체크박스 (PrintEstimate 공식) */}
+            <label className="flex items-center space-x-2 cursor-pointer bg-white px-3 py-1 rounded-lg border border-indigo-300 hover:bg-indigo-100/50 transition">
+              <input
+                type="checkbox"
+                checked={hasDamji}
+                onChange={e => setHasDamji(e.target.checked)}
+                className="rounded text-indigo-600"
+              />
+              <span className="font-bold text-indigo-900">
+                출판사 댐지대(정합비) 포함 ({Math.round(quantity / 7.5).toLocaleString()}부 × 110원 = ₩{calculateDamjiCost(quantity).toLocaleString()}원)
+              </span>
+            </label>
+          </div>
+
+          {/* 2탑 제본인 경우 해설 면수 입력 */}
+          {bindingDetailType === '무선 2탑 제본' && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-white p-2.5 rounded-lg border border-indigo-200 animate-in fade-in">
+              <div>
+                <label className="font-bold text-slate-700 block mb-0.5">해설 표지 면수</label>
+                <input
+                  type="number"
+                  value={cover2Pages}
+                  onChange={e => setCover2Pages(Number(e.target.value) || 0)}
+                  className="w-full p-1.5 border border-slate-300 rounded text-center font-bold"
+                />
+              </div>
+              <div>
+                <label className="font-bold text-slate-700 block mb-0.5">해설 본문 면수</label>
+                <input
+                  type="number"
+                  value={body2Pages}
+                  onChange={e => setBody2Pages(Number(e.target.value) || 0)}
+                  className="w-full p-1.5 border border-slate-300 rounded text-center font-bold text-indigo-700"
+                />
+              </div>
+              <div className="col-span-2 flex items-center text-[11px] text-slate-600">
+                <span>[{(coverPages + cover2Pages)}×2 + {bodyPages} + {body2Pages}] × {bindingCoefficient} + {bindingBasePrice}원/부 공식으로 자동 연산됩니다.</span>
+              </div>
+            </div>
+          )}
+
+          {/* 무선날개제본인 경우 광고/날개 면수 입력 */}
+          {bindingDetailType === '무선날개제본' && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-white p-2.5 rounded-lg border border-indigo-200 animate-in fade-in">
+              <div>
+                <label className="font-bold text-slate-700 block mb-0.5">날개/광고 면수</label>
+                <input
+                  type="number"
+                  value={adPages}
+                  onChange={e => setAdPages(Number(e.target.value) || 0)}
+                  className="w-full p-1.5 border border-slate-300 rounded text-center font-bold text-indigo-700"
+                />
+              </div>
+              <div className="col-span-3 flex items-center text-[11px] text-slate-600">
+                <span>{`{(${coverPages} + ${adPages}) × 2} + ${bodyPages} × ${bindingCoefficient} + ${bindingBasePrice}원/부 공식으로 자동 연산됩니다.`}</span>
+              </div>
+            </div>
+          )}
+
+          {/* 책속책제본인 경우 속표지/속본문 면수 입력 */}
+          {bindingDetailType === '책속책제본' && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-white p-2.5 rounded-lg border border-indigo-200 animate-in fade-in">
+              <div>
+                <label className="font-bold text-slate-700 block mb-0.5">책속 속표지 면수</label>
+                <input
+                  type="number"
+                  value={innerCoverPages}
+                  onChange={e => setInnerCoverPages(Number(e.target.value) || 0)}
+                  className="w-full p-1.5 border border-slate-300 rounded text-center font-bold"
+                />
+              </div>
+              <div>
+                <label className="font-bold text-slate-700 block mb-0.5">책속 속본문 면수</label>
+                <input
+                  type="number"
+                  value={innerBodyPages}
+                  onChange={e => setInnerBodyPages(Number(e.target.value) || 0)}
+                  className="w-full p-1.5 border border-slate-300 rounded text-center font-bold text-indigo-700"
+                />
+              </div>
+              <div className="col-span-2 flex items-center text-[11px] text-slate-600">
+                <span>[({coverPages}+{innerCoverPages})×2 + {bodyPages} + {innerBodyPages}] × {bindingCoefficient} + {bindingBasePrice}원/부 공식으로 자동 연산됩니다.</span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ── 후가공 세부 옵션 체크리스트 (PrintEstimate 단가표 반영) ── */}
+        <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2.5 text-xs">
+          <div className="font-bold text-slate-700 flex items-center justify-between pb-1 border-b border-slate-200">
+            <span className="flex items-center space-x-1">
+              <Wrench className="w-3.5 h-3.5 text-slate-500" />
+              <span>후가공 세부 공정 (실무 단가):</span>
+            </span>
             {hasCoating && (
               <div className="flex items-center space-x-2">
                 <span className="text-[11px] text-slate-500">코팅 종류:</span>
@@ -1364,118 +1469,141 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
                   onChange={e => setCoatingType(e.target.value)}
                   className="p-1 border border-slate-300 rounded bg-white font-bold text-sky-700 text-[11px]"
                 >
-                  <option value="무광코팅">무광 라미네이팅</option>
-                  <option value="유광코팅">유광 라미네이팅</option>
-                  <option value="UV코팅">UV 코팅</option>
+                  <option value="무광코팅">무광 라미네이팅 (57,000원/R)</option>
+                  <option value="유광코팅">유광 라미네이팅 (48,000원/R)</option>
+                  <option value="UV코팅">UV 코팅 (40,530원/R)</option>
+                  <option value="부분UV코팅">부분 UV 코팅 (42,980원/R)</option>
+                  <option value="엠보코팅">엠보 코팅 (100,000원/R)</option>
                 </select>
               </div>
             )}
           </div>
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-            <label className="flex items-center space-x-1.5 cursor-pointer font-medium">
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+            <label className="flex items-center space-x-1.5 cursor-pointer font-medium p-1 bg-white rounded border border-slate-200">
               <input
                 type="checkbox"
                 checked={hasCoating}
                 onChange={e => setHasCoating(e.target.checked)}
                 className="rounded text-sky-600"
               />
-              <span>코팅</span>
+              <span>표지 코팅</span>
             </label>
 
-            <label className="flex items-center space-x-1.5 cursor-pointer font-medium">
+            <label className="flex items-center space-x-1.5 cursor-pointer font-medium p-1 bg-white rounded border border-slate-200">
               <input
                 type="checkbox"
-                checked={hasCoverSpecial}
-                onChange={e => setHasCoverSpecial(e.target.checked)}
+                checked={hasHoloFoil}
+                onChange={e => setHasHoloFoil(e.target.checked)}
                 className="rounded text-sky-600"
               />
-              <span>표지 식재</span>
+              <span>홀박 (30원/부)</span>
             </label>
 
-            <label className="flex items-center space-x-1.5 cursor-pointer font-bold text-sky-700">
+            <label className="flex items-center space-x-1.5 cursor-pointer font-medium p-1 bg-white rounded border border-slate-200">
+              <input
+                type="checkbox"
+                checked={hasHotFoil}
+                onChange={e => setHasHotFoil(e.target.checked)}
+                className="rounded text-sky-600"
+              />
+              <span>열박 (기본 10만)</span>
+            </label>
+
+            <label className="flex items-center space-x-1.5 cursor-pointer font-medium p-1 bg-white rounded border border-slate-200">
+              <input
+                type="checkbox"
+                checked={hasDie}
+                onChange={e => setHasDie(e.target.checked)}
+                className="rounded text-sky-600"
+              />
+              <span>목형대 (20만)</span>
+            </label>
+
+            <label className="flex items-center space-x-1.5 cursor-pointer font-medium p-1 bg-white rounded border border-slate-200">
+              <input
+                type="checkbox"
+                checked={hasCopper}
+                onChange={e => setHasCopper(e.target.checked)}
+                className="rounded text-sky-600"
+              />
+              <span>형압 동판대 (3.5만)</span>
+            </label>
+
+            <label className="flex items-center space-x-1.5 cursor-pointer font-medium p-1 bg-white rounded border border-slate-200">
+              <input
+                type="checkbox"
+                checked={hasResin}
+                onChange={e => setHasResin(e.target.checked)}
+                className="rounded text-sky-600"
+              />
+              <span>수지판대 (6만)</span>
+            </label>
+
+            <label className="flex items-center space-x-1.5 cursor-pointer font-medium p-1 bg-white rounded border border-slate-200">
+              <input
+                type="checkbox"
+                checked={hasThomson}
+                onChange={e => setHasThomson(e.target.checked)}
+                className="rounded text-sky-600"
+              />
+              <span>톰슨 타발 (2.6만/R)</span>
+            </label>
+
+            <label className="flex items-center space-x-1.5 cursor-pointer font-medium p-1 bg-white rounded border border-slate-200">
+              <input
+                type="checkbox"
+                checked={hasEpoxy}
+                onChange={e => setHasEpoxy(e.target.checked)}
+                className="rounded text-sky-600"
+              />
+              <span>에폭시 (130원/장)</span>
+            </label>
+
+            <label className="flex items-center space-x-1.5 cursor-pointer font-medium p-1 bg-white rounded border border-slate-200">
+              <input
+                type="checkbox"
+                checked={hasMinipillar}
+                onChange={e => setHasMinipillar(e.target.checked)}
+                className="rounded text-sky-600"
+              />
+              <span>미니필라스 (95원/장)</span>
+            </label>
+
+            <label className="flex items-center space-x-1.5 cursor-pointer font-medium p-1 bg-white rounded border border-slate-200">
+              <input
+                type="checkbox"
+                checked={hasStickerMerge}
+                onChange={e => setHasStickerMerge(e.target.checked)}
+                className="rounded text-sky-600"
+              />
+              <span>스티커정합 (10원/부)</span>
+            </label>
+
+            <label className="flex items-center space-x-1.5 cursor-pointer font-bold text-sky-700 p-1 bg-sky-50 rounded border border-sky-200">
               <input
                 type="checkbox"
                 checked={hasSupplement}
                 onChange={e => setHasSupplement(e.target.checked)}
                 className="rounded text-sky-600"
               />
-              <span>화보사용 (컬러 화보 별도 삽입)</span>
+              <span>화보 삽입</span>
             </label>
 
-            <label className="flex items-center space-x-1.5 cursor-pointer font-medium">
-              <input
-                type="checkbox"
-                checked={hasAddBody}
-                onChange={e => setHasAddBody(e.target.checked)}
-                className="rounded text-sky-600"
-              />
-              <span>본문추가 (해설집/본문2)</span>
-            </label>
-
-            <label className="flex items-center space-x-1.5 cursor-pointer font-medium">
-              <input
-                type="checkbox"
-                checked={isProcessGuide}
-                onChange={e => setIsProcessGuide(e.target.checked)}
-                className="rounded text-sky-600"
-              />
-              <span>작업설</span>
-            </label>
-
-            <label className="flex items-center space-x-1.5 cursor-pointer font-medium">
-              <input
-                type="checkbox"
-                checked={isPrimaryPrint}
-                onChange={e => setIsPrimaryPrint(e.target.checked)}
-                className="rounded text-sky-600"
-              />
-              <span>원색인쇄</span>
-            </label>
-
-            <label className="flex items-center space-x-1.5 cursor-pointer font-medium">
-              <input
-                type="checkbox"
-                checked={isSpotColor}
-                onChange={e => setIsSpotColor(e.target.checked)}
-                className="rounded text-sky-600"
-              />
-              <span>특수별색</span>
-            </label>
-
-            <label className="flex items-center space-x-1.5 cursor-pointer font-medium">
+            <label className="flex items-center space-x-1.5 cursor-pointer font-medium p-1 bg-white rounded border border-slate-200">
               <input
                 type="checkbox"
                 checked={isBetaPrint}
                 onChange={e => setIsBetaPrint(e.target.checked)}
                 className="rounded text-sky-600"
               />
-              <span>베다인쇄 (솔리드 베다 할증)</span>
-            </label>
-
-            <label className="flex items-center space-x-1.5 cursor-pointer font-medium">
-              <input
-                type="checkbox"
-                checked={hasFoil}
-                onChange={e => setHasFoil(e.target.checked)}
-                className="rounded text-sky-600"
-              />
-              <span>금박/은박</span>
-            </label>
-
-            <label className="flex items-center space-x-1.5 cursor-pointer font-medium">
-              <input
-                type="checkbox"
-                checked={hasDiecut}
-                onChange={e => setHasDiecut(e.target.checked)}
-                className="rounded text-sky-600"
-              />
-              <span>톰슨(도무송)</span>
+              <span>베다 인쇄 (+60%)</span>
             </label>
           </div>
         </div>
       </div>
 
-      {/* ── 3. [표지 선택정보] (이미지 2의 표지 선택정보 박스) ── */}
+      {/* ── 3. [표지 선택정보] ── */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
         <div className="flex items-center justify-between pb-2 border-b border-slate-100">
           <span className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center space-x-2">
@@ -1488,7 +1616,6 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
-          {/* 용지 종류 & 평량 */}
           <div>
             <label className="font-bold text-slate-600 block mb-1">용지종류 / 평량</label>
             <div className="flex space-x-1">
@@ -1518,7 +1645,6 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
             </div>
           </div>
 
-          {/* 표지 면수 */}
           <div>
             <label className="font-bold text-slate-600 block mb-1">표지면수 (Page)</label>
             <input
@@ -1529,7 +1655,6 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
             />
           </div>
 
-          {/* 인쇄 형태 */}
           <div>
             <label className="font-bold text-slate-600 block mb-1">인쇄형태 (도수 / 면)</label>
             <div className="flex space-x-1">
@@ -1554,7 +1679,6 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
             </div>
           </div>
 
-          {/* 조판면수 */}
           <div>
             <label className="font-bold text-slate-600 block mb-1">조판면수 (Page)</label>
             <input
@@ -1565,18 +1689,21 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
             />
           </div>
 
-          {/* 연당단가 */}
           <div>
-            <label className="font-bold text-slate-600 block mb-1">연당단가 (원/R)</label>
+            <label className="font-bold text-slate-600 block mb-1">
+              연당단가 (원/R) {!includePaper && <span className="text-amber-600 font-normal">(사급 제외)</span>}
+            </label>
             <input
               type="number"
+              disabled={!includePaper}
               value={coverUnitPrice}
               onChange={e => setCoverUnitPrice(Number(e.target.value) || 0)}
-              className="w-full p-2 border border-slate-300 rounded-lg bg-white font-black text-sky-700 text-right"
+              className={`w-full p-2 border border-slate-300 rounded-lg font-black text-right ${
+                includePaper ? 'bg-white text-sky-700' : 'bg-slate-100 text-slate-400 line-through'
+              }`}
             />
           </div>
 
-          {/* 인쇄되지 않는 면 */}
           <div>
             <label className="font-bold text-slate-600 block mb-1">인쇄되지 않는 면 (백면)</label>
             <input
@@ -1587,7 +1714,6 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
             />
           </div>
 
-          {/* 조판 및 편집율 슬라이더 */}
           <div className="sm:col-span-2">
             <div className="flex justify-between items-center mb-1 font-bold text-slate-600">
               <span>조판 및 편집율:</span>
@@ -1605,13 +1731,12 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
           </div>
         </div>
 
-        {/* 표지 실시간 연산 산출 결과 바 */}
         <div className="bg-amber-50/70 p-3 rounded-xl border border-amber-200 text-xs flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center space-x-4">
             <span>소요연수: <strong className="text-slate-800">{costReport.coverCalc.totalReams.toFixed(2)} R</strong></span>
             <span>CTP: <strong className="text-slate-800">{costReport.coverCalc.totalPlates} 판</strong> (₩{costReport.coverCalc.ctpCost.toLocaleString()}원)</span>
             <span>인쇄비: <strong className="text-slate-800">₩{costReport.coverCalc.printCost.toLocaleString()}원</strong></span>
-            <span>용지비: <strong className="text-slate-800">₩{costReport.coverCalc.paperCost.toLocaleString()}원</strong></span>
+            <span>용지비: <strong className="text-slate-800">{includePaper ? `₩${costReport.coverCalc.paperCost.toLocaleString()}원` : '사급(0원)'}</strong></span>
           </div>
           {hasCoating && (
             <span className="text-amber-800 font-bold">코팅비: ₩{costReport.coatingCost.toLocaleString()}원</span>
@@ -1619,7 +1744,7 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
         </div>
       </div>
 
-      {/* ── 4. [본문 선택정보] (이미지 2의 본문 선택정보 박스) ── */}
+      {/* ── 4. [본문 선택정보] ── */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
         <div className="flex items-center justify-between pb-2 border-b border-slate-100">
           <span className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center space-x-2">
@@ -1632,7 +1757,6 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
-          {/* 용지 종류 & 평량 */}
           <div>
             <label className="font-bold text-slate-600 block mb-1">용지종류 / 평량</label>
             <div className="flex space-x-1">
@@ -1661,7 +1785,6 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
             </div>
           </div>
 
-          {/* 본문 면수 */}
           <div>
             <label className="font-bold text-slate-600 block mb-1">본문면수 (Page)</label>
             <input
@@ -1672,7 +1795,6 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
             />
           </div>
 
-          {/* 인쇄 형태 */}
           <div>
             <label className="font-bold text-slate-600 block mb-1">인쇄형태 (도수 / 면)</label>
             <div className="flex space-x-1">
@@ -1696,7 +1818,6 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
             </div>
           </div>
 
-          {/* 조판면수 */}
           <div>
             <label className="font-bold text-slate-600 block mb-1">조판면수 (Page)</label>
             <input
@@ -1707,18 +1828,21 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
             />
           </div>
 
-          {/* 연당단가 */}
           <div>
-            <label className="font-bold text-slate-600 block mb-1">연당단가 (원/R)</label>
+            <label className="font-bold text-slate-600 block mb-1">
+              연당단가 (원/R) {!includePaper && <span className="text-amber-600 font-normal">(사급 제외)</span>}
+            </label>
             <input
               type="number"
+              disabled={!includePaper}
               value={bodyUnitPrice}
               onChange={e => setBodyUnitPrice(Number(e.target.value) || 0)}
-              className="w-full p-2 border border-slate-300 rounded-lg bg-white font-black text-sky-700 text-right"
+              className={`w-full p-2 border border-slate-300 rounded-lg font-black text-right ${
+                includePaper ? 'bg-white text-sky-700' : 'bg-slate-100 text-slate-400 line-through'
+              }`}
             />
           </div>
 
-          {/* 인쇄되지 않는 면 */}
           <div>
             <label className="font-bold text-slate-600 block mb-1">인쇄되지 않는 면 (백면)</label>
             <input
@@ -1729,7 +1853,6 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
             />
           </div>
 
-          {/* 조판 및 편집율 슬라이더 */}
           <div className="sm:col-span-2">
             <div className="flex justify-between items-center mb-1 font-bold text-slate-600">
               <span>조판 및 편집율:</span>
@@ -1747,14 +1870,13 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
           </div>
         </div>
 
-        {/* 본문 실시간 연산 산출 결과 바 */}
         <div className="bg-emerald-50/70 p-3 rounded-xl border border-emerald-200 text-xs flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center space-x-4">
             <span>대수: <strong className="text-slate-800">{costReport.bodyCalc.signatures} 대</strong></span>
             <span>소요연수: <strong className="text-slate-800">{costReport.bodyCalc.totalReams.toFixed(2)} R</strong></span>
             <span>CTP: <strong className="text-slate-800">{costReport.bodyCalc.totalPlates} 판</strong> (₩{costReport.bodyCalc.ctpCost.toLocaleString()}원)</span>
             <span>인쇄비: <strong className="text-slate-800">₩{costReport.bodyCalc.printCost.toLocaleString()}원</strong></span>
-            <span>용지비: <strong className="text-slate-800">₩{costReport.bodyCalc.paperCost.toLocaleString()}원</strong></span>
+            <span>용지비: <strong className="text-slate-800">{includePaper ? `₩${costReport.bodyCalc.paperCost.toLocaleString()}원` : '사급(0원)'}</strong></span>
           </div>
           {costReport.bodyCalc.typesetCost > 0 && (
             <span className="text-emerald-800 font-bold">조판료: ₩{costReport.bodyCalc.typesetCost.toLocaleString()}원</span>
@@ -1762,7 +1884,7 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
         </div>
       </div>
 
-      {/* ── 5. [화보 / 간지 선택정보] (화보사용 옵션 시 활성화) ── */}
+      {/* ── 5. [화보 / 간지 선택정보] ── */}
       {hasSupplement && (
         <div className="bg-white rounded-2xl border border-sky-300 shadow-sm p-5 space-y-4">
           <div className="flex items-center justify-between pb-2 border-b border-sky-100">
@@ -1830,6 +1952,7 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
               <label className="font-bold text-slate-600 block mb-1">연당단가 (원/R)</label>
               <input
                 type="number"
+                disabled={!includePaper}
                 value={suppUnitPrice}
                 onChange={e => setSuppUnitPrice(Number(e.target.value) || 0)}
                 className="w-full p-2 border border-slate-300 rounded-lg bg-white font-black text-sky-700 text-right"
@@ -1839,11 +1962,11 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
         </div>
       )}
 
-      {/* ── 6. 기타 선택정보 (가감금액, 배송비, 포장비) ── */}
+      {/* ── 6. 기타 선택정보 ── */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
         <div className="text-xs font-black text-slate-800 uppercase tracking-wider pb-2 border-b border-slate-100 flex items-center space-x-2">
           <span className="w-2.5 h-2.5 rounded-full bg-purple-600"></span>
-          <span>기타 선택정보 (가감금액 및 물류 포장)</span>
+          <span>기타 선택정보 (물류, 포장 및 특약 메모)</span>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 text-xs">
@@ -1902,18 +2025,21 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
         </div>
       </div>
 
-      {/* ── 7. 공정별 세부 산출 내역표 (원가 집계 테이블 - 모드별 분기) ── */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
+      {/* ── 7. 공정별 세부 산출 내역표 (모드별 완벽 분리) ── */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
         <div className="text-xs font-black text-slate-800 uppercase tracking-wider pb-2 border-b border-slate-100 flex items-center justify-between">
-          <span>
-            {costingMode === 'GOVERNMENT'
-              ? '■ 🏛️ 조달청·교육청 표준 인쇄원가 14단계 법정 산출 상세표'
-              : '■ 🏢 인쇄소 상업 실무 견적 공정별 원가 상세표'}
+          <span className="flex items-center space-x-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-600"></span>
+            <span>
+              {costingMode === 'GOVERNMENT'
+                ? '■ 🏛️ 조달청·교육청 표준 인쇄원가 14단계 법정 산출 상세표'
+                : '■ 🏢 비피앤피 / 갑우문화사 6대 실무 공정별 원가 명세 (PrintEstimate)'}
+            </span>
           </span>
           <span className="text-[11px] font-normal text-slate-500">
             {costingMode === 'GOVERNMENT'
               ? '국가를 당사자로 하는 계약에 관한 법률 시행규칙 제6조 적용'
-              : '비피앤피 / 갑우문화사 실무 견적 기준'}
+              : '비피앤피 / 갑우문화사 실무 견적 공식 & 편차율 분석'}
           </span>
         </div>
 
@@ -1931,7 +2057,6 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-[11px]">
-                {/* 1. 용지료 */}
                 <tr className="hover:bg-slate-50/70">
                   <td className="p-2.5 text-center font-bold text-slate-500">1</td>
                   <td className="p-2.5 font-bold text-slate-800">1. 용지료</td>
@@ -1943,7 +2068,6 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
                   <td className="p-2.5 text-right text-slate-500">직접재료비</td>
                 </tr>
 
-                {/* 2. 조판료 */}
                 <tr className="hover:bg-slate-50/70">
                   <td className="p-2.5 text-center font-bold text-slate-500">2</td>
                   <td className="p-2.5 font-bold text-slate-800">2. 조판료</td>
@@ -1954,7 +2078,6 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
                   <td className="p-2.5 text-right text-slate-500">기본 15,390원/p</td>
                 </tr>
 
-                {/* 3. 인쇄판료 */}
                 <tr className="hover:bg-slate-50/70">
                   <td className="p-2.5 text-center font-bold text-slate-500">3</td>
                   <td className="p-2.5 font-bold text-slate-800">3. 인쇄판료 (CTP)</td>
@@ -1965,7 +2088,6 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
                   <td className="p-2.5 text-right text-slate-500">조달 CTP 단가</td>
                 </tr>
 
-                {/* 4. 인쇄료 */}
                 <tr className="hover:bg-slate-50/70">
                   <td className="p-2.5 text-center font-bold text-slate-500">4</td>
                   <td className="p-2.5 font-bold text-slate-800">4. 인쇄료</td>
@@ -1976,7 +2098,6 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
                   <td className="p-2.5 text-right text-slate-500">통수 구간제</td>
                 </tr>
 
-                {/* 5. 제본료 */}
                 <tr className="hover:bg-slate-50/70">
                   <td className="p-2.5 text-center font-bold text-slate-500">5</td>
                   <td className="p-2.5 font-bold text-slate-800">5. 제본료</td>
@@ -1987,7 +2108,6 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
                   <td className="p-2.5 text-right text-slate-500">공인 단가</td>
                 </tr>
 
-                {/* 6. 기타추가 */}
                 <tr className="hover:bg-slate-50/70">
                   <td className="p-2.5 text-center font-bold text-slate-500">6</td>
                   <td className="p-2.5 font-bold text-slate-800">6. 기타추가</td>
@@ -1998,7 +2118,6 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
                   <td className="p-2.5 text-right text-slate-500">후가공 실비</td>
                 </tr>
 
-                {/* 7. 소계 (순제조원가) */}
                 <tr className="bg-slate-100 font-bold border-t border-b border-slate-300">
                   <td className="p-2.5 text-center text-slate-700">7</td>
                   <td className="p-2.5 text-slate-900 font-black">7. 순제조원가 (소계)</td>
@@ -2007,7 +2126,6 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
                   <td className="p-2.5 text-right text-slate-700 font-bold">순제조비</td>
                 </tr>
 
-                {/* 8. 일반관리비 */}
                 <tr className="hover:bg-slate-50/70">
                   <td className="p-2.5 text-center font-bold text-slate-500">8</td>
                   <td className="p-2.5 font-bold text-teal-800">8. 일반관리비</td>
@@ -2018,7 +2136,6 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
                   <td className="p-2.5 text-right font-semibold text-teal-800">법정 {manageRate}%</td>
                 </tr>
 
-                {/* 9. 계 */}
                 <tr className="bg-slate-50 font-bold">
                   <td className="p-2.5 text-center text-slate-600">9</td>
                   <td className="p-2.5 text-slate-800 font-bold">9. 계 (소계 + 일반관리비)</td>
@@ -2027,7 +2144,6 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
                   <td className="p-2.5 text-right text-slate-600">총제조원가</td>
                 </tr>
 
-                {/* 10. 이윤 */}
                 <tr className="hover:bg-teal-50/50 bg-teal-50/30">
                   <td className="p-2.5 text-center font-bold text-teal-800">10</td>
                   <td className="p-2.5 font-black text-teal-900">10. 이윤 (법정산식)</td>
@@ -2038,7 +2154,6 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
                   <td className="p-2.5 text-right font-bold text-rose-700">용지비 공제 적용</td>
                 </tr>
 
-                {/* 11. 공급가액 */}
                 <tr className="bg-slate-50 font-bold">
                   <td className="p-2.5 text-center text-slate-600">11</td>
                   <td className="p-2.5 text-slate-900 font-bold">11. 공급가액</td>
@@ -2047,7 +2162,6 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
                   <td className="p-2.5 text-right text-slate-600">과세표준액</td>
                 </tr>
 
-                {/* 12. 부가가치세 */}
                 <tr className="hover:bg-slate-50/70">
                   <td className="p-2.5 text-center font-bold text-slate-500">12</td>
                   <td className="p-2.5 font-bold text-slate-800">12. 부가가치세</td>
@@ -2056,7 +2170,6 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
                   <td className="p-2.5 text-right text-slate-500">VAT 10%</td>
                 </tr>
 
-                {/* 13. 합계 (예정가격) */}
                 <tr className="bg-blue-50/80 font-bold border-t border-b border-blue-200">
                   <td className="p-3 text-center text-blue-900 font-black">13</td>
                   <td className="p-3 text-blue-950 font-black text-xs">13. 예정가격 (합계)</td>
@@ -2065,7 +2178,6 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
                   <td className="p-3 text-right text-blue-800 font-bold">관공서 예정가</td>
                 </tr>
 
-                {/* 14. 계약금액 / 낙찰금액 */}
                 <tr className="bg-teal-100/90 font-bold border-t-2 border-teal-500">
                   <td className="p-3.5 text-center text-teal-950 font-black text-sm">14</td>
                   <td className="p-3.5 text-teal-950 font-black text-sm">14. 최종 계약금액</td>
@@ -2083,50 +2195,118 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
             </table>
           </div>
         ) : (
-          /* 🏢 사기업 실무 견적 공정별 내역 테이블 */
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs text-center border border-slate-200 rounded-lg">
-              <thead className="bg-slate-50 text-slate-700 font-bold border-b border-slate-200">
-                <tr>
-                  <th className="p-2 w-10">No</th>
-                  <th className="p-2 w-24">구분</th>
-                  <th className="p-2 text-left">세부 항목명</th>
-                  <th className="p-2">규격 / 산출 기준</th>
-                  <th className="p-2 w-16">수량</th>
-                  <th className="p-2 w-12">단위</th>
-                  <th className="p-2 text-right w-24">단가</th>
-                  <th className="p-2 text-right w-28">금액</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {compileDetailedItems().map((it, idx) => (
-                  <tr key={idx} className="hover:bg-slate-50/70">
-                    <td className="p-2 text-slate-400">{idx + 1}</td>
-                    <td className="p-2 font-semibold text-slate-600">{it.category}</td>
-                    <td className="p-2 text-left font-bold text-slate-800">{it.name}</td>
-                    <td className="p-2 text-slate-500 text-[11px]">{it.spec}</td>
-                    <td className="p-2 font-medium">{it.quantity?.toLocaleString()}</td>
-                    <td className="p-2 text-slate-500">{it.unit}</td>
-                    <td className="p-2 text-right">{it.unitPrice?.toLocaleString()}원</td>
-                    <td className="p-2 text-right font-bold text-slate-900">{it.amount?.toLocaleString()}원</td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot className="bg-slate-50 font-bold border-t border-slate-300">
-                <tr>
-                  <td colSpan={7} className="p-2.5 text-right text-slate-700">공급가액 합계</td>
-                  <td className="p-2.5 text-right text-slate-900">{costReport.subtotal.toLocaleString()}원</td>
-                </tr>
-                <tr>
-                  <td colSpan={7} className="p-2 text-right text-slate-700">부가가치세 (10%)</td>
-                  <td className="p-2 text-right text-slate-900">{costReport.vat.toLocaleString()}원</td>
-                </tr>
-                <tr className="bg-sky-50 text-sky-900 text-sm font-black border-t-2 border-slate-400">
-                  <td colSpan={7} className="p-3 text-right">총 인쇄 견적금액 (부당 {costReport.perBookPrice.toLocaleString()}원)</td>
-                  <td className="p-3 text-right text-sky-700">{costReport.totalAmount.toLocaleString()}원</td>
-                </tr>
-              </tfoot>
-            </table>
+          /* 🏢 사기업 실무 견적: 6대 공정별 아코디언 / 테이블 카드 (PrintEstimate 구조) */
+          <div className="space-y-4">
+            {Object.entries(costReport.sections).map(([secKey, section]) => {
+              if (secKey === 'paper' && !includePaper) {
+                // 용지대 제외 시 간략 카드
+                return (
+                  <div key={secKey} className="border border-slate-200 rounded-xl overflow-hidden bg-slate-50/50">
+                    <div className="p-3.5 flex items-center justify-between bg-slate-100/80">
+                      <div className="flex items-center space-x-2">
+                        <span className="font-bold text-slate-700">{section.title}</span>
+                        <span className="px-2 py-0.5 rounded text-[11px] font-black bg-amber-100 text-amber-800 border border-amber-300">
+                          거래처 사급/입고 (0원 처리)
+                        </span>
+                      </div>
+                      <span className="font-bold text-slate-500 text-xs">소계: 0원</span>
+                    </div>
+                  </div>
+                );
+              }
+
+              return (
+                <div key={secKey} className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-xs">
+                  {/* 섹션 헤더 */}
+                  <div className="p-3.5 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center space-x-2">
+                      <h4 className="font-black text-slate-800 text-xs sm:text-sm">{section.title}</h4>
+                      <span className="text-[11px] text-slate-500 font-medium">({section.items.length}개 항목)</span>
+                    </div>
+                    <div className="flex items-center space-x-3">
+                      <button
+                        type="button"
+                        onClick={() => handleOpenAddCustomModal(section.category)}
+                        className="flex items-center space-x-1 px-2.5 py-1 text-[11px] font-bold rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 transition"
+                      >
+                        <Plus className="w-3 h-3 text-sky-600" />
+                        <span>항목 추가</span>
+                      </button>
+                      <span className="font-black text-sky-800 text-xs sm:text-sm">
+                        소계: ₩ {section.total.toLocaleString()}원
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* 세부 항목 테이블 */}
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead className="bg-slate-50/50 text-slate-600 font-bold border-b border-slate-200 text-left">
+                        <tr>
+                          <th className="p-2.5 w-10 text-center">No</th>
+                          <th className="p-2.5 w-44">항목명</th>
+                          <th className="p-2.5">규격 / 산출 공식</th>
+                          <th className="p-2.5 w-20 text-center">수량</th>
+                          <th className="p-2.5 w-14 text-center">단위</th>
+                          <th className="p-2.5 w-24 text-right">단가</th>
+                          <th className="p-2.5 w-28 text-right">금액</th>
+                          <th className="p-2.5 w-28 text-center">편차율(%)</th>
+                          <th className="p-2.5 w-12 text-center">관리</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {section.items.map((item, idx) => (
+                          <tr key={item.id || idx} className="hover:bg-slate-50/70">
+                            <td className="p-2.5 text-center text-slate-400">{idx + 1}</td>
+                            <td className="p-2.5 font-bold text-slate-800">
+                              {item.name}
+                              {item.isCustom && (
+                                <span className="ml-1 px-1.5 py-0.2 rounded text-[10px] bg-purple-100 text-purple-700 font-semibold">
+                                  커스텀
+                                </span>
+                              )}
+                            </td>
+                            <td className="p-2.5 text-slate-600 text-[11px]">
+                              <span>{item.spec}</span>
+                              {item.formula && (
+                                <span className="block text-[10px] text-slate-400 font-mono mt-0.5">
+                                  ↳ {item.formula}
+                                </span>
+                              )}
+                            </td>
+                            <td className="p-2.5 text-center font-medium">{item.quantity?.toLocaleString()}</td>
+                            <td className="p-2.5 text-center text-slate-500">{item.unit}</td>
+                            <td className="p-2.5 text-right font-medium text-slate-700">
+                              {item.unitPrice?.toLocaleString()}원
+                            </td>
+                            <td className="p-2.5 text-right font-black text-slate-900">
+                              {item.amount?.toLocaleString()}원
+                            </td>
+                            <td className="p-2.5 text-center">
+                              {renderDeviationBadge(item.deviation)}
+                            </td>
+                            <td className="p-2.5 text-center">
+                              {item.isCustom ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteCustomItem(item.id)}
+                                  className="text-rose-500 hover:text-rose-700 p-1"
+                                  title="항목 삭제"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              ) : (
+                                <span className="text-slate-300">-</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
@@ -2141,7 +2321,7 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
           <div className="flex flex-wrap items-center gap-4 sm:gap-8">
             <div>
               <span className={`text-[11px] block font-medium ${costingMode === 'GOVERNMENT' ? 'text-slate-400' : 'text-slate-500'}`}>
-                {costingMode === 'GOVERNMENT' ? '공급가액 (11단계)' : '공급가액'}
+                {costingMode === 'GOVERNMENT' ? '공급가액 (11단계)' : '공급가액 (6대 공정 합계)'}
               </span>
               <span className={`text-sm font-bold ${costingMode === 'GOVERNMENT' ? 'text-teal-300' : 'text-slate-800'}`}>
                 ₩ {activeSubtotal.toLocaleString()}
@@ -2159,7 +2339,7 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
 
             <div className="pl-3 border-l border-slate-400/40">
               <span className={`text-[11px] block font-medium ${costingMode === 'GOVERNMENT' ? 'text-slate-400' : 'text-slate-500'}`}>
-                {costingMode === 'GOVERNMENT' ? '계약 부당단가' : '부당 단가'}
+                {costingMode === 'GOVERNMENT' ? '계약 부당단가' : '권당(부당) 단가'}
               </span>
               <span className={`text-base font-black ${costingMode === 'GOVERNMENT' ? 'text-emerald-400' : 'text-sky-600'}`}>
                 {activeUnitPrice.toLocaleString()} <span className="text-xs font-bold text-slate-400">원/부</span>
@@ -2177,6 +2357,11 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
                 {costingMode === 'GOVERNMENT' && (
                   <span className="text-xs text-slate-400">
                     (예정가격: ₩{governmentReport.step13_targetTotal.toLocaleString()})
+                  </span>
+                )}
+                {costingMode === 'COMMERCIAL' && costReport.overallMarginRate !== 0 && (
+                  <span className="text-xs font-bold text-slate-500">
+                    ({renderDeviationBadge(costReport.overallMarginRate)})
                   </span>
                 )}
               </div>
@@ -2222,6 +2407,128 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
         </div>
       </div>
 
+      {/* ── 커스텀 항목 추가 모달 ── */}
+      {showCustomModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <h3 className="text-sm font-black text-slate-900">
+                [ {customCategory} ] 공정 커스텀 항목 추가
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowCustomModal(false)}
+                className="text-slate-400 hover:text-slate-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">공정 구분</label>
+                <select
+                  value={customCategory}
+                  onChange={e => setCustomCategory(e.target.value)}
+                  className="w-full p-2 border border-slate-300 rounded-lg bg-white font-bold"
+                >
+                  <option value="PREPRESS">1. 기획/제판 (PREPRESS)</option>
+                  <option value="PRINT">2. 인쇄 (PRINT)</option>
+                  <option value="BINDING">3. 제본 (BINDING)</option>
+                  <option value="FINISHING">4. 후가공 (FINISHING)</option>
+                  <option value="PAPER">5. 용지대 (PAPER)</option>
+                  <option value="OTHER">6. 기타 (OTHER)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">항목명 *</label>
+                <input
+                  type="text"
+                  value={customName}
+                  onChange={e => setCustomName(e.target.value)}
+                  placeholder="예: 특수 포장비, 감리비, 교정 출력비"
+                  className="w-full p-2 border border-slate-300 rounded-lg"
+                  autoFocus
+                />
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">규격 / 산출 기준</label>
+                <input
+                  type="text"
+                  value={customSpec}
+                  onChange={e => setCustomSpec(e.target.value)}
+                  placeholder="예: 4절 2교정, 에어캡 개별포장 등"
+                  className="w-full p-2 border border-slate-300 rounded-lg"
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">수량</label>
+                  <input
+                    type="number"
+                    value={customQty}
+                    onChange={e => setCustomQty(Number(e.target.value) || 0)}
+                    className="w-full p-2 border border-slate-300 rounded-lg text-right"
+                  />
+                </div>
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">단위</label>
+                  <select
+                    value={customUnit}
+                    onChange={e => setCustomUnit(e.target.value)}
+                    className="w-full p-2 border border-slate-300 rounded-lg bg-white"
+                  >
+                    <option value="식">식</option>
+                    <option value="부">부</option>
+                    <option value="R">R</option>
+                    <option value="판">판</option>
+                    <option value="장">장</option>
+                    <option value="EA">EA</option>
+                    <option value="BOX">BOX</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">단가 (원)</label>
+                  <input
+                    type="number"
+                    value={customPrice}
+                    onChange={e => setCustomPrice(Number(e.target.value) || 0)}
+                    className="w-full p-2 border border-slate-300 rounded-lg text-right font-bold"
+                  />
+                </div>
+              </div>
+
+              <div className="p-3 bg-slate-50 rounded-xl flex items-center justify-between font-bold">
+                <span className="text-slate-600">합산 금액:</span>
+                <span className="text-sky-700 text-sm">
+                  ₩ {((Number(customQty) || 0) * (Number(customPrice) || 0)).toLocaleString()} 원
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end space-x-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setShowCustomModal(false)}
+                className="px-4 py-2 text-xs font-bold rounded-lg border border-slate-300 hover:bg-slate-50 text-slate-700"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveCustomItem}
+                className="px-4 py-2 text-xs font-bold rounded-lg bg-sky-600 hover:bg-sky-700 text-white shadow-sm"
+              >
+                항목 추가하기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 인쇄 모달 (사기업 실무 견적) */}
       {showPrintModal && (
         <EstimatePrintViewModal
@@ -2242,15 +2549,17 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
             sizeHeight: 0,
             pages: totalPages,
             colors: `표지: ${coverColor}(${coverSide}) / 본문: ${bodyColor}(${bodySide})`,
-            bindingType: `${bindingType} (${bindingDirection})`,
-            paperType: `표지: ${coverPaperName} ${coverWeight}g / 본문: ${bodyPaperName} ${bodyWeight}g`,
+            bindingType: `${bindingDetailType} (${bindingDirection})`,
+            paperType: includePaper
+              ? `표지: ${coverPaperName} ${coverWeight}g / 본문: ${bodyPaperName} ${bodyWeight}g`
+              : `거래처 사급/입고 (표지: ${coverPaperName} / 본문: ${bodyPaperName})`,
             finishingOptions: hasCoating ? coatingType : '없음',
             subtotal: activeSubtotal,
             vat: activeVat,
             totalAmount: activeTotalAmount,
             unitPrice: activeUnitPrice,
             notes,
-            items: compileDetailedItems(),
+            items: costReport.allItems,
             authorName: writerName || user?.userName || '영업담당',
             createdAt: regDate,
             governmentReport: costingMode === 'GOVERNMENT' ? governmentReport : null,
@@ -2297,8 +2606,8 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
             suppSide,
             hasCoating,
             coatingType,
-            hasFoil,
-            hasDiecut,
+            hasFoil: hasHotFoil || hasHoloFoil,
+            hasDiecut: hasDie || hasThomson,
             notes,
             regDate,
             proofDate,
