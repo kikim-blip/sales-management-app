@@ -32,7 +32,7 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
   const { user } = useGoogleAuth();
   const [papers] = useState(() => getMasterPapers());
 
-  // ── 0. 계산 모드 분리 ('COMMERCIAL' 사기업 실무 vs 'GOVERNMENT' 조달·교육청 표준원가) ──
+  // ── 0. 계산 모드 분리 ('COMMERCIAL' 사기업 실무 vs 'GOVERNMENT' 조달청 공공 표준원가) ──
   const [costingMode, setCostingMode] = useState(initialEstimate?.costingMode || 'COMMERCIAL');
 
   // 조달·공공 표준 원가 법정 가산율
@@ -80,6 +80,7 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
      initialEstimate?.bindingType?.includes('양장') ? '양장제본' : '무선제본')
   );
   const [bindingDirection, setBindingDirection] = useState(initialEstimate?.bindingDirection || '좌철');
+  const [foldType, setFoldType] = useState(initialEstimate?.foldType || '3단 접지'); // 리플렛 접지 방식
 
   // 출판사 제본 댐지대 (정합비: 부수 / 7.5 × 110원)
   const [hasDamji, setHasDamji] = useState(initialEstimate?.hasDamji ?? false);
@@ -274,6 +275,83 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
     }
   };
 
+  // ── 인쇄 방식 변경 핸들러 (jne.go.kr 규칙 정밀 반영) ──
+  const handlePrintTypeChange = (newType) => {
+    setPrintType(newType);
+
+    if (newType === '경인쇄') {
+      // 1. 경인쇄는 책자만 선택 가능 (jne.go.kr 규정: 화보집/리플렛/포스터/전단 비활성화)
+      if (printCategory !== '책자') {
+        setPrintCategory('책자');
+        if (bodyPages === 0) setBodyPages(64);
+        setCoverPages(4);
+        setBindingType('무선제본');
+        setBindingDetailType('무선제본');
+      }
+      // 2. 경인쇄 본문 도수는 1도(먹) 고정
+      setBodyColor('1도');
+      // 3. 경인쇄는 베다인쇄, 특수별색, 화보 비활성화 및 초기화
+      setIsBetaPrint(false);
+      setIsSpotColor(false);
+      setHasSupplement(false);
+    } else if (newType === '디지털인쇄') {
+      // 디지털인쇄는 CTP 0판/0원, 베다/별색 가산 비활성화
+      setIsBetaPrint(false);
+      setIsSpotColor(false);
+    }
+  };
+
+  // ── 인쇄물 종류 변경 핸들러 (jne.go.kr 규칙 정밀 반영) ──
+  const handlePrintCategoryChange = (newCat) => {
+    // 경인쇄일 때는 책자 이외 선택 불가
+    if (printType === '경인쇄' && newCat !== '책자') {
+      alert('경인쇄(마스터인쇄) 방식은 [책자] 인쇄물만 제작 가능합니다.\n(화보집, 리플렛, 포스터, 전단은 옵셋인쇄 또는 디지털인쇄를 선택해주세요)');
+      return;
+    }
+
+    setPrintCategory(newCat);
+
+    if (newCat === '리플렛') {
+      // 리플렛: 본문(내지) 없음(0면), 화보 없음, 표지(리플렛 기본 6면, 양면)
+      setBodyPages(0);
+      setHasSupplement(false);
+      setCoverPages(6);
+      setCoverSide('양면');
+      setBindingType('접지');
+      setBindingDetailType('3단 접지');
+      setFoldType('3단 접지');
+    } else if (newCat === '포스터') {
+      // 포스터: 본문 없음(0면), 화보 없음, 단면 인쇄 고정, 제본 없음(재단 15,000원)
+      setBodyPages(0);
+      setHasSupplement(false);
+      setCoverPages(1);
+      setCoverSide('단면');
+      setBindingType('해당없음(재단)');
+      setBindingDetailType('해당없음(재단)');
+    } else if (newCat === '전단') {
+      // 전단: 본문 없음(0면), 화보 없음, 제본 없음
+      setBodyPages(0);
+      setHasSupplement(false);
+      setCoverPages(2);
+      setBindingType('해당없음(재단)');
+      setBindingDetailType('해당없음(재단)');
+    } else {
+      // 책자 / 화보집
+      if (bodyPages === 0) setBodyPages(64);
+      if (coverPages < 4) setCoverPages(4);
+      if (bindingType === '해당없음(재단)' || bindingType === '접지') {
+        setBindingType('무선제본');
+        setBindingDetailType('무선제본');
+      }
+      if (newCat === '화보집') {
+        setCoverColor('4도');
+        if (printType !== '경인쇄') {
+          setBodyColor('4도');
+        }
+      }
+    }
+  };
+
   // ── 제본 방식 변경 시 계수/기본단가 자동 설정 ──
   const handleBindingDetailChange = (type) => {
     setBindingDetailType(type);
@@ -307,6 +385,7 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
         bindingType,
         bindingDetailType,
         bindingDirection,
+        foldType,
         includePaper,
         hasDamji,
         ctpUnitPrice: 6500,
@@ -399,7 +478,7 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
       customItems,
     });
   }, [
-    quantity, paperCut, printType, printCategory, bindingType, bindingDetailType, bindingDirection,
+    quantity, paperCut, printType, printCategory, bindingType, foldType, bindingDetailType, bindingDirection, foldType,
     includePaper, hasDamji, bindingCoefficient, bindingBasePrice,
     coverPages, coverBlankPages, coverTypesetPages, coverTypesetRate, coverColor, coverSide, coverPaperName, coverWeight, coverUnitPrice,
     bodyPages, bodyBlankPages, bodyTypesetPages, bodyTypesetRate, bodyColor, bodySide, bodyPaperName, bodyWeight, bodyUnitPrice,
@@ -411,7 +490,7 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
     deliveryCost, packagingCost, discountOrAdd, discountReason, customItems
   ]);
 
-  // ── 🏛️ 조달청 / 교육청 공인 표준원가 실시간 연산 엔진 (14단계 법정 산식) ──
+  // ── 🏛️ 조달청 공인 표준원가 실시간 연산 엔진 (14단계 법정 산식) ──
   const governmentReport = useMemo(() => {
     return calculateGovernmentCost({
       general: {
@@ -420,6 +499,7 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
         printType,
         printCategory,
         bindingType,
+        foldType,
       },
       cover: {
         pages: coverPages,
@@ -468,7 +548,7 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
       },
     });
   }, [
-    quantity, paperCut, printType, printCategory, bindingType,
+    quantity, paperCut, printType, printCategory, bindingType, foldType,
     coverPages, coverBlankPages, coverTypesetPages, coverTypesetRate, coverColor, coverSide, coverUnitPrice, coverWeight,
     bodyPages, bodyBlankPages, bodyTypesetPages, bodyTypesetRate, bodyColor, bodySide, bodyUnitPrice, bodyWeight,
     hasSupplement, suppPages, suppColor, suppSide, suppUnitPrice, suppWeight,
@@ -638,7 +718,7 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
       triggerToast(`${saved.version}차 견적으로 신규 저장되었습니다!`);
     } else {
       saved = saveEstimate(estimateData);
-      triggerToast(costingMode === 'GOVERNMENT' ? '🏛️ 조달·교육청 표준원가 견적서가 저장되었습니다.' : '🏢 비피앤피/갑우문화사 실무 견적서가 저장되었습니다.');
+      triggerToast(costingMode === 'GOVERNMENT' ? '🏛️ 조달청 공공 표준원가 견적서가 저장되었습니다.' : '🏢 사기업 실무 견적서가 저장되었습니다.');
     }
 
     if (onSaved) onSaved(saved);
@@ -675,7 +755,7 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
       post_process: hasCoating ? coatingType : '없음',
       order_price: activeTotalAmount,
       special_notes: costingMode === 'GOVERNMENT'
-        ? `[조달·교육청 표준원가 연계 - 계약금액 ₩${activeTotalAmount.toLocaleString()}]\n예정가격: ₩${governmentReport.step13_targetTotal.toLocaleString()}원 / 권당: ₩${activeUnitPrice.toLocaleString()}원\n${notes || ''}`
+        ? `[조달청 공공 표준원가 연계 - 계약금액 ₩${activeTotalAmount.toLocaleString()}]\n예정가격: ₩${governmentReport.step13_targetTotal.toLocaleString()}원 / 권당: ₩${activeUnitPrice.toLocaleString()}원\n${notes || ''}`
         : `[실무 인쇄 견적서 연계]\n부당단가: ${activeUnitPrice.toLocaleString()}원 (용지대: ${includePaper ? '포함' : '거래처 사급/입고'})\n${notes || ''}`,
       status: '접수완료',
       author: writerName || user?.userName || '영업담당',
@@ -716,7 +796,7 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
       contact_person: contactName || '',
       manager: writerName || user?.userName || '영업담당',
       status: '미수',
-      remarks: costingMode === 'GOVERNMENT' ? `[조달·교육청 표준원가 연계]` : `[실무 인쇄 견적 연계]`,
+      remarks: costingMode === 'GOVERNMENT' ? `[조달청 공공 표준원가 연계]` : `[실무 인쇄 견적 연계]`,
     };
 
     try {
@@ -768,12 +848,12 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
                 ? 'bg-teal-100 text-teal-800 ring-1 ring-teal-300'
                 : 'bg-blue-100 text-blue-800 ring-1 ring-blue-300'
             }`}>
-              {costingMode === 'GOVERNMENT' ? '🏛️ 조달·교육청 표준원가 모드 활성' : '🏢 비피앤피 / 갑우문화사 실무 견적 모드 활성'}
+              {costingMode === 'GOVERNMENT' ? '🏛️ 조달청 공공 표준원가 모드 활성' : '🏢 사기업 실무 견적 모드 활성'}
             </span>
           </div>
           <p className="text-xs text-slate-600 mt-1">
             {costingMode === 'GOVERNMENT'
-              ? '조달청 고시 및 전남교육청(print.jne.go.kr) 기준 14단계 공인 원가계산 (일반관리비 5%, 법정이윤 10%, 낙찰하한율 88%, 원가계산서/규격서 공문서 출력)'
+              ? '국가계약법 시행규칙 제6조 및 조달청 공인 기준 14단계 표준 원가계산 (일반관리비 5%, 법정이윤 10%, 낙찰하한율 88%, 원가계산서/규격서 공문서 출력)'
               : '비피앤피 / 갑우문화사 6대 실무 공정(CTP 6,500원, 실무 4종 무선산식, 댐지대, 용지대 사급/포함 토글, 후가공 세부 단가) 기반 견적서 산출'}
           </p>
         </div>
@@ -803,7 +883,7 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
             }`}
           >
             <ShieldCheck className="w-4 h-4 text-teal-200" />
-            <span>🏛️ 조달·교육청 표준원가 (공공기관)</span>
+            <span>🏛️ 조달청 공공 표준원가 (공공기관)</span>
           </button>
         </div>
       </div>
@@ -818,10 +898,10 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
               </span>
               <div>
                 <span className="text-sm font-black text-teal-950">
-                  조달청 및 전라남도교육청 인쇄요금 원가계산 기준 (2018. 3. 1.)
+                  조달청 인쇄요금 원가계산 기준 (국가계약법 시행규칙 제6조)
                 </span>
                 <span className="text-xs text-teal-700 ml-2 hidden sm:inline">
-                  (국가를 당사자로 하는 계약에 관한 법률 시행규칙 제6조)
+                  (조달청 공인 표준 산식)
                 </span>
               </div>
             </div>
@@ -931,19 +1011,19 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
           <div>
             <div className="flex items-center space-x-2">
               <h2 className="text-lg font-black text-slate-900 tracking-tight">
-                인쇄 견적서 작성 ({costingMode === 'GOVERNMENT' ? '🏛️ 조달·교육청 표준' : '🏢 사기업 실무견적'})
+                인쇄 견적서 작성 ({costingMode === 'GOVERNMENT' ? '🏛️ 조달청 공공 표준원가' : '🏢 사기업 실무견적'})
               </h2>
               <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
                 costingMode === 'GOVERNMENT'
                   ? 'bg-teal-100 text-teal-800'
                   : 'bg-sky-100 text-sky-800'
               }`}>
-                {costingMode === 'GOVERNMENT' ? '조달 공인 14단계 원가' : '비피앤피/갑우문화사 6대 실무공정'}
+                {costingMode === 'GOVERNMENT' ? '조달청 공인 14단계 원가' : '비피앤피/갑우문화사 6대 실무공정'}
               </span>
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
               {costingMode === 'GOVERNMENT'
-                ? '전라남도교육청 및 조달청 인쇄요금 표준기준에 따른 엄격한 법정 예정가격 및 계약금액 산출'
+                ? '국가계약법 시행규칙 제6조 및 조달청 인쇄요금 공인 표준원가에 의한 공식 산출'
                 : 'CTP 판당 6,500원 고정, 무선 실무 4종 산식, 댐지대, 용지대 사급/포함 토글, 후가공 세부 단가 적용'}
             </p>
           </div>
@@ -1259,38 +1339,75 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-          <div className="flex items-center space-x-3 p-2 bg-slate-50 rounded-xl border border-slate-200">
-            <span className="font-bold text-slate-600 w-20">인쇄 방식:</span>
-            {['옵셋인쇄', '경인쇄', '시험지인쇄', '디지털인쇄'].map(t => (
-              <label key={t} className="flex items-center space-x-1 cursor-pointer font-medium">
-                <input
-                  type="radio"
-                  name="printType"
-                  value={t}
-                  checked={printType === t}
-                  onChange={e => setPrintType(e.target.value)}
-                  className="text-sky-600"
-                />
-                <span className={printType === t ? 'font-bold text-sky-700' : 'text-slate-600'}>{t}</span>
-              </label>
-            ))}
+          {/* 1. 인쇄 방식 선택 (시험지인쇄 삭제, 옵셋/경인쇄/디지털인쇄 3종) */}
+          <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-slate-700">인쇄 방식:</span>
+              {printType === '디지털인쇄' && (
+                <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 border border-purple-200">
+                  ⚡ CTP 판비 0원 (무판 Direct)
+                </span>
+              )}
+              {printType === '경인쇄' && (
+                <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+                  🖨️ 책자 전용 / 본문 1도 고정
+                </span>
+              )}
+            </div>
+            <div className="flex items-center space-x-4 pt-0.5">
+              {['옵셋인쇄', '경인쇄', '디지털인쇄'].map(t => (
+                <label key={t} className="flex items-center space-x-1.5 cursor-pointer font-medium">
+                  <input
+                    type="radio"
+                    name="printType"
+                    value={t}
+                    checked={printType === t}
+                    onChange={e => handlePrintTypeChange(e.target.value)}
+                    className="text-sky-600 focus:ring-sky-500"
+                  />
+                  <span className={printType === t ? 'font-black text-sky-700' : 'text-slate-600'}>{t}</span>
+                </label>
+              ))}
+            </div>
           </div>
 
-          <div className="flex items-center space-x-3 p-2 bg-slate-50 rounded-xl border border-slate-200">
-            <span className="font-bold text-slate-600 w-20">인쇄물 종류:</span>
-            {['책자', '화보집', '리플렛', '포스터', '전단'].map(c => (
-              <label key={c} className="flex items-center space-x-1 cursor-pointer font-medium">
-                <input
-                  type="radio"
-                  name="printCategory"
-                  value={c}
-                  checked={printCategory === c}
-                  onChange={e => setPrintCategory(e.target.value)}
-                  className="text-sky-600"
-                />
-                <span className={printCategory === c ? 'font-bold text-sky-700' : 'text-slate-600'}>{c}</span>
-              </label>
-            ))}
+          {/* 2. 인쇄물 종류 선택 (jne.go.kr 규칙: 경인쇄 선택 시 책자만 가능) */}
+          <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-slate-700">인쇄물 종류:</span>
+              {printType === '경인쇄' && (
+                <span className="text-[10px] text-amber-700 font-bold">
+                  ※ 경인쇄는 책자만 선택 가능
+                </span>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-3 pt-0.5">
+              {['책자', '화보집', '리플렛', '포스터', '전단'].map(c => {
+                const isCatDisabled = printType === '경인쇄' && c !== '책자';
+                return (
+                  <label
+                    key={c}
+                    className={`flex items-center space-x-1.5 font-medium ${
+                      isCatDisabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'
+                    }`}
+                    title={isCatDisabled ? '경인쇄는 책자만 지원됩니다' : ''}
+                  >
+                    <input
+                      type="radio"
+                      name="printCategory"
+                      value={c}
+                      disabled={isCatDisabled}
+                      checked={printCategory === c}
+                      onChange={() => handlePrintCategoryChange(c)}
+                      className="text-sky-600 focus:ring-sky-500 disabled:opacity-40"
+                    />
+                    <span className={printCategory === c ? 'font-black text-sky-700' : 'text-slate-600'}>
+                      {c}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
           </div>
         </div>
 
@@ -1331,54 +1448,82 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
             </div>
           </div>
 
+          {/* 제본 또는 접지 형태 선택 (인쇄물 종류에 따라 분기) */}
           <div>
-            <label className="font-bold text-slate-600 block mb-1">제본 형태 (실무 4종 산식)</label>
-            <div className="flex space-x-1">
+            <label className="font-bold text-slate-600 block mb-1">
+              {printCategory === '리플렛' ? '접지 형태 (리플렛)' : (printCategory === '포스터' || printCategory === '전단') ? '마감 형태 (낱장)' : '제본 형태 (실무 4종 산식)'}
+            </label>
+
+            {printCategory === '리플렛' ? (
               <select
-                value={bindingDetailType}
-                onChange={e => handleBindingDetailChange(e.target.value)}
-                className="w-2/3 p-2 border border-slate-300 rounded-lg bg-white font-bold text-slate-800"
+                value={foldType}
+                onChange={e => {
+                  setFoldType(e.target.value);
+                  setBindingDetailType(e.target.value);
+                }}
+                className="w-full p-2 border border-slate-300 rounded-lg bg-white font-bold text-teal-800"
               >
-                <option value="무선제본">무선제본 (단본)</option>
-                <option value="무선 2탑 제본">무선 2탑 제본 (본책+해설)</option>
-                <option value="무선날개제본">무선날개제본</option>
-                <option value="책속책제본">책속책제본</option>
-                <option value="중철제본">중철제본</option>
-                <option value="양장제본">양장제본 (하드커버)</option>
-                <option value="와이어스프링">와이어 스프링</option>
+                <option value="2단 접지">2단 접지 (반접기 4면)</option>
+                <option value="3단 접지">3단 접지 (기본 6면)</option>
+                <option value="4단 접지">4단 접지 (8면)</option>
+                <option value="대문접지">대문접지 (6면/8면)</option>
+                <option value="병풍접지">병풍접지 (6면/8면)</option>
               </select>
-              <select
-                value={bindingDirection}
-                onChange={e => setBindingDirection(e.target.value)}
-                className="w-1/3 p-2 border border-slate-300 rounded-lg bg-white font-medium"
-              >
-                <option value="좌철">좌철</option>
-                <option value="우철">우철</option>
-                <option value="상철">상철</option>
-              </select>
-            </div>
+            ) : (printCategory === '포스터' || printCategory === '전단') ? (
+              <div className="p-2 bg-slate-100 rounded-lg border border-slate-200 font-bold text-slate-600 text-center">
+                해당없음 (정밀재단 ₩15,000원)
+              </div>
+            ) : (
+              <div className="flex space-x-1">
+                <select
+                  value={bindingDetailType}
+                  onChange={e => handleBindingDetailChange(e.target.value)}
+                  className="w-2/3 p-2 border border-slate-300 rounded-lg bg-white font-bold text-slate-800"
+                >
+                  <option value="무선제본">무선제본 (단본)</option>
+                  <option value="무선 2탑 제본">무선 2탑 제본 (본책+해설)</option>
+                  <option value="무선날개제본">무선날개제본</option>
+                  <option value="책속책제본">책속책제본</option>
+                  <option value="중철제본">중철제본</option>
+                  <option value="양장제본">양장제본 (하드커버)</option>
+                  <option value="와이어스프링">와이어 스프링</option>
+                </select>
+                <select
+                  value={bindingDirection}
+                  onChange={e => setBindingDirection(e.target.value)}
+                  className="w-1/3 p-2 border border-slate-300 rounded-lg bg-white font-medium"
+                >
+                  <option value="좌철">좌철</option>
+                  <option value="우철">우철</option>
+                  <option value="상철">상철</option>
+                </select>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* 제본 세부 설정 (2탑 / 날개 / 책속책 파라미터 및 댐지대) */}
+        {/* 제본/접지 세부 설정 패널 */}
         <div className="p-3 bg-indigo-50/70 rounded-xl border border-indigo-200 text-xs space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="font-bold text-indigo-950 flex items-center space-x-1.5">
               <BookOpen className="w-4 h-4 text-indigo-600" />
-              <span>실무 제본 산식: <strong>{costReport.sections.binding.formula}</strong></span>
+              <span>실무 제본/접지 산식: <strong>{costReport.sections.binding.formula}</strong></span>
             </span>
-            {/* 댐지대 체크박스 (PrintEstimate 공식) */}
-            <label className="flex items-center space-x-2 cursor-pointer bg-white px-3 py-1 rounded-lg border border-indigo-300 hover:bg-indigo-100/50 transition">
-              <input
-                type="checkbox"
-                checked={hasDamji}
-                onChange={e => setHasDamji(e.target.checked)}
-                className="rounded text-indigo-600"
-              />
-              <span className="font-bold text-indigo-900">
-                출판사 댐지대(정합비) 포함 ({Math.round(quantity / 7.5).toLocaleString()}부 × 110원 = ₩{calculateDamjiCost(quantity).toLocaleString()}원)
-              </span>
-            </label>
+
+            {/* 책자/화보집인 경우에만 댐지대 표시 */}
+            {(printCategory === '책자' || printCategory === '화보집') && (
+              <label className="flex items-center space-x-2 cursor-pointer bg-white px-3 py-1 rounded-lg border border-indigo-300 hover:bg-indigo-100/50 transition">
+                <input
+                  type="checkbox"
+                  checked={hasDamji}
+                  onChange={e => setHasDamji(e.target.checked)}
+                  className="rounded text-indigo-600"
+                />
+                <span className="font-bold text-indigo-900">
+                  출판사 댐지대(정합비) 포함 ({Math.round(quantity / 7.5).toLocaleString()}부 × 110원 = ₩{calculateDamjiCost(quantity).toLocaleString()}원)
+                </span>
+              </label>
+            )}
           </div>
 
           {/* 2탑 제본인 경우 해설 면수 입력 */}
@@ -1580,38 +1725,74 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
               <span>스티커정합 (10원/부)</span>
             </label>
 
-            <label className="flex items-center space-x-1.5 cursor-pointer font-bold text-sky-700 p-1 bg-sky-50 rounded border border-sky-200">
+            {/* 화보 삽입 (경인쇄 또는 리플렛/포스터/전단은 비활성화) */}
+            <label className={`flex items-center space-x-1.5 p-1 rounded border ${
+              (printType === '경인쇄' || printCategory === '리플렛' || printCategory === '포스터' || printCategory === '전단')
+                ? 'opacity-40 cursor-not-allowed bg-slate-100 border-slate-200'
+                : 'cursor-pointer font-bold text-sky-700 bg-sky-50 border-sky-200'
+            }`}>
               <input
                 type="checkbox"
+                disabled={printType === '경인쇄' || printCategory === '리플렛' || printCategory === '포스터' || printCategory === '전단'}
                 checked={hasSupplement}
                 onChange={e => setHasSupplement(e.target.checked)}
                 className="rounded text-sky-600"
               />
-              <span>화보 삽입</span>
+              <span>화보 삽입 {printType === '경인쇄' ? '(경인쇄불가)' : ''}</span>
             </label>
 
-            <label className="flex items-center space-x-1.5 cursor-pointer font-medium p-1 bg-white rounded border border-slate-200">
+            {/* 베다 인쇄 (+60%) (경인쇄 및 디지털인쇄 비활성화) */}
+            <label className={`flex items-center space-x-1.5 p-1 rounded border ${
+              (printType === '경인쇄' || printType === '디지털인쇄')
+                ? 'opacity-40 cursor-not-allowed bg-slate-100 border-slate-200'
+                : 'cursor-pointer font-medium bg-white border-slate-200'
+            }`}>
               <input
                 type="checkbox"
+                disabled={printType === '경인쇄' || printType === '디지털인쇄'}
                 checked={isBetaPrint}
                 onChange={e => setIsBetaPrint(e.target.checked)}
                 className="rounded text-sky-600"
               />
               <span>베다 인쇄 (+60%)</span>
             </label>
+
+            {/* 특수 별색 (+100%) (경인쇄 및 디지털인쇄 비활성화) */}
+            <label className={`flex items-center space-x-1.5 p-1 rounded border ${
+              (printType === '경인쇄' || printType === '디지털인쇄')
+                ? 'opacity-40 cursor-not-allowed bg-slate-100 border-slate-200'
+                : 'cursor-pointer font-medium bg-white border-slate-200'
+            }`}>
+              <input
+                type="checkbox"
+                disabled={printType === '경인쇄' || printType === '디지털인쇄'}
+                checked={isSpotColor}
+                onChange={e => setIsSpotColor(e.target.checked)}
+                className="rounded text-sky-600"
+              />
+              <span>특수 별색 (+100%)</span>
+            </label>
           </div>
         </div>
       </div>
 
-      {/* ── 3. [표지 선택정보] ── */}
+      {/* ── 3. [표지 / 낱장 사양 정보] (인쇄물 종류에 따라 표지/리플렛/포스터 동적 전환) ── */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
         <div className="flex items-center justify-between pb-2 border-b border-slate-100">
           <span className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center space-x-2">
             <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
-            <span>표지 선택정보 (COVER)</span>
+            <span>
+              {printCategory === '리플렛'
+                ? '리플렛 사양 정보 (LEAFLET)'
+                : printCategory === '포스터'
+                ? '포스터 사양 정보 (POSTER)'
+                : printCategory === '전단'
+                ? '전단 사양 정보 (FLYER)'
+                : '표지 사양 정보 (COVER)'}
+            </span>
           </span>
           <span className="text-xs font-black text-sky-700">
-            표지 소계: ₩ {(costReport.coverCalc.totalCost + (hasCoating ? costReport.coatingCost : 0)).toLocaleString()} 원
+            {printCategory === '리플렛' ? '리플렛' : (printCategory === '포스터' || printCategory === '전단') ? '출력' : '표지'} 소계: ₩ {(costReport.coverCalc.totalCost + (hasCoating ? costReport.coatingCost : 0)).toLocaleString()} 원
           </span>
         </div>
 
@@ -1628,6 +1809,7 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
                 <option value="스노우지">스노우지</option>
                 <option value="랑데뷰">랑데뷰(고급)</option>
                 <option value="아르떼">아르떼(고급)</option>
+                <option value="백상지">백상지(모조)</option>
                 <option value="레자크">레자크</option>
                 <option value="마닐라">마닐라(SC)</option>
               </select>
@@ -1636,6 +1818,8 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
                 onChange={e => setCoverWeight(Number(e.target.value))}
                 className="w-1/3 p-2 border border-slate-300 rounded-lg bg-white font-medium"
               >
+                <option value={100}>100g</option>
+                <option value={120}>120g</option>
                 <option value={150}>150g</option>
                 <option value={180}>180g</option>
                 <option value={200}>200g</option>
@@ -1646,7 +1830,9 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
           </div>
 
           <div>
-            <label className="font-bold text-slate-600 block mb-1">표지면수 (Page)</label>
+            <label className="font-bold text-slate-600 block mb-1">
+              {printCategory === '리플렛' ? '접지 총면수 (Page)' : (printCategory === '포스터' || printCategory === '전단') ? '인쇄면수 (Page)' : '표지면수 (Page)'}
+            </label>
             <input
               type="number"
               value={coverPages}
@@ -1670,8 +1856,11 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
               </select>
               <select
                 value={coverSide}
+                disabled={printCategory === '리플렛' || printCategory === '포스터'}
                 onChange={e => setCoverSide(e.target.value)}
-                className="w-1/2 p-2 border border-slate-300 rounded-lg bg-white font-medium"
+                className={`w-1/2 p-2 border border-slate-300 rounded-lg bg-white font-medium ${
+                  (printCategory === '리플렛' || printCategory === '포스터') ? 'opacity-60 cursor-not-allowed bg-slate-100' : ''
+                }`}
               >
                 <option value="단면">단면</option>
                 <option value="양면">양면</option>
@@ -1734,7 +1923,14 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
         <div className="bg-amber-50/70 p-3 rounded-xl border border-amber-200 text-xs flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center space-x-4">
             <span>소요연수: <strong className="text-slate-800">{costReport.coverCalc.totalReams.toFixed(2)} R</strong></span>
-            <span>CTP: <strong className="text-slate-800">{costReport.coverCalc.totalPlates} 판</strong> (₩{costReport.coverCalc.ctpCost.toLocaleString()}원)</span>
+            <span>
+              CTP:&nbsp;
+              {printType === '디지털인쇄' ? (
+                <strong className="text-purple-700">0판 (무판 0원)</strong>
+              ) : (
+                <strong className="text-slate-800">{costReport.coverCalc.totalPlates} 판 (₩{costReport.coverCalc.ctpCost.toLocaleString()}원)</strong>
+              )}
+            </span>
             <span>인쇄비: <strong className="text-slate-800">₩{costReport.coverCalc.printCost.toLocaleString()}원</strong></span>
             <span>용지비: <strong className="text-slate-800">{includePaper ? `₩${costReport.coverCalc.paperCost.toLocaleString()}원` : '사급(0원)'}</strong></span>
           </div>
@@ -1744,145 +1940,174 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
         </div>
       </div>
 
-      {/* ── 4. [본문 선택정보] ── */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
-        <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-          <span className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center space-x-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
-            <span>본문 선택정보 (BODY / 내지)</span>
-          </span>
-          <span className="text-xs font-black text-sky-700">
-            본문 소계: ₩ {costReport.bodyCalc.totalCost.toLocaleString()} 원
-          </span>
+      {/* ── 4. [본문 선택정보] (리플렛, 포스터, 전단은 본문 제외) ── */}
+      {(printCategory === '리플렛' || printCategory === '포스터' || printCategory === '전단') ? (
+        <div className="bg-slate-50 rounded-2xl border border-dashed border-slate-300 p-5 text-center space-y-1.5 text-xs animate-in fade-in">
+          <div className="font-black text-slate-700 flex items-center justify-center space-x-1.5">
+            <Info className="w-4 h-4 text-sky-600" />
+            <span>[{printCategory}] 인쇄물은 본문(내지)이 포함되지 않는 {printCategory === '리플렛' ? '접지' : '낱장'} 규격입니다.</span>
+          </div>
+          <p className="text-slate-500 text-[11px]">
+            상단의 [{printCategory} 사양 정보]에서 설정된 규격/면수({coverPages}면) 및 {printCategory === '리플렛' ? foldType : '정밀재단'} 공정으로 원가가 자동 집계됩니다.
+          </p>
         </div>
+      ) : (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
+          <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+            <div className="flex items-center space-x-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+              <span className="text-xs font-black text-slate-800 uppercase tracking-wider">
+                본문 선택정보 (BODY / 내지)
+              </span>
+              {printType === '경인쇄' && (
+                <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+                  먹 1도 인쇄 전용 (도수 고정)
+                </span>
+              )}
+            </div>
+            <span className="text-xs font-black text-sky-700">
+              본문 소계: ₩ {costReport.bodyCalc.totalCost.toLocaleString()} 원
+            </span>
+          </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
-          <div>
-            <label className="font-bold text-slate-600 block mb-1">용지종류 / 평량</label>
-            <div className="flex space-x-1">
-              <select
-                value={bodyPaperName}
-                onChange={e => handleBodyPaperChange(e.target.value)}
-                className="w-2/3 p-2 border border-slate-300 rounded-lg bg-white font-bold text-slate-800"
-              >
-                <option value="백상지">백상지 (모조)</option>
-                <option value="미색모조">미색 모조지</option>
-                <option value="스노우지">스노우지</option>
-                <option value="뉴플러스지">뉴플러스지</option>
-                <option value="아트지">아트지</option>
-              </select>
-              <select
-                value={bodyWeight}
-                onChange={e => setBodyWeight(Number(e.target.value))}
-                className="w-1/3 p-2 border border-slate-300 rounded-lg bg-white font-medium"
-              >
-                <option value={70}>70g</option>
-                <option value={80}>80g</option>
-                <option value={100}>100g</option>
-                <option value={120}>120g</option>
-                <option value={150}>150g</option>
-              </select>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
+            <div>
+              <label className="font-bold text-slate-600 block mb-1">용지종류 / 평량</label>
+              <div className="flex space-x-1">
+                <select
+                  value={bodyPaperName}
+                  onChange={e => handleBodyPaperChange(e.target.value)}
+                  className="w-2/3 p-2 border border-slate-300 rounded-lg bg-white font-bold text-slate-800"
+                >
+                  <option value="백상지">백상지 (모조)</option>
+                  <option value="미색모조">미색 모조지</option>
+                  <option value="스노우지">스노우지</option>
+                  <option value="뉴플러스지">뉴플러스지</option>
+                  <option value="아트지">아트지</option>
+                </select>
+                <select
+                  value={bodyWeight}
+                  onChange={e => setBodyWeight(Number(e.target.value))}
+                  className="w-1/3 p-2 border border-slate-300 rounded-lg bg-white font-medium"
+                >
+                  <option value={70}>70g</option>
+                  <option value={80}>80g</option>
+                  <option value={100}>100g</option>
+                  <option value={120}>120g</option>
+                  <option value={150}>150g</option>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label className="font-bold text-slate-600 block mb-1">본문면수 (Page)</label>
+              <input
+                type="number"
+                value={bodyPages}
+                onChange={e => setBodyPages(Number(e.target.value) || 0)}
+                className="w-full p-2 border border-slate-300 rounded-lg bg-white font-bold text-slate-800 text-center"
+              />
+            </div>
+
+            <div>
+              <label className="font-bold text-slate-600 block mb-1">인쇄형태 (도수 / 면)</label>
+              <div className="flex space-x-1">
+                <select
+                  value={bodyColor}
+                  disabled={printType === '경인쇄'}
+                  onChange={e => setBodyColor(e.target.value)}
+                  className={`w-1/2 p-2 border border-slate-300 rounded-lg bg-white font-bold text-slate-800 ${
+                    printType === '경인쇄' ? 'opacity-60 cursor-not-allowed bg-slate-100' : ''
+                  }`}
+                >
+                  <option value="1도">1도 (먹단색)</option>
+                  <option value="2도">2도 (2도인쇄)</option>
+                  <option value="4도">4도 (올칼라)</option>
+                </select>
+                <select
+                  value={bodySide}
+                  onChange={e => setBodySide(e.target.value)}
+                  className="w-1/2 p-2 border border-slate-300 rounded-lg bg-white font-medium"
+                >
+                  <option value="양면">양면</option>
+                  <option value="단면">단면</option>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label className="font-bold text-slate-600 block mb-1">조판면수 (Page)</label>
+              <input
+                type="number"
+                value={bodyTypesetPages}
+                onChange={e => setBodyTypesetPages(Number(e.target.value) || 0)}
+                className="w-full p-2 border border-slate-300 rounded-lg bg-white text-center"
+              />
+            </div>
+
+            <div>
+              <label className="font-bold text-slate-600 block mb-1">
+                연당단가 (원/R) {!includePaper && <span className="text-amber-600 font-normal">(사급 제외)</span>}
+              </label>
+              <input
+                type="number"
+                disabled={!includePaper}
+                value={bodyUnitPrice}
+                onChange={e => setBodyUnitPrice(Number(e.target.value) || 0)}
+                className={`w-full p-2 border border-slate-300 rounded-lg font-black text-right ${
+                  includePaper ? 'bg-white text-sky-700' : 'bg-slate-100 text-slate-400 line-through'
+                }`}
+              />
+            </div>
+
+            <div>
+              <label className="font-bold text-slate-600 block mb-1">인쇄되지 않는 면 (백면)</label>
+              <input
+                type="number"
+                value={bodyBlankPages}
+                onChange={e => setBodyBlankPages(Number(e.target.value) || 0)}
+                className="w-full p-2 border border-slate-300 rounded-lg bg-white text-center"
+              />
+            </div>
+
+            <div className="sm:col-span-2">
+              <div className="flex justify-between items-center mb-1 font-bold text-slate-600">
+                <span>조판 및 편집율:</span>
+                <span className="text-sky-700">{bodyTypesetRate}%</span>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                step={10}
+                value={bodyTypesetRate}
+                onChange={e => setBodyTypesetRate(Number(e.target.value))}
+                className="w-full accent-sky-600"
+              />
             </div>
           </div>
 
-          <div>
-            <label className="font-bold text-slate-600 block mb-1">본문면수 (Page)</label>
-            <input
-              type="number"
-              value={bodyPages}
-              onChange={e => setBodyPages(Number(e.target.value) || 0)}
-              className="w-full p-2 border border-slate-300 rounded-lg bg-white font-bold text-slate-800 text-center"
-            />
-          </div>
-
-          <div>
-            <label className="font-bold text-slate-600 block mb-1">인쇄형태 (도수 / 면)</label>
-            <div className="flex space-x-1">
-              <select
-                value={bodyColor}
-                onChange={e => setBodyColor(e.target.value)}
-                className="w-1/2 p-2 border border-slate-300 rounded-lg bg-white font-bold text-slate-800"
-              >
-                <option value="1도">1도 (먹단색)</option>
-                <option value="2도">2도 (2도인쇄)</option>
-                <option value="4도">4도 (올칼라)</option>
-              </select>
-              <select
-                value={bodySide}
-                onChange={e => setBodySide(e.target.value)}
-                className="w-1/2 p-2 border border-slate-300 rounded-lg bg-white font-medium"
-              >
-                <option value="양면">양면</option>
-                <option value="단면">단면</option>
-              </select>
+          <div className="bg-emerald-50/70 p-3 rounded-xl border border-emerald-200 text-xs flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center space-x-4">
+              <span>대수: <strong className="text-slate-800">{costReport.bodyCalc.signatures} 대</strong></span>
+              <span>소요연수: <strong className="text-slate-800">{costReport.bodyCalc.totalReams.toFixed(2)} R</strong></span>
+              <span>
+                CTP:&nbsp;
+                {printType === '디지털인쇄' ? (
+                  <strong className="text-purple-700">0판 (무판 0원)</strong>
+                ) : (
+                  <strong className="text-slate-800">{costReport.bodyCalc.totalPlates} 판 (₩{costReport.bodyCalc.ctpCost.toLocaleString()}원)</strong>
+                )}
+              </span>
+              <span>인쇄비: <strong className="text-slate-800">₩{costReport.bodyCalc.printCost.toLocaleString()}원</strong></span>
+              <span>용지비: <strong className="text-slate-800">{includePaper ? `₩${costReport.bodyCalc.paperCost.toLocaleString()}원` : '사급(0원)'}</strong></span>
             </div>
-          </div>
-
-          <div>
-            <label className="font-bold text-slate-600 block mb-1">조판면수 (Page)</label>
-            <input
-              type="number"
-              value={bodyTypesetPages}
-              onChange={e => setBodyTypesetPages(Number(e.target.value) || 0)}
-              className="w-full p-2 border border-slate-300 rounded-lg bg-white text-center"
-            />
-          </div>
-
-          <div>
-            <label className="font-bold text-slate-600 block mb-1">
-              연당단가 (원/R) {!includePaper && <span className="text-amber-600 font-normal">(사급 제외)</span>}
-            </label>
-            <input
-              type="number"
-              disabled={!includePaper}
-              value={bodyUnitPrice}
-              onChange={e => setBodyUnitPrice(Number(e.target.value) || 0)}
-              className={`w-full p-2 border border-slate-300 rounded-lg font-black text-right ${
-                includePaper ? 'bg-white text-sky-700' : 'bg-slate-100 text-slate-400 line-through'
-              }`}
-            />
-          </div>
-
-          <div>
-            <label className="font-bold text-slate-600 block mb-1">인쇄되지 않는 면 (백면)</label>
-            <input
-              type="number"
-              value={bodyBlankPages}
-              onChange={e => setBodyBlankPages(Number(e.target.value) || 0)}
-              className="w-full p-2 border border-slate-300 rounded-lg bg-white text-center"
-            />
-          </div>
-
-          <div className="sm:col-span-2">
-            <div className="flex justify-between items-center mb-1 font-bold text-slate-600">
-              <span>조판 및 편집율:</span>
-              <span className="text-sky-700">{bodyTypesetRate}%</span>
-            </div>
-            <input
-              type="range"
-              min={0}
-              max={100}
-              step={10}
-              value={bodyTypesetRate}
-              onChange={e => setBodyTypesetRate(Number(e.target.value))}
-              className="w-full accent-sky-600"
-            />
+            {costReport.bodyCalc.typesetCost > 0 && (
+              <span className="text-emerald-800 font-bold">조판료: ₩{costReport.bodyCalc.typesetCost.toLocaleString()}원</span>
+            )}
           </div>
         </div>
-
-        <div className="bg-emerald-50/70 p-3 rounded-xl border border-emerald-200 text-xs flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center space-x-4">
-            <span>대수: <strong className="text-slate-800">{costReport.bodyCalc.signatures} 대</strong></span>
-            <span>소요연수: <strong className="text-slate-800">{costReport.bodyCalc.totalReams.toFixed(2)} R</strong></span>
-            <span>CTP: <strong className="text-slate-800">{costReport.bodyCalc.totalPlates} 판</strong> (₩{costReport.bodyCalc.ctpCost.toLocaleString()}원)</span>
-            <span>인쇄비: <strong className="text-slate-800">₩{costReport.bodyCalc.printCost.toLocaleString()}원</strong></span>
-            <span>용지비: <strong className="text-slate-800">{includePaper ? `₩${costReport.bodyCalc.paperCost.toLocaleString()}원` : '사급(0원)'}</strong></span>
-          </div>
-          {costReport.bodyCalc.typesetCost > 0 && (
-            <span className="text-emerald-800 font-bold">조판료: ₩{costReport.bodyCalc.typesetCost.toLocaleString()}원</span>
-          )}
-        </div>
-      </div>
+      )}
 
       {/* ── 5. [화보 / 간지 선택정보] ── */}
       {hasSupplement && (
@@ -1959,6 +2184,24 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
               />
             </div>
           </div>
+
+          {costReport.supplementCalc && (
+            <div className="bg-sky-50/70 p-3 rounded-xl border border-sky-200 text-xs flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center space-x-4">
+                <span>소요연수: <strong className="text-slate-800">{costReport.supplementCalc.totalReams.toFixed(2)} R</strong></span>
+                <span>
+                  CTP:&nbsp;
+                  {printType === '디지털인쇄' ? (
+                    <strong className="text-purple-700">0판 (무판 0원)</strong>
+                  ) : (
+                    <strong className="text-slate-800">{costReport.supplementCalc.totalPlates} 판 (₩{costReport.supplementCalc.ctpCost.toLocaleString()}원)</strong>
+                  )}
+                </span>
+                <span>인쇄비: <strong className="text-slate-800">₩{costReport.supplementCalc.printCost.toLocaleString()}원</strong></span>
+                <span>용지비: <strong className="text-slate-800">{includePaper ? `₩${costReport.supplementCalc.paperCost.toLocaleString()}원` : '사급(0원)'}</strong></span>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -2032,8 +2275,8 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-600"></span>
             <span>
               {costingMode === 'GOVERNMENT'
-                ? '■ 🏛️ 조달청·교육청 표준 인쇄원가 14단계 법정 산출 상세표'
-                : '■ 🏢 비피앤피 / 갑우문화사 6대 실무 공정별 원가 명세 (PrintEstimate)'}
+                ? '■ 🏛️ 조달청 공공 표준 인쇄원가 14단계 법정 산출 상세표'
+                : '■ 🏢 사기업 6대 실무 공정별 원가 명세 (PrintEstimate)'}
             </span>
           </span>
           <span className="text-[11px] font-normal text-slate-500">
@@ -2082,27 +2325,43 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
                   <td className="p-2.5 text-center font-bold text-slate-500">3</td>
                   <td className="p-2.5 font-bold text-slate-800">3. 인쇄판료 (CTP)</td>
                   <td className="p-2.5 text-slate-600">
-                    총 {(governmentReport.coverCalc?.plates || 0) + (governmentReport.bodyCalc?.plates || 0) + (governmentReport.supplementCalc?.plates || 0)}판 (대수 × 면수 × 색도수) × 공인 판당단가 {governmentReport.coverCalc?.plateUnitPrice?.toLocaleString()}원
+                    {printType === '디지털인쇄' ? (
+                      <span className="text-purple-700 font-bold">디지털 Direct 무판 인쇄 (CTP 인쇄판대 0원 면제)</span>
+                    ) : (
+                      `총 ${(governmentReport.coverCalc?.plates || 0) + (governmentReport.bodyCalc?.plates || 0) + (governmentReport.supplementCalc?.plates || 0)}판 (대수 × 면수 × 색도수) × 공인 판당단가 ${(governmentReport.coverCalc?.plateUnitPrice || 0).toLocaleString()}원`
+                    )}
                   </td>
                   <td className="p-2.5 text-right font-bold text-slate-900">{governmentReport.step3_ctpCost.toLocaleString()}원</td>
-                  <td className="p-2.5 text-right text-slate-500">조달 CTP 단가</td>
+                  <td className="p-2.5 text-right text-slate-500">{printType === '디지털인쇄' ? '무판 Direct' : '조달 CTP 단가'}</td>
                 </tr>
 
                 <tr className="hover:bg-slate-50/70">
                   <td className="p-2.5 text-center font-bold text-slate-500">4</td>
                   <td className="p-2.5 font-bold text-slate-800">4. 인쇄료</td>
                   <td className="p-2.5 text-slate-600">
-                    기준통수 × 통당단가 × 인쇄면수 × 할증(지질, 특수별색, 베다바탕 가산율)
+                    {printType === '디지털인쇄' ? (
+                      `디지털 페이지 출력단가 (원색 120원/p, 단색 35원/p) × ${quantity.toLocaleString()}부`
+                    ) : printType === '경인쇄' ? (
+                      `경인쇄 기본요율 (표지 50부 기본 13,240원 + 추가10부 170원 / 본문 50부 6,800원 + 추가10부 90원)`
+                    ) : (
+                      `기준통수 × 통당단가 × 인쇄면수 × 할증(지질, 특수별색, 베다바탕 가산율)`
+                    )}
                   </td>
                   <td className="p-2.5 text-right font-bold text-slate-900">{governmentReport.step4_printCost.toLocaleString()}원</td>
-                  <td className="p-2.5 text-right text-slate-500">통수 구간제</td>
+                  <td className="p-2.5 text-right text-slate-500">{printType === '디지털인쇄' ? '디지털 출력비' : '통수 구간제'}</td>
                 </tr>
 
                 <tr className="hover:bg-slate-50/70">
                   <td className="p-2.5 text-center font-bold text-slate-500">5</td>
-                  <td className="p-2.5 font-bold text-slate-800">5. 제본료</td>
+                  <td className="p-2.5 font-bold text-slate-800">5. 제본 / 접지료</td>
                   <td className="p-2.5 text-slate-600">
-                    {bindingType} : {quantity.toLocaleString()}부 × {Math.max(100, governmentReport.totalPages)}면(100면 기본) × 면당 0.825원
+                    {printCategory === '포스터' || printCategory === '전단' ? (
+                      `포스터/전단 낱장: 제본 없음 (기본 정밀재단 15,000원)`
+                    ) : printCategory === '리플렛' ? (
+                      `리플렛 접지: ${foldType} 가공비 (${quantity.toLocaleString()}부 × 접지단가)`
+                    ) : (
+                      `${bindingType} : ${quantity.toLocaleString()}부 × ${Math.max(100, governmentReport.totalPages)}면(100면 기본) × 면당 0.825원`
+                    )}
                   </td>
                   <td className="p-2.5 text-right font-bold text-slate-900">{governmentReport.step5_bindingCost.toLocaleString()}원</td>
                   <td className="p-2.5 text-right text-slate-500">공인 단가</td>
@@ -2568,7 +2827,7 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
         />
       )}
 
-      {/* 🏛️ 조달청·교육청 공공 인쇄원가계산서 / 규격서 모달 */}
+      {/* 🏛️ 조달청 공공 인쇄원가계산서 / 규격서 모달 */}
       {showGovPrintModal && (
         <GovernmentCostModal
           estimate={{

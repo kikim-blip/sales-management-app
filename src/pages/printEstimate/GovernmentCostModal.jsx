@@ -11,6 +11,7 @@ export default function GovernmentCostModal({ estimate, onClose }) {
 
   const gov = estimate.governmentReport || {};
   const isOffset = (estimate.printType || '옵셋인쇄').includes('옵셋');
+  const isDigital = (estimate.printType || '').includes('디지털');
   const todayStr = estimate.regDate || new Date().toISOString().slice(0, 10);
   const deliveryDateStr = estimate.deliveryDate || '-';
   const proofDateStr = estimate.proofDate || '-';
@@ -34,7 +35,7 @@ export default function GovernmentCostModal({ estimate, onClose }) {
           <div className="flex items-center space-x-2">
             <span className="flex items-center space-x-1.5 text-xs font-black px-2.5 py-1 rounded-lg bg-teal-600 text-white shadow-sm">
               <ShieldCheck className="w-4 h-4" />
-              <span>조달·교육청 표준원가</span>
+              <span>조달청 공공 표준원가</span>
             </span>
             <span className="text-sm font-bold text-slate-800 truncate max-w-xs">
               {estimate.productName || '인쇄원가계산'}
@@ -119,14 +120,14 @@ export default function GovernmentCostModal({ estimate, onClose }) {
                 {/* 계산서 타이틀 */}
                 <div className="text-center pb-4 pt-1">
                   <h1 className="text-2xl sm:text-3xl font-black tracking-widest text-black border-b-2 border-black pb-2">
-                    {isOffset ? '옵 셋 인 쇄 원 가 계 산 서' : '경 인 쇄 원 가 계 산 서'}
+                    {isOffset ? '옵 셋 인 쇄 원 가 계 산 서' : (isDigital ? '디 지 털 인 쇄 원 가 계 산 서' : '경 인 쇄 원 가 계 산 서')}
                   </h1>
                 </div>
 
                 {/* 작성 메타 정보 헤더 */}
                 <div className="flex flex-col sm:flex-row justify-between text-xs sm:text-sm text-slate-800 my-3 leading-relaxed border-b border-slate-300 pb-2">
                   <div className="space-y-0.5">
-                    <div>■ 작성기준 : 전라남도교육청 및 조달청 인쇄요금 기준</div>
+                    <div>■ 작성기준 : 조달청 인쇄요금 원가계산 기준 (국가계약법 시행규칙 제6조)</div>
                     <div>■ 작성일자 : {todayStr}</div>
                   </div>
                   <div className="sm:text-right mt-1 sm:mt-0 font-bold">
@@ -431,7 +432,7 @@ export default function GovernmentCostModal({ estimate, onClose }) {
 
                 {/* 하단 공문서 안내 문구 */}
                 <div className="mt-6 text-[11px] text-slate-500 leading-relaxed border-t border-slate-300 pt-3">
-                  <p>※ 본 계산서는 조달청 공인 인쇄요금 산정기준 및 교육청 표준 인쇄원가 계산 규칙에 의해 정밀 산출되었습니다.</p>
+                  <p>※ 본 계산서는 국가계약법 시행규칙 제6조 및 조달청 인쇄요금 공인 표준원가 기준에 의해 정밀 산출되었습니다.</p>
                   <p>※ 권당 예정가격: ₩ {(gov.perBookTargetPrice || 0).toLocaleString()}원 / 권당 계약금액: ₩ {(gov.perBookContractPrice || 0).toLocaleString()}원</p>
                 </div>
               </div>

@@ -306,7 +306,7 @@ export default function EstimateListPage({ onNewEstimate, onSelectEstimate }) {
         />
       )}
 
-      {/* 🏛️ 인쇄 모달 (조달·교육청 공공 원가계산서 / 규격서) */}
+      {/* 🏛️ 인쇄 모달 (조달청 공공 원가계산서 / 규격서) */}
       {printGovEstimate && (
         <GovernmentCostModal
           estimate={printGovEstimate}

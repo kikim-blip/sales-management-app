@@ -102,7 +102,9 @@ export function calculatePartCost({
   isBetaPrint = false,    // 전면 베다 인쇄 여부 (할증 60% 또는 15%)
   isSpotColor = false,    // 특수 별색 여부
   isHeavyOrThin = false,  // 후지/박엽지 여부
+  printType = '옵셋인쇄', // 인쇄 방식 ('옵셋인쇄', '경인쇄', '디지털인쇄')
 }) {
+  const isDigital = printType === '디지털인쇄';
   const qty = Math.max(1, Number(quantity) || 1);
   const actualPages = Math.max(0, Number(pages) || 0);
   const printedPages = Math.max(0, actualPages - (Number(blankPages) || 0));
@@ -141,16 +143,17 @@ export function calculatePartCost({
   }
 
   // 2. CTP 판수 및 제판비 계산 (PrintEstimate 공식: 대수 × 판수(1) × 색도 × 6,500원)
+  // ★ 디지털 인쇄는 무판 인쇄이므로 CTP 0원!
   const effectiveColors = Number(colorCount) || (isDoubleSided ? 8 : 4);
-  const totalPlates = Math.max(1, Math.round(signatures * effectiveColors));
-  const effectiveCtpUnitPrice = Number(ctpUnitPrice) || 6500;
-  const ctpCost = Math.round(totalPlates * effectiveCtpUnitPrice);
+  const totalPlates = isDigital ? 0 : Math.max(1, Math.round(signatures * effectiveColors));
+  const effectiveCtpUnitPrice = isDigital ? 0 : (Number(ctpUnitPrice) || 6500);
+  const ctpCost = isDigital ? 0 : Math.round(totalPlates * effectiveCtpUnitPrice);
 
   // 표준 CTP 단가 (협동조합 기준: 국2절 10,618원, 4×6 2절 15,286원)
   const isKuk = paperCut.includes('국');
-  const ctpStdUnitPrice = isKuk ? 10618 : 15286;
-  const ctpStdCost = Math.round(totalPlates * ctpStdUnitPrice);
-  const ctpDeviation = calculateDeviation(effectiveCtpUnitPrice, ctpStdUnitPrice);
+  const ctpStdUnitPrice = isDigital ? 0 : (isKuk ? 10618 : 15286);
+  const ctpStdCost = isDigital ? 0 : Math.round(totalPlates * ctpStdUnitPrice);
+  const ctpDeviation = isDigital ? 0 : calculateDeviation(effectiveCtpUnitPrice, ctpStdUnitPrice);
 
   // 3. 소요 연수(R) 및 용지비 계산
   const pagesPerFullSheet = cuts * 2;
@@ -232,32 +235,36 @@ export function calculateFullCost({
 }) {
   const qty = Math.max(1, Number(general.quantity) || 1000);
   const paperCut = general.paperCut || '국배판(A4)';
+  const printType = general.printType || '옵셋인쇄';
+  const printCategory = general.printCategory || '책자';
+  const isSingleLeaf = printCategory === '리플렛' || printCategory === '포스터' || printCategory === '전단';
   const includePaper = general.includePaper !== undefined ? general.includePaper : true;
   const ctpUnitPrice = Number(general.ctpUnitPrice) || 6500;
 
   // ── 1. 각 파트별 계산 ──
-  // 표지
+  // 표지 (리플렛, 포스터/전단인 경우 메인 시트)
   const coverCalc = calculatePartCost({
-    name: '표지',
+    name: isSingleLeaf ? (printCategory === '리플렛' ? '리플렛' : '포스터/전단') : '표지',
     quantity: qty,
     paperCut,
-    pages: cover.pages ?? 4,
+    pages: cover.pages ?? (isSingleLeaf ? (printCategory === '리플렛' ? 6 : 1) : 4),
     blankPages: cover.blankPages || 0,
     typesetPages: cover.typesetPages || 0,
     typesetRate: cover.typesetRate || 0,
     typesetUnitPrice: cover.typesetUnitPrice || 25000,
     colorCount: cover.colorCount || 4,
-    isDoubleSided: cover.isDoubleSided ?? false,
+    isDoubleSided: isSingleLeaf && printCategory === '포스터' ? false : (cover.isDoubleSided ?? (isSingleLeaf ? true : false)),
     paperUnitPrice: cover.paperUnitPrice || 94000,
     ctpUnitPrice,
     includePaper,
     isBetaPrint: options.isBetaPrint || false,
     isSpotColor: options.isSpotColor || false,
     isHeavyOrThin: (cover.paperWeight >= 150 || cover.paperWeight <= 50),
+    printType,
   });
 
-  // 본문
-  const bodyCalc = calculatePartCost({
+  // 본문 (리플렛, 포스터, 전단은 본문 0면)
+  const bodyCalc = (!isSingleLeaf) ? calculatePartCost({
     name: '본문',
     quantity: qty,
     paperCut,
@@ -274,11 +281,30 @@ export function calculateFullCost({
     isBetaPrint: options.isBetaPrint || false,
     isSpotColor: options.isSpotColor || false,
     isHeavyOrThin: (body.paperWeight >= 150 || body.paperWeight <= 50),
-  });
+    printType,
+  }) : {
+    name: '본문',
+    pages: 0,
+    printedPages: 0,
+    blankPages: 0,
+    signatures: 0,
+    totalPlates: 0,
+    effectiveColors: 0,
+    wasteRate: 0,
+    netReams: 0,
+    totalReams: 0,
+    paperCost: 0,
+    printCost: 0,
+    ctpCost: 0,
+    ctpStdCost: 0,
+    ctpDeviation: 0,
+    typesetCost: 0,
+    totalCost: 0,
+  };
 
   // 화보/부속
   let supplementCalc = null;
-  if (options.hasSupplement && (Number(supplement.pages) || 0) > 0) {
+  if (!isSingleLeaf && options.hasSupplement && (Number(supplement.pages) || 0) > 0) {
     supplementCalc = calculatePartCost({
       name: '화보/부속',
       quantity: qty,
@@ -295,12 +321,13 @@ export function calculateFullCost({
       includePaper,
       isBetaPrint: options.isBetaPrint || false,
       isSpotColor: options.isSpotColor || false,
+      printType,
     });
   }
 
   // 2탑용 해설 (옵션)
   let body2Calc = null;
-  if ((Number(body2.pages) || 0) > 0) {
+  if (!isSingleLeaf && (Number(body2.pages) || 0) > 0) {
     body2Calc = calculatePartCost({
       name: '해설본문',
       quantity: qty,
@@ -315,6 +342,7 @@ export function calculateFullCost({
       paperUnitPrice: body2.paperUnitPrice || 46136,
       ctpUnitPrice,
       includePaper,
+      printType,
     });
   }
 
@@ -341,6 +369,12 @@ export function calculateFullCost({
     bindingUnitPrice = 0;
     bindingCost = 15000; // 재단비
     bindingFormula = '포스터/전단 재단 기본 15,000원';
+  } else if (general.printCategory === '리플렛') {
+    const foldType = general.foldType || '3단 접지';
+    bindingUnitPrice = foldType.includes('4단') ? 24 : foldType.includes('2단') ? 12 : foldType.includes('대문') || foldType.includes('병풍') ? 30 : 18;
+    const foldBaseFee = 25000;
+    bindingCost = Math.round(bindingUnitPrice * qty + foldBaseFee);
+    bindingFormula = `리플렛 ${foldType}: 부당 ${bindingUnitPrice}원 × ${qty.toLocaleString()}부 + 기본료 ${foldBaseFee.toLocaleString()}원`;
   } else if (bindingDetailType === '무선 2탑 제본' || bindingType.includes('2탑')) {
     // [{(표지1+표지2)*2} + 본문1 + 본문2] × 0.8 + 130원 × 부수 + 기본료 200,000원
     const coef = Number(general.bindingCoefficient) || 0.8;
@@ -470,10 +504,26 @@ export function calculateFullCost({
   // ── 5. 6대 공정 섹션별 명세 리스트 빌드 (PrintEstimate 구조) ──
 
   // 1) 기획/제판 (PREPRESS)
-  const prepressItems = [
-    {
+  const isDigital = printType === '디지털인쇄';
+  const prepressItems = [];
+
+  if (isDigital) {
+    prepressItems.push({
+      id: 'prepress_digital',
+      name: '디지털 Direct 무판 인쇄',
+      spec: '전자 데이터 직접 출력 (CTP 제판비 면제)',
+      quantity: 0,
+      unit: '판',
+      unitPrice: 0,
+      amount: 0,
+      stdPrice: 0,
+      deviation: 0,
+      formula: '디지털 무판 인쇄로 CTP 제판비 0원 적용',
+    });
+  } else {
+    prepressItems.push({
       id: 'prepress_cover',
-      name: '표지 CTP 출력',
+      name: isSingleLeaf ? `${printCategory} CTP 출력` : '표지 CTP 출력',
       spec: `${coverCalc.signatures}대 × ${coverCalc.effectiveColors}도 (${coverCalc.totalPlates}판)`,
       quantity: coverCalc.totalPlates,
       unit: '판',
@@ -482,52 +532,52 @@ export function calculateFullCost({
       stdPrice: coverCalc.ctpStdUnitPrice,
       deviation: coverCalc.ctpDeviation,
       formula: `${coverCalc.signatures}대 × 1판 × ${coverCalc.effectiveColors}도 × ${coverCalc.ctpUnitPrice.toLocaleString()}원`,
+    });
+
+    if (bodyCalc.pages > 0) {
+      prepressItems.push({
+        id: 'prepress_body',
+        name: '본문 CTP 출력',
+        spec: `${bodyCalc.signatures}대 × ${bodyCalc.effectiveColors}도 (${bodyCalc.totalPlates}판)`,
+        quantity: bodyCalc.totalPlates,
+        unit: '판',
+        unitPrice: bodyCalc.ctpUnitPrice,
+        amount: bodyCalc.ctpCost,
+        stdPrice: bodyCalc.ctpStdUnitPrice,
+        deviation: bodyCalc.ctpDeviation,
+        formula: `${bodyCalc.signatures}대 × 1판 × ${bodyCalc.effectiveColors}도 × ${bodyCalc.ctpUnitPrice.toLocaleString()}원`,
+      });
     }
-  ];
 
-  if (bodyCalc.pages > 0) {
-    prepressItems.push({
-      id: 'prepress_body',
-      name: '본문 CTP 출력',
-      spec: `${bodyCalc.signatures}대 × ${bodyCalc.effectiveColors}도 (${bodyCalc.totalPlates}판)`,
-      quantity: bodyCalc.totalPlates,
-      unit: '판',
-      unitPrice: bodyCalc.ctpUnitPrice,
-      amount: bodyCalc.ctpCost,
-      stdPrice: bodyCalc.ctpStdUnitPrice,
-      deviation: bodyCalc.ctpDeviation,
-      formula: `${bodyCalc.signatures}대 × 1판 × ${bodyCalc.effectiveColors}도 × ${bodyCalc.ctpUnitPrice.toLocaleString()}원`,
-    });
-  }
+    if (supplementCalc && supplementCalc.pages > 0) {
+      prepressItems.push({
+        id: 'prepress_supp',
+        name: '화보 CTP 출력',
+        spec: `${supplementCalc.signatures}대 × ${supplementCalc.effectiveColors}도 (${supplementCalc.totalPlates}판)`,
+        quantity: supplementCalc.totalPlates,
+        unit: '판',
+        unitPrice: supplementCalc.ctpUnitPrice,
+        amount: supplementCalc.ctpCost,
+        stdPrice: supplementCalc.ctpStdUnitPrice,
+        deviation: supplementCalc.ctpDeviation,
+        formula: `${supplementCalc.signatures}대 × 1판 × ${supplementCalc.effectiveColors}도 × ${supplementCalc.ctpUnitPrice.toLocaleString()}원`,
+      });
+    }
 
-  if (supplementCalc && supplementCalc.pages > 0) {
-    prepressItems.push({
-      id: 'prepress_supp',
-      name: '화보 CTP 출력',
-      spec: `${supplementCalc.signatures}대 × ${supplementCalc.effectiveColors}도 (${supplementCalc.totalPlates}판)`,
-      quantity: supplementCalc.totalPlates,
-      unit: '판',
-      unitPrice: supplementCalc.ctpUnitPrice,
-      amount: supplementCalc.ctpCost,
-      stdPrice: supplementCalc.ctpStdUnitPrice,
-      deviation: supplementCalc.ctpDeviation,
-      formula: `${supplementCalc.signatures}대 × 1판 × ${supplementCalc.effectiveColors}도 × ${supplementCalc.ctpUnitPrice.toLocaleString()}원`,
-    });
-  }
-
-  if (body2Calc && body2Calc.pages > 0) {
-    prepressItems.push({
-      id: 'prepress_body2',
-      name: '해설본문 CTP 출력',
-      spec: `${body2Calc.signatures}대 × ${body2Calc.effectiveColors}도 (${body2Calc.totalPlates}판)`,
-      quantity: body2Calc.totalPlates,
-      unit: '판',
-      unitPrice: body2Calc.ctpUnitPrice,
-      amount: body2Calc.ctpCost,
-      stdPrice: body2Calc.ctpStdUnitPrice,
-      deviation: body2Calc.ctpDeviation,
-      formula: `${body2Calc.signatures}대 × 1판 × ${body2Calc.effectiveColors}도 × ${body2Calc.ctpUnitPrice.toLocaleString()}원`,
-    });
+    if (body2Calc && body2Calc.pages > 0) {
+      prepressItems.push({
+        id: 'prepress_body2',
+        name: '해설본문 CTP 출력',
+        spec: `${body2Calc.signatures}대 × ${body2Calc.effectiveColors}도 (${body2Calc.totalPlates}판)`,
+        quantity: body2Calc.totalPlates,
+        unit: '판',
+        unitPrice: body2Calc.ctpUnitPrice,
+        amount: body2Calc.ctpCost,
+        stdPrice: body2Calc.ctpStdUnitPrice,
+        deviation: body2Calc.ctpDeviation,
+        formula: `${body2Calc.signatures}대 × 1판 × ${body2Calc.effectiveColors}도 × ${body2Calc.ctpUnitPrice.toLocaleString()}원`,
+      });
+    }
   }
 
   if (coverCalc.typesetCost > 0 || bodyCalc.typesetCost > 0) {
@@ -550,15 +600,17 @@ export function calculateFullCost({
   const printItems = [
     {
       id: 'print_cover',
-      name: `표지 인쇄 (${cover.colorCount || 4}도 ${cover.isDoubleSided ? '양면' : '단면'})`,
-      spec: `${coverCalc.totalReams.toFixed(2)}R (손지율 ${coverCalc.wasteRate}%)`,
+      name: isSingleLeaf
+        ? `${printCategory} ${isDigital ? '디지털 출력' : '인쇄'} (${cover.colorCount || 4}도 ${cover.isDoubleSided ? '양면' : '단면'})`
+        : `표지 ${isDigital ? '디지털 출력' : '인쇄'} (${cover.colorCount || 4}도 ${cover.isDoubleSided ? '양면' : '단면'})`,
+      spec: isDigital ? `${qty.toLocaleString()}부 × ${coverCalc.printedPages}면 (디지털 Direct)` : `${coverCalc.totalReams.toFixed(2)}R (손지율 ${coverCalc.wasteRate}%)`,
       quantity: parseFloat(coverCalc.totalReams.toFixed(2)),
-      unit: 'R',
+      unit: isDigital ? '식' : 'R',
       unitPrice: Math.round(coverCalc.printCost / Math.max(0.01, coverCalc.totalReams)),
       amount: coverCalc.printCost,
       stdPrice: Math.round(coverCalc.printCost / Math.max(0.01, coverCalc.totalReams)),
       deviation: 0,
-      formula: `${coverCalc.totalReams.toFixed(2)}R × 인쇄비`,
+      formula: isDigital ? `디지털 출력비 ₩${coverCalc.printCost.toLocaleString()}원` : `${coverCalc.totalReams.toFixed(2)}R × 인쇄비`,
     }
   ];
 

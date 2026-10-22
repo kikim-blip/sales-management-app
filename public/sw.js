@@ -1,5 +1,5 @@
 // public/sw.js
-const CACHE_NAME = 'sales-pwa-v10-printestimate-deep-integration';
+const CACHE_NAME = 'sales-pwa-v11-pure-procurement-costing-dynamic';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();

@@ -9,7 +9,7 @@ export default function EstimatePrintViewModal({ estimate, onClose }) {
 
   if (!estimate) return null;
 
-  // 조달·교육청 표준원가 모드 견적서인 경우 공공 전용 3대 서식 모달로 연결
+  // 조달청 공공 표준원가 모드 견적서인 경우 공공 전용 3대 서식 모달로 연결
   if (estimate.costingMode === 'GOVERNMENT') {
     return <GovernmentCostModal estimate={estimate} onClose={onClose} />;
   }

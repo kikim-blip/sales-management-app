@@ -1,15 +1,15 @@
 // src/utils/printCalculators/governmentCostCalculator.js
 /**
- * 조달청 및 전라남도교육청(print.jne.go.kr) 공인 표준 인쇄원가 계산 엔진
+ * 조달청(Public Procurement Service) 공인 표준 인쇄원가 계산 엔진
  * 국가를 당사자로 하는 계약에 관한 법률 시행규칙 제6조(원가계산에 의한 예정가격의 결정) 준수
  * 
  * 14단계 법정 원가 산식:
  * 1. 용지비 (표지/본문/화보별 대수, 통수, 손지율 산식)
  * 2. 조판료 (전자조판 기본단가 × 조판면수 × 조판/편집율)
- * 3. 제판비 (대수 × 인쇄면수 × 색도수 = 판수 × 공인 판당 단가)
+ * 3. 제판비 (대수 × 인쇄면수 × 색도수 = 판수 × 공인 판당 단가, 디지털인쇄는 0원)
  * 4. 인쇄료 (기준통수 × 통당단가 × 인쇄면수 × 지질/베다/특수색 할증)
- * 5. 제본료 (부수 × 면수(100면 기본) × 면당단가 × 박엽지 할증)
- * 6. 기타가공비 (코팅, 박, 톰슨 등 실비)
+ * 5. 제본료 (부수 × 면수(100면 기본) × 면당단가 × 박엽지 할증, 낱장/포스터는 0원)
+ * 6. 기타가공비 (코팅, 박, 톰슨, 접지 등 실비)
  * 7. 소계 (순제조원가 = 1+2+3+4+5+6)
  * 8. 일반관리비 (순제조원가의 5% ~ 6%, 최대 14% 한도)
  * 9. 계 (소계 + 일반관리비)
@@ -70,7 +70,7 @@ export function getGovernmentSheetCuts(cutName = '국배판(A4)') {
 }
 
 /**
- * 기준통수 및 색도수에 따른 표준 손지율(%) 산정 (전남교육청 기준)
+ * 기준통수 및 색도수에 따른 표준 손지율(%) 산정 (조달청 공인 기준)
  */
 export function getGovernmentWasteRate(passCount, colorCount = 4, isDoubleSided = true) {
   const passes = Math.max(1000, Number(passCount) || 1000);
@@ -114,7 +114,7 @@ export function getGovernmentPassUnitPrice(passes = 1000) {
 }
 
 /**
- * 옵셋인쇄 - 파트별(표지, 본문, 화보) 공공 표준원가 계산
+ * 조달청 기준 파트별(표지, 본문, 화보) 공공 표준원가 계산
  */
 export function calculateGovernmentOffsetPart({
   name = '표지',
@@ -131,6 +131,7 @@ export function calculateGovernmentOffsetPart({
   paperWeight = 200,
   isBetaPrint = false,
   isSpotColor = false,
+  printType = '옵셋인쇄',
 }) {
   const qty = Math.max(1, Number(quantity) || 1);
   const actualPages = Math.max(0, Number(pages) || 0);
@@ -150,6 +151,7 @@ export function calculateGovernmentOffsetPart({
       paperCost: 0,
       typesetCost: 0,
       plates: 0,
+      plateUnitPrice: 0,
       ctpCost: 0,
       passes: 0,
       basePasses: 0,
@@ -160,6 +162,8 @@ export function calculateGovernmentOffsetPart({
   }
 
   const cuts = getGovernmentSheetCuts(paperCut);
+  const isDigital = printType === '디지털인쇄';
+  const isLightPrint = printType === '경인쇄' || printType === '마스터인쇄';
 
   // ① 소요량(연수) 계산
   // 소요량 = {부수 × (면수 / 장당 2면)} / {500매 × 절수}
@@ -178,8 +182,8 @@ export function calculateGovernmentOffsetPart({
   // 기준통수 = 통수 / 대수 (1,000통 미만은 1,000통으로 계산)
   const basePasses = Math.max(1000, Math.round(passes / signatures));
 
-  // ⑤ 손지율(%) 계산
-  const wasteRate = getGovernmentWasteRate(basePasses, colorCount, isDoubleSided);
+  // ⑤ 손지율(%) 계산 (디지털인쇄는 손지율 3% 고정)
+  const wasteRate = isDigital ? 3.0 : getGovernmentWasteRate(basePasses, colorCount, isDoubleSided);
   const totalReams = parseFloat((netReams * (1 + wasteRate / 100)).toFixed(3));
   const wasteReams = parseFloat((totalReams - netReams).toFixed(3));
 
@@ -195,26 +199,53 @@ export function calculateGovernmentOffsetPart({
 
   // ⑧ 인쇄판료(CTP) 계산
   // 판수 = 대수 × 인쇄면(단면 1 / 양면 2) × 색도수
+  // ★ 중요: 디지털 인쇄는 무판 인쇄이므로 CTP 판수 = 0판, 비용 = 0원!
   const sides = isDoubleSided ? 2 : 1;
-  const plates = Math.max(1, Math.round(signatures * sides * colorCount));
-  const plateUnitPrice = cuts <= 8 ? GOVERNMENT_STD_RATES.platePrices['4×6 2절'] : GOVERNMENT_STD_RATES.platePrices['국2절'];
-  const ctpCost = Math.round(plates * plateUnitPrice);
+  let plates = 0;
+  let plateUnitPrice = 0;
+  let ctpCost = 0;
+
+  if (isDigital) {
+    plates = 0;
+    plateUnitPrice = 0;
+    ctpCost = 0;
+  } else if (isLightPrint) {
+    // 경인쇄는 마스터 페이퍼 제판비 (2,500원)
+    plates = Math.max(1, Math.round(signatures * sides * (colorCount || 1)));
+    plateUnitPrice = GOVERNMENT_STD_RATES.platePrices['마스터'] || 2500;
+    ctpCost = Math.round(plates * plateUnitPrice);
+  } else {
+    // 옵셋인쇄 CTP 판비
+    plates = Math.max(1, Math.round(signatures * sides * colorCount));
+    plateUnitPrice = cuts <= 8 ? GOVERNMENT_STD_RATES.platePrices['4×6 2절'] : GOVERNMENT_STD_RATES.platePrices['국2절'];
+    ctpCost = Math.round(plates * plateUnitPrice);
+  }
 
   // ⑨ 인쇄료 계산
-  // 기준통수 × {통당단가 × 인쇄면(단면 1 / 양면 2)} × 할증율
-  const passUnitPrice = getGovernmentPassUnitPrice(basePasses);
-  
-  // 지질할증: 150g/㎡ 이상 후지 30% 가산 (할증 1.3)
-  let weightSurcharge = Number(paperWeight) >= 150 ? 1.3 : 1.0;
-  if (Number(paperWeight) <= 50) weightSurcharge = 1.3; // 박엽지 30% 할증
+  let printCost = 0;
+  let passUnitPrice = 0;
+  let weightSurcharge = 1.0;
+  let totalSurcharge = 1.0;
 
-  // 베다할증(솔리드 바탕) 60% 가산 (1.6)
-  const betaSurcharge = isBetaPrint ? 1.6 : 1.0;
-  // 특수별색 100% 가산 (2.0)
-  const spotSurcharge = isSpotColor ? 2.0 : 1.0;
-  const totalSurcharge = weightSurcharge * betaSurcharge * spotSurcharge;
+  if (isDigital) {
+    // 디지털인쇄: 장당(페이지당) 출력비 (A4 기준 원색: 120원, 단색: 35원)
+    const digitalUnitRate = colorCount >= 3 ? 120 : 35;
+    passUnitPrice = digitalUnitRate;
+    const totalPrintedSheets = (qty * printedPages) / 2;
+    printCost = Math.round(totalPrintedSheets * digitalUnitRate);
+  } else {
+    passUnitPrice = getGovernmentPassUnitPrice(basePasses);
+    // 지질할증: 150g/㎡ 이상 후지 30% 가산 (할증 1.3)
+    weightSurcharge = Number(paperWeight) >= 150 ? 1.3 : 1.0;
+    if (Number(paperWeight) <= 50) weightSurcharge = 1.3; // 박엽지 30% 할증
 
-  const printCost = Math.round(basePasses * (passUnitPrice * sides) * totalSurcharge);
+    // 경인쇄는 베다/특수색 할증 제외
+    const betaSurcharge = (!isLightPrint && isBetaPrint) ? 1.6 : 1.0;
+    const spotSurcharge = (!isLightPrint && isSpotColor) ? 2.0 : 1.0;
+    totalSurcharge = weightSurcharge * betaSurcharge * spotSurcharge;
+
+    printCost = Math.round(basePasses * (passUnitPrice * sides) * totalSurcharge);
+  }
 
   const totalCost = paperCost + typesetCost + ctpCost + printCost;
 
@@ -248,7 +279,7 @@ export function calculateGovernmentOffsetPart({
 }
 
 /**
- * 조달청 및 교육청 표준 인쇄원가 종합 계산 (14단계 법정 산식)
+ * 조달청 공공 표준 인쇄원가 종합 계산 (14단계 법정 산식)
  */
 export function calculateGovernmentCost({
   general = {},
@@ -260,34 +291,40 @@ export function calculateGovernmentCost({
 }) {
   const qty = Math.max(1, Number(general.quantity) || 1000);
   const paperCut = general.paperCut || '국배판(A4)';
-  const printType = general.printType || '옵셋인쇄'; // '옵셋인쇄' | '경인쇄' | '마스터인쇄'
+  const printType = general.printType || '옵셋인쇄'; // '옵셋인쇄' | '경인쇄' | '디지털인쇄'
+  const printCategory = general.printCategory || '책자';
   const isLightPrint = printType === '경인쇄' || printType === '마스터인쇄';
+  const isDigital = printType === '디지털인쇄';
 
   // 가산율 설정 (사용자 정의 또는 법정 기본값)
   const manageRate = Number(rates.manageRate ?? GOVERNMENT_STD_RATES.defaultManageRate); // 기본 5%
   const profitRate = Number(rates.profitRate ?? GOVERNMENT_STD_RATES.defaultProfitRate); // 기본 10%
   const contractRate = Number(rates.contractRate ?? GOVERNMENT_STD_RATES.defaultContractRate); // 기본 88%
 
-  // 1. 표지 계산
+  // 인쇄물 종류에 따른 본문/화보 포함 여부 (리플렛, 포스터, 전단은 본문/화보 제외)
+  const isSingleLeaf = printCategory === '리플렛' || printCategory === '포스터' || printCategory === '전단';
+
+  // 1. 표지 (또는 리플렛/포스터 본체) 계산
   const coverCalc = calculateGovernmentOffsetPart({
-    name: '표지',
+    name: isSingleLeaf ? (printCategory === '리플렛' ? '리플렛' : '포스터/전단') : '표지',
     quantity: qty,
     paperCut,
-    pages: cover.pages ?? 4,
+    pages: cover.pages ?? (isSingleLeaf ? (printCategory === '리플렛' ? 6 : 1) : 4),
     blankPages: cover.blankPages || 0,
     typesetPages: cover.typesetPages ?? 1,
     typesetRate: cover.typesetRate ?? 0,
     typesetUnitPrice: cover.typesetUnitPrice || GOVERNMENT_STD_RATES.typesetUnitPrice.cover,
     colorCount: cover.colorCount || 4,
-    isDoubleSided: cover.isDoubleSided ?? false,
+    isDoubleSided: isSingleLeaf && printCategory === '포스터' ? false : (cover.isDoubleSided ?? (isSingleLeaf ? true : false)),
     paperUnitPrice: cover.paperUnitPrice || 94000,
-    paperWeight: cover.paperWeight || 200,
-    isBetaPrint: options.isBetaPrint || false,
-    isSpotColor: options.isSpotColor || false,
+    paperWeight: cover.paperWeight || (isSingleLeaf ? 150 : 200),
+    isBetaPrint: isDigital ? false : (options.isBetaPrint || false),
+    isSpotColor: isDigital ? false : (options.isSpotColor || false),
+    printType,
   });
 
-  // 2. 본문 계산
-  const bodyCalc = calculateGovernmentOffsetPart({
+  // 2. 본문 계산 (책자, 화보집만 적용)
+  const bodyCalc = (!isSingleLeaf) ? calculateGovernmentOffsetPart({
     name: '본문',
     quantity: qty,
     paperCut,
@@ -296,17 +333,38 @@ export function calculateGovernmentCost({
     typesetPages: body.typesetPages ?? 0,
     typesetRate: body.typesetRate ?? 0,
     typesetUnitPrice: body.typesetUnitPrice || GOVERNMENT_STD_RATES.typesetUnitPrice.body,
-    colorCount: body.colorCount || 1,
+    colorCount: isLightPrint ? 1 : (body.colorCount || 1),
     isDoubleSided: body.isDoubleSided ?? true,
     paperUnitPrice: body.paperUnitPrice || 46136,
     paperWeight: body.paperWeight || 80,
-    isBetaPrint: options.isBetaPrint || false,
-    isSpotColor: options.isSpotColor || false,
-  });
+    isBetaPrint: (isDigital || isLightPrint) ? false : (options.isBetaPrint || false),
+    isSpotColor: (isDigital || isLightPrint) ? false : (options.isSpotColor || false),
+    printType,
+  }) : {
+    name: '본문',
+    pages: 0,
+    printedPages: 0,
+    cuts: 16,
+    signatures: 0,
+    netReams: 0,
+    wasteRate: 0,
+    wasteReams: 0,
+    totalReams: 0,
+    paperCost: 0,
+    typesetCost: 0,
+    plates: 0,
+    plateUnitPrice: 0,
+    ctpCost: 0,
+    passes: 0,
+    basePasses: 0,
+    passUnitPrice: 0,
+    printCost: 0,
+    totalCost: 0,
+  };
 
-  // 3. 화보/부속 계산 (옵션 시)
+  // 3. 화보/부속 계산 (책자/화보집 옵션 시)
   let supplementCalc = null;
-  if (options.hasSupplement && (Number(supplement.pages) || 0) > 0) {
+  if (!isSingleLeaf && !isLightPrint && options.hasSupplement && (Number(supplement.pages) || 0) > 0) {
     supplementCalc = calculateGovernmentOffsetPart({
       name: '화보',
       quantity: qty,
@@ -320,8 +378,9 @@ export function calculateGovernmentCost({
       isDoubleSided: supplement.isDoubleSided ?? true,
       paperUnitPrice: supplement.paperUnitPrice || 75000,
       paperWeight: supplement.paperWeight || 120,
-      isBetaPrint: options.isBetaPrint || false,
-      isSpotColor: options.isSpotColor || false,
+      isBetaPrint: isDigital ? false : (options.isBetaPrint || false),
+      isSpotColor: isDigital ? false : (options.isSpotColor || false),
+      printType,
     });
   }
 
@@ -331,21 +390,19 @@ export function calculateGovernmentCost({
   // ── 2. 조판료 합계 ──
   const totalTypesetCost = coverCalc.typesetCost + bodyCalc.typesetCost + (supplementCalc ? supplementCalc.typesetCost : 0);
 
-  // ── 3. 인쇄판료(CTP) 합계 ──
-  const totalCtpCost = coverCalc.ctpCost + bodyCalc.ctpCost + (supplementCalc ? supplementCalc.ctpCost : 0);
+  // ── 3. 인쇄판료(CTP) 합계 (디지털인쇄는 0원) ──
+  const totalCtpCost = isDigital ? 0 : (coverCalc.ctpCost + bodyCalc.ctpCost + (supplementCalc ? supplementCalc.ctpCost : 0));
 
   // ── 4. 인쇄료 합계 ──
   let totalPrintCost = 0;
-  if (isLightPrint) {
-    // 경인쇄 표준 산식 (jne.go.kr 기준)
-    // 표지: 50부까지 기본 13,240원 × {3매 + 추가색도(4색도×2.5매)} = 205,220원 + 10부마다 170원×3매
-    const extraColors = (cover.colorCount || 4) * 2.5;
-    const cover50Cost = Math.round(13240 * (3 + extraColors));
+  if (isLightPrint && !isSingleLeaf) {
+    // 경인쇄 표준 산식
+    const extraColors = ((cover.colorCount || 4) - 1) * 2.5;
+    const cover50Cost = Math.round(13240 * (3 + Math.max(0, extraColors)));
     const coverAddSteps = Math.max(0, Math.ceil((qty - 50) / 10));
     const coverAddCost = Math.round(coverAddSteps * 170 * 3);
     const lightCoverCost = cover50Cost + coverAddCost;
 
-    // 본문: 면당 50부까지 6,800원 + 10부마다 90원
     const bodyHalfPages = Math.ceil((body.pages ?? 64) / 2);
     const body50Cost = Math.round(bodyHalfPages * 6800);
     const bodyAddCost = Math.round(coverAddSteps * 90 * bodyHalfPages);
@@ -356,14 +413,20 @@ export function calculateGovernmentCost({
     totalPrintCost = coverCalc.printCost + bodyCalc.printCost + (supplementCalc ? supplementCalc.printCost : 0);
   }
 
-  // ── 5. 제본료 계산 (무사무선 표준 기준) ──
+  // ── 5. 제본료 계산 ──
   const totalPages = coverCalc.pages + bodyCalc.pages + (supplementCalc ? supplementCalc.pages : 0);
   const bindingType = general.bindingType || '무사무선';
   let bindingCost = 0;
   let bindingUnitRate = GOVERNMENT_STD_RATES.bindingUnitPrice.perfect; // 0.825원
 
-  if (general.printCategory === '포스터' || general.printCategory === '전단') {
+  if (printCategory === '포스터' || printCategory === '전단') {
+    // 포스터 및 전단: 제본 없음, 기본 재단비만 적용
     bindingCost = 15000;
+  } else if (printCategory === '리플렛') {
+    // 리플렛: 접지 형태별 가공비 (2단 12원, 3단 18원, 4단 24원, 병풍/대문 30원)
+    const foldType = general.foldType || '3단 접지';
+    const foldRate = foldType.includes('4단') ? 24 : foldType.includes('2단') ? 12 : foldType.includes('대문') || foldType.includes('병풍') ? 30 : 18;
+    bindingCost = Math.max(25000, Math.round(qty * foldRate));
   } else if (bindingType.includes('중철')) {
     bindingUnitRate = GOVERNMENT_STD_RATES.bindingUnitPrice.saddle;
     const calcPages = Math.max(16, totalPages);
