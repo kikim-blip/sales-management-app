@@ -18,6 +18,7 @@ const StaffManagementPage = lazy(() => import('./pages/StaffManagementPage'));
 const BoardPage = lazy(() => import('./pages/BoardPage'));
 const LogPage = lazy(() => import('./pages/LogPage'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
+const PrintEstimatePage = lazy(() => import('./pages/printEstimate/PrintEstimatePage'));
 
 class ErrorBoundary extends Component {
   constructor(props) {
@@ -98,6 +99,7 @@ export default function App() {
             <Suspense fallback={<div className="flex items-center justify-center min-h-[200px] text-sm font-bold text-slate-500">페이지 로딩 중...</div>}>
               <Routes>
                 <Route path="/" element={<DashboardPage />} />
+                <Route path="/print-estimates" element={<PrintEstimatePage />} />
                 <Route path="/customers" element={<CustomerPage />} />
                 <Route path="/job-orders" element={<JobOrderPage />} />
                 <Route path="/sales" element={<SalesPage />} />
