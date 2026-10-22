@@ -1,5 +1,5 @@
 // public/sw.js
-const CACHE_NAME = 'sales-pwa-v7-multipart-print-estimate';
+const CACHE_NAME = 'sales-pwa-v8-searchable-customers-sticky-sidebar';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();

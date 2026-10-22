@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import {
   Save, Download, ArrowLeft, Check,
-  FileCheck2, ShoppingCart, Printer
+  FileCheck2, ShoppingCart, Printer, Search, X
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { useGoogleAuth } from '../../context/GoogleAuthContext';
@@ -16,7 +16,7 @@ import { calculateFullCost } from '../../utils/printCalculators/multiPartCalcula
 import EstimatePrintViewModal from './EstimatePrintViewModal';
 
 export default function EstimateFormPage({ initialEstimate = null, onBack, onSaved }) {
-  const { customers, addJobOrder, addSales } = useData();
+  const { customers, contacts, addJobOrder, addSales } = useData();
   const { user } = useGoogleAuth();
   const [papers] = useState(() => getMasterPapers());
 
@@ -30,8 +30,13 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
   const [productName, setProductName] = useState(initialEstimate?.productName || '');
   const [clientId, setClientId] = useState(initialEstimate?.clientId || '');
   const [clientName, setClientName] = useState(initialEstimate?.clientName || '');
+  const [clientDept, setClientDept] = useState(initialEstimate?.clientDept || '');
   const [contactName, setContactName] = useState(initialEstimate?.contactName || '');
   const [phone, setPhone] = useState(initialEstimate?.phone || '');
+
+  // 거래처 실시간 검색창 상태
+  const [customerSearchInput, setCustomerSearchInput] = useState('');
+  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
 
   // ── 2. 규격 선택 정보 ──
   const [printType, setPrintType] = useState(initialEstimate?.printType || '옵셋인쇄'); // 옵셋인쇄 | 경인쇄 | 시험지인쇄 | 디지털인쇄
@@ -101,15 +106,70 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
     setTimeout(() => setToastMsg(''), 3000);
   };
 
-  // ── 거래처 선택 시 자동 입력 ──
-  const handleSelectCustomer = (cId) => {
-    setClientId(cId);
-    const found = customers.find(c => String(c.id || c.code_number) === String(cId));
-    if (found) {
-      setClientName(found.name || found.client_name || '');
-      setContactName(found.contact_name || found.representative || '');
-      setPhone(found.phone || found.tel || '');
-    }
+  // ── 거래처 실시간 검색 결과 (고객사명, 과/부서명, 담당자명, 연락처 통합 매칭) ──
+  const customerSearchResults = useMemo(() => {
+    if (!customerSearchInput.trim()) return [];
+    const q = customerSearchInput.trim().toLowerCase();
+    const results = [];
+
+    (customers || []).forEach(c => {
+      const custContacts = (contacts || []).filter(ct => String(ct.customer_id) === String(c.id));
+      const cMatch =
+        (c.name || '').toLowerCase().includes(q) ||
+        (c.dept || '').toLowerCase().includes(q) ||
+        (c.sales_manager || '').toLowerCase().includes(q) ||
+        (c.contact_person || '').toLowerCase().includes(q) ||
+        (c.phone || '').includes(q) ||
+        (c.mobile || '').includes(q) ||
+        (c.email || '').toLowerCase().includes(q);
+
+      if (cMatch) {
+        if (custContacts.length === 0) {
+          results.push({ ...c });
+        } else {
+          custContacts.forEach(ct => {
+            results.push({
+              ...c,
+              dept: ct.dept || c.dept,
+              contact_person: ct.name || c.contact_person,
+              phone: ct.phone || ct.mobile || c.phone,
+              email: ct.email || c.email,
+              contact_id: ct.id,
+            });
+          });
+        }
+      } else {
+        const matchedContacts = custContacts.filter(ct =>
+          (ct.name || '').toLowerCase().includes(q) ||
+          (ct.dept || '').toLowerCase().includes(q) ||
+          (ct.phone || '').includes(q) ||
+          (ct.mobile || '').includes(q) ||
+          (ct.email || '').toLowerCase().includes(q)
+        );
+        matchedContacts.forEach(ct => {
+          results.push({
+            ...c,
+            dept: ct.dept || c.dept,
+            contact_person: ct.name,
+            phone: ct.phone || ct.mobile || c.phone,
+            email: ct.email || c.email,
+            contact_id: ct.id,
+          });
+        });
+      }
+    });
+
+    return results.slice(0, 30);
+  }, [customerSearchInput, customers, contacts]);
+
+  const handleSelectSearchResult = (c) => {
+    setClientId(c.id || c.code_number || '');
+    setClientName(c.name || '');
+    setClientDept(c.dept || '');
+    setContactName(c.contact_person || '');
+    setPhone(c.phone || c.mobile || '');
+    setCustomerSearchInput('');
+    setShowCustomerDropdown(false);
   };
 
   // ── 표지 지종 변경 시 단가 자동 매칭 ──
@@ -450,6 +510,7 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
       productName,
       clientId,
       clientName,
+      clientDept,
       contactName,
       phone,
       printType,
@@ -534,7 +595,7 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
     const newJob = {
       order_date: regDate || new Date().toISOString().slice(0, 10),
       delivery_date: deliveryDate || new Date().toISOString().slice(0, 10),
-      client_name: clientName || '일반거래처',
+      client_name: clientDept ? `${clientName} (${clientDept})` : (clientName || '일반거래처'),
       client_id: clientId || '',
       contact_name: contactName || '',
       phone: phone || '',
@@ -576,7 +637,7 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
 
     const newSale = {
       date: regDate || new Date().toISOString().slice(0, 10),
-      client_name: clientName || '일반거래처',
+      client_name: clientDept ? `${clientName} (${clientDept})` : (clientName || '일반거래처'),
       client_id: clientId || '',
       product_name: productName,
       spec: `${paperCut} ${totalPages}p ${bindingType}`,
@@ -769,33 +830,118 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
             />
           </div>
 
-          {/* 거래처 선택 (기존 고객 DB 직결) */}
-          <div className="sm:col-span-2">
-            <label className="font-bold text-slate-600 block mb-1">
-              거래처 선택 <span className="text-rose-500">*</span>
-            </label>
-            <div className="flex space-x-2">
-              <select
-                value={clientId}
-                onChange={e => handleSelectCustomer(e.target.value)}
-                className="w-1/2 p-2 border border-slate-300 rounded-lg bg-slate-50 font-medium"
-              >
-                <option value="">-- 등록 거래처 선택 --</option>
-                {customers.map(c => (
-                  <option key={c.id || c.code_number} value={c.id || c.code_number}>
-                    {c.name || c.client_name}
-                  </option>
-                ))}
-              </select>
+          {/* 실시간 거래처 검색 바 */}
+          <div className="sm:col-span-4 bg-sky-50/70 p-3.5 rounded-xl border border-sky-200 space-y-2 relative">
+            <div className="flex items-center justify-between">
+              <label className="block text-xs font-bold text-sky-800 flex items-center space-x-1.5">
+                <Search className="w-3.5 h-3.5 text-sky-600" />
+                <span>기존 등록 고객 실시간 검색 (과/부서명, 고객사명, 담당자명, 연락처로 조회)</span>
+              </label>
+              {clientName && (
+                <span className="text-[11px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
+                  선택됨: {clientName} {clientDept ? `(${clientDept})` : ''}
+                </span>
+              )}
+            </div>
+
+            <div className="relative">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
-                value={clientName}
-                onChange={e => setClientName(e.target.value)}
-                className="w-1/2 p-2 border border-slate-300 rounded-lg bg-white font-bold text-slate-800"
-                placeholder="또는 직접 거래처명 입력"
-                required
+                placeholder="과명, 고객사명, 담당자명, 전화번호 검색... (예: 환경, 기후, 홍길동, 010...)"
+                value={customerSearchInput}
+                onChange={e => {
+                  setCustomerSearchInput(e.target.value);
+                  setShowCustomerDropdown(true);
+                }}
+                onFocus={() => {
+                  if (customerSearchInput.trim()) setShowCustomerDropdown(true);
+                }}
+                className="w-full pl-9 pr-8 py-2 bg-white border border-sky-300 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-sky-500"
               />
+              {customerSearchInput && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCustomerSearchInput('');
+                    setShowCustomerDropdown(false);
+                  }}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+
+              {/* 검색 결과 드롭다운 */}
+              {showCustomerDropdown && customerSearchInput.trim() && (
+                <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-2xl z-50 max-h-60 overflow-y-auto divide-y divide-slate-100 text-xs">
+                  <div className="p-2 bg-slate-50 text-[11px] font-bold text-slate-600 border-b border-slate-100 flex justify-between items-center sticky top-0 bg-white">
+                    <span>검색 결과 ({customerSearchResults.length}건)</span>
+                    <button
+                      type="button"
+                      onClick={() => setShowCustomerDropdown(false)}
+                      className="text-slate-500 hover:text-slate-800 font-bold px-2 py-0.5 rounded hover:bg-slate-100"
+                    >
+                      ✕ 닫기
+                    </button>
+                  </div>
+                  {customerSearchResults.length > 0 ? (
+                    customerSearchResults.map((c, idx) => (
+                      <button
+                        key={`${c.id}-${c.contact_id || idx}`}
+                        type="button"
+                        onClick={() => handleSelectSearchResult(c)}
+                        className="w-full text-left p-2.5 hover:bg-sky-50 cursor-pointer flex flex-col transition"
+                      >
+                        <div className="flex items-center space-x-2">
+                          <span className="font-bold text-slate-900">{c.name}</span>
+                          {c.dept && (
+                            <span className="text-[11px] font-bold text-sky-700 bg-sky-100 px-1.5 py-0.2 rounded">
+                              {c.dept}
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[11px] text-slate-500 mt-0.5 flex items-center space-x-3">
+                          {c.contact_person && <span>👤 담당: <strong className="text-slate-700">{c.contact_person}</strong></span>}
+                          {c.phone && <span>📞 {c.phone}</span>}
+                          {c.sales_manager && <span>영업담당: {c.sales_manager}</span>}
+                        </div>
+                      </button>
+                    ))
+                  ) : (
+                    <div className="p-4 text-center text-slate-500 text-[11px]">
+                      일치하는 등록 고객이 없습니다. 아래 항목에 직접 입력하실 수 있습니다.
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
+          </div>
+
+          {/* 4단 상세 입력 필드 (자동 채워짐 & 직접 편집 가능) */}
+          <div>
+            <label className="font-bold text-slate-600 block mb-1">
+              거래처명 (고객사) <span className="text-rose-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={clientName}
+              onChange={e => setClientName(e.target.value)}
+              className="w-full p-2 border border-slate-300 rounded-lg bg-white font-black text-slate-900"
+              placeholder="예: 금강유역환경청"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="font-bold text-slate-600 block mb-1">과 / 부서명</label>
+            <input
+              type="text"
+              value={clientDept}
+              onChange={e => setClientDept(e.target.value)}
+              className="w-full p-2 border border-slate-300 rounded-lg bg-white font-bold text-sky-700"
+              placeholder="예: 환경관리과"
+            />
           </div>
 
           <div>
@@ -804,7 +950,7 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
               type="text"
               value={contactName}
               onChange={e => setContactName(e.target.value)}
-              className="w-full p-2 border border-slate-300 rounded-lg bg-white"
+              className="w-full p-2 border border-slate-300 rounded-lg bg-white font-medium"
               placeholder="예: 홍길동 주무관"
             />
           </div>
@@ -815,7 +961,7 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
               type="text"
               value={phone}
               onChange={e => setPhone(e.target.value)}
-              className="w-full p-2 border border-slate-300 rounded-lg bg-white"
+              className="w-full p-2 border border-slate-300 rounded-lg bg-white font-medium"
               placeholder="010-0000-0000"
             />
           </div>
@@ -1611,6 +1757,7 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
             version: initialEstimate?.version || 1,
             isFinal: initialEstimate?.isFinal || false,
             clientName,
+            clientDept,
             contactName,
             phone,
             productName,

@@ -161,7 +161,7 @@ export default function EstimateListPage({ onNewEstimate, onSelectEstimate }) {
                     </td>
 
                     <td className="p-3 font-semibold text-slate-800">
-                      <div>{item.clientName || '-'}</div>
+                      <div>{item.clientName || '-'} {item.clientDept ? `(${item.clientDept})` : ''}</div>
                       {item.contactName && <div className="text-[11px] text-slate-400">{item.contactName}</div>}
                     </td>
 

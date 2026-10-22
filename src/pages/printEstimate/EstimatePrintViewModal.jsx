@@ -82,7 +82,7 @@ export default function EstimatePrintViewModal({ estimate, onClose }) {
                 <div>
                   <div className="text-xs text-slate-500 mb-1">수신 (귀하)</div>
                   <div className="text-lg font-black text-slate-900 mb-2">
-                    {estimate.clientName || '고객사 귀중'}
+                    {estimate.clientName || '고객사 귀중'} {estimate.clientDept ? `(${estimate.clientDept})` : ''}
                   </div>
                   <div className="space-y-1 text-xs text-slate-600">
                     <p>담당자: <span className="font-semibold text-slate-800">{estimate.contactName || '-'}</span></p>

@@ -29,7 +29,7 @@ export default function Sidebar() {
   });
 
   return (
-    <aside className="hidden md:flex flex-col w-64 bg-white border-r border-slate-200 min-h-[calc(100vh-65px)] p-4">
+    <aside className="hidden md:flex flex-col w-64 bg-white border-r border-slate-200 sticky top-[57px] sm:top-[65px] self-start max-h-[calc(100vh-65px)] overflow-y-auto p-4 z-20">
       <div>
         <div className="text-xs font-semibold text-slate-400 mb-4 px-3 tracking-wider uppercase">메인 메뉴</div>
         <nav className="space-y-1">
