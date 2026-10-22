@@ -11,6 +11,7 @@ const STORAGE_KEYS = {
   PAPERS: 'pe_papers_v1',
   PROCESSES: 'pe_processes_v1',
   STD_PRICES: 'pe_std_prices_v1',
+  GOV_STD_RATES: 'pe_gov_std_rates_v1',
 };
 
 // ─── 견적서 CRUD & 버전 관리 ───────────────────────────────────
@@ -207,11 +208,88 @@ export function resetMasterDataToDefaults() {
   localStorage.removeItem(STORAGE_KEYS.PAPERS);
   localStorage.removeItem(STORAGE_KEYS.PROCESSES);
   localStorage.removeItem(STORAGE_KEYS.STD_PRICES);
+  localStorage.removeItem(STORAGE_KEYS.GOV_STD_RATES);
   return {
     papers: DEFAULT_PAPERS,
     processes: DEFAULT_PROCESSES,
     stdPrices: DEFAULT_STD_PRICES,
   };
+}
+
+// ─── 🏛️ 조달·공공 표준 단가 마스터 관리 ─────────────────────────
+
+export const DEFAULT_GOVERNMENT_MASTER_RATES = {
+  // CTP 판비 (조달청 공인 단가)
+  platePrices: {
+    '국2절': 17500,
+    '4×6 2절': 17500,
+    '국4절': 12500,
+    '4×6 4절': 12500,
+    '마스터': 2500,
+  },
+  // 조판료 (면당 기본단가)
+  typesetUnitPrice: {
+    cover: 25000,
+    body: 15390,
+    supplement: 20000,
+  },
+  // 통수별 통당 인쇄 기본단가 (국2절/4×6 2절 매엽기 기준, 1도 기준)
+  passUnitPrices: [
+    { limit: 1000, price: 14.71 },
+    { limit: 2000, price: 13.50 },
+    { limit: 3000, price: 12.20 },
+    { limit: 5000, price: 11.00 },
+    { limit: 10000, price: 9.80 },
+    { limit: 99999999, price: 8.50 },
+  ],
+  // 제본단가 (무사무선 면당 기준단가)
+  bindingUnitPrice: {
+    perfect: 0.825, // 무사무선 면당
+    saddle: 0.650,  // 중철 면당
+    hardcover: 3.500,// 양장 면당
+    spring: 850,    // 스프링 부당
+  },
+  // 후가공 및 기타 단가
+  finishingUnitPrice: {
+    matteLami: 48000, // 무광 라미네이팅 (원/R)
+    glossLami: 42000, // 유광 라미네이팅 (원/R)
+    cutSingle: 15000, // 포스터/전단 기본 재단비 (원)
+    fold2: 12,        // 리플렛 2단 접지 (원/부)
+    fold3: 18,        // 리플렛 3단 접지 (원/부)
+    fold4: 24,        // 리플렛 4단 접지 (원/부)
+    foldGate: 30,     // 리플렛 대문/병풍접지 (원/부)
+    foldBase: 25000,  // 리플렛 기본 접지료 (원)
+  },
+  // 디지털 인쇄 출력단가
+  digitalUnitPrice: {
+    color: 120, // 원색(컬러) 장당 출력료 (원/장)
+    mono: 35,   // 흑백(단색) 장당 출력료 (원/장)
+  },
+  // 공공 법정 가산율 기본값
+  defaultManageRate: 5,   // 일반관리비율 5% (최대 14%)
+  defaultProfitRate: 10,  // 이윤율 10% (최대 25%)
+  defaultContractRate: 88,// 낙찰하한율/사정율 88%
+};
+
+export function getGovernmentMasterRates() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.GOV_STD_RATES);
+    if (!raw) return DEFAULT_GOVERNMENT_MASTER_RATES;
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? { ...DEFAULT_GOVERNMENT_MASTER_RATES, ...parsed } : DEFAULT_GOVERNMENT_MASTER_RATES;
+  } catch (e) {
+    return DEFAULT_GOVERNMENT_MASTER_RATES;
+  }
+}
+
+export function saveGovernmentMasterRates(newRates) {
+  localStorage.setItem(STORAGE_KEYS.GOV_STD_RATES, JSON.stringify(newRates));
+  return newRates;
+}
+
+export function resetGovernmentMasterRates() {
+  localStorage.removeItem(STORAGE_KEYS.GOV_STD_RATES);
+  return DEFAULT_GOVERNMENT_MASTER_RATES;
 }
 
 // ─── 엑셀 내보내기 ──────────────────────────────────────────

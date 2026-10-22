@@ -1,7 +1,7 @@
 // src/utils/printCalculators/multiPartCalculator.js
 /**
- * 인쇄원가 종합 계산 엔진 (표지 / 내지 / 화보 멀티파트 정밀 분리)
- * - 비피앤피(bp&p) / 갑우문화사 실무 견적 시스템 (kkch1012/PrintEstimate) 정밀 공식 완전 구현
+ * 사기업 인쇄원가 종합 계산 엔진 (표지 / 내지 / 화보 멀티파트 정밀 분리)
+ * - 사기업 6대 실무 공정 정밀 공식 완전 구현
  * - 6대 공정 카테고리: PREPRESS, PRINT, BINDING, FINISHING, PAPER, OTHER
  * - CTP 고정 단가(6,500원), 무선 실무 4종 산식(단본/2탑/날개/책속책), 댐지대, 용지대 포함/사급 토글, 후가공 정밀 단가, 편차율(%) 산출
  */
@@ -142,7 +142,7 @@ export function calculatePartCost({
     signatures = actualPages <= 4 ? 1 : Math.ceil(actualPages / 4);
   }
 
-  // 2. CTP 판수 및 제판비 계산 (PrintEstimate 공식: 대수 × 판수(1) × 색도 × 6,500원)
+  // 2. CTP 판수 및 제판비 계산 (실무 공식: 대수 × 판수(1) × 색도 × 6,500원)
   // ★ 디지털 인쇄는 무판 인쇄이므로 CTP 0원!
   const effectiveColors = Number(colorCount) || (isDoubleSided ? 8 : 4);
   const totalPlates = isDigital ? 0 : Math.max(1, Math.round(signatures * effectiveColors));
@@ -346,7 +346,7 @@ export function calculateFullCost({
     });
   }
 
-  // ── 2. 제본비 계산 (비피앤피 / 갑우문화사 실무 4종 산식) ──
+  // ── 2. 제본비 계산 (실무 4종 산식: 단본/2탑/날개/책속책) ──
   const bindingType = general.bindingType || '무선제본';
   const bindingDetailType = general.bindingDetailType || (
     bindingType.includes('2탑') ? '무선 2탑 제본' :
@@ -440,7 +440,7 @@ export function calculateFullCost({
   const hasDamji = general.hasDamji || options.hasDamji || false;
   const damjiCost = hasDamji ? calculateDamjiCost(qty) : 0;
 
-  // ── 3. 후가공비 계산 (비피앤피 / 갑우문화사 실제 단가 반영) ──
+  // ── 3. 후가공비 계산 (실무 실제 단가 반영) ──
   // 표지 코팅
   let coatingCost = 0;
   let coatingFormula = '';
@@ -494,14 +494,14 @@ export function calculateFullCost({
 
   const totalFinishingCost = coatingCost + holoFoilCost + hotFoilCost + dieCost + copperCost + resinCost + thomsonCost + epoxyCost + minipillarCost;
 
-  // ── 4. 기타 및 운송비 (비피앤피 실제 기준) ──
+  // ── 4. 기타 및 운송비 (실무 표준 기준) ──
   const deliveryCost = Number(extra.deliveryCost ?? 50000);
   const packagingCost = Number(extra.packagingCost ?? (Math.ceil(qty / 50) * 1000));
   const hasStickerMerge = options.hasStickerMerge || false;
   const stickerMergeCost = hasStickerMerge ? Math.round(qty * 10) : 0;
   const discountOrAdd = Number(extra.discountOrAdd || 0);
 
-  // ── 5. 6대 공정 섹션별 명세 리스트 빌드 (PrintEstimate 구조) ──
+  // ── 5. 6대 공정 섹션별 명세 리스트 빌드 (6대 공정 체계) ──
 
   // 1) 기획/제판 (PREPRESS)
   const isDigital = printType === '디지털인쇄';

@@ -13,7 +13,8 @@ import {
   getMasterPapers,
   saveEstimate,
   createEstimateVersion,
-  exportEstimateDetailToExcel
+  exportEstimateDetailToExcel,
+  getGovernmentMasterRates,
 } from '../../services/printEstimateStorage';
 import {
   calculateFullCost,
@@ -31,14 +32,15 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
   const { customers, contacts, addJobOrder, addSales } = useData();
   const { user } = useGoogleAuth();
   const [papers] = useState(() => getMasterPapers());
+  const [govMasterRates] = useState(() => getGovernmentMasterRates());
 
-  // ── 0. 계산 모드 분리 ('COMMERCIAL' 사기업 실무 vs 'GOVERNMENT' 조달청 공공 표준원가) ──
-  const [costingMode, setCostingMode] = useState(initialEstimate?.costingMode || 'COMMERCIAL');
+  // ── 0. 견적 모드 (기본: 'GOVERNMENT' 조달·공공기관 표준인쇄원가, 필요시 'COMMERCIAL' 사기업 실무견적) ──
+  const [costingMode, setCostingMode] = useState(initialEstimate?.costingMode || 'GOVERNMENT');
 
-  // 조달·공공 표준 원가 법정 가산율
-  const [manageRate, setManageRate] = useState(initialEstimate?.manageRate ?? GOVERNMENT_STD_RATES.defaultManageRate); // 기본 5%
-  const [profitRate, setProfitRate] = useState(initialEstimate?.profitRate ?? GOVERNMENT_STD_RATES.defaultProfitRate); // 기본 10%
-  const [contractRate, setContractRate] = useState(initialEstimate?.contractRate ?? GOVERNMENT_STD_RATES.defaultContractRate); // 기본 88%
+  // 조달·공공 표준 원가 법정 가산율 (단가 마스터 연동)
+  const [manageRate, setManageRate] = useState(initialEstimate?.manageRate ?? govMasterRates?.defaultManageRate ?? 5);
+  const [profitRate, setProfitRate] = useState(initialEstimate?.profitRate ?? govMasterRates?.defaultProfitRate ?? 10);
+  const [contractRate, setContractRate] = useState(initialEstimate?.contractRate ?? govMasterRates?.defaultContractRate ?? 88);
   const [showGovPrintModal, setShowGovPrintModal] = useState(false);
 
   // ── 1. 기본 선택 정보 ──
@@ -66,10 +68,10 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
   const [quantity, setQuantity] = useState(initialEstimate?.quantity || 1000);
   const [paperCut, setPaperCut] = useState(initialEstimate?.paperCut || '국배판(A4)');
 
-  // 용지대 포함 여부 (kkch1012/PrintEstimate includePaper 플래그: true면 자사 구입, false면 거래처 입고/사급)
+  // 용지대 포함 여부 (includePaper 플래그: true면 자사 구입, false면 거래처 입고/사급)
   const [includePaper, setIncludePaper] = useState(initialEstimate?.includePaper ?? true);
 
-  // 제본 방식 상세 (PrintEstimate 4종 무선 산식: 무선단본, 무선 2탑, 무선날개, 책속책, 중철, 양장, 스프링)
+  // 제본 방식 상세 (4종 무선 산식: 무선단본, 무선 2탑, 무선날개, 책속책, 중철, 양장, 스프링)
   const [bindingType, setBindingType] = useState(initialEstimate?.bindingType || '무선제본');
   const [bindingDetailType, setBindingDetailType] = useState(
     initialEstimate?.bindingDetailType ||
@@ -96,7 +98,7 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
   const [bindingCoefficient, setBindingCoefficient] = useState(initialEstimate?.bindingCoefficient ?? 0.8);
   const [bindingBasePrice, setBindingBasePrice] = useState(initialEstimate?.bindingBasePrice ?? 130);
 
-  // ── 3. 후가공 옵션 체크박스 및 단가 (PrintEstimate 비피앤피/갑우문화사 실무단가 기준) ──
+  // ── 3. 후가공 옵션 체크박스 및 단가 (실무 기준 단가) ──
   const [hasCoating, setHasCoating] = useState(initialEstimate?.hasCoating ?? true);
   const [coatingType, setCoatingType] = useState(initialEstimate?.coatingType || '무광코팅');
 
@@ -374,7 +376,7 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
     (bindingDetailType === '무선 2탑 제본' ? body2Pages : 0) +
     (bindingDetailType === '책속책제본' ? innerBodyPages : 0);
 
-  // ── 🏢 사기업 실무 견적 정밀 계산 엔진 (PrintEstimate 6대 공정) ──
+  // ── 🏢 사기업 실무 견적 정밀 계산 엔진 (6대 공정) ──
   const costReport = useMemo(() => {
     return calculateFullCost({
       general: {
@@ -545,6 +547,7 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
         manageRate,
         profitRate,
         contractRate,
+        masterRates: govMasterRates,
       },
     });
   }, [
@@ -553,7 +556,7 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
     bodyPages, bodyBlankPages, bodyTypesetPages, bodyTypesetRate, bodyColor, bodySide, bodyUnitPrice, bodyWeight,
     hasSupplement, suppPages, suppColor, suppSide, suppUnitPrice, suppWeight,
     hasCoating, coatingType, isBetaPrint, isSpotColor, hasHotFoil, hasHoloFoil, hotFoilBasePrice, hotFoilUnitPrice, hasDie, hasThomson,
-    manageRate, profitRate, contractRate
+    manageRate, profitRate, contractRate, govMasterRates
   ]);
 
   function hotFoilCostEstimate(base, perUnit, q, holo) {
@@ -838,57 +841,149 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
         </div>
       )}
 
-      {/* ── 계산 모드 선택 스위처 (사기업 실무 vs 공공·조달 표준원가) ── */}
-      <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
-          <div className="flex items-center space-x-2">
-            <span className="text-xs font-black text-slate-500 uppercase tracking-wider">인쇄 견적 계산 엔진 분리</span>
-            <span className={`px-2.5 py-0.5 rounded-full text-xs font-black ${
-              costingMode === 'GOVERNMENT'
-                ? 'bg-teal-100 text-teal-800 ring-1 ring-teal-300'
-                : 'bg-blue-100 text-blue-800 ring-1 ring-blue-300'
-            }`}>
-              {costingMode === 'GOVERNMENT' ? '🏛️ 조달청 공공 표준원가 모드 활성' : '🏢 사기업 실무 견적 모드 활성'}
-            </span>
+      {/* ── 최상단 헤더 바 & 견적 모드 전환 탭 ── */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm">
+        <div className="flex items-center space-x-3">
+          {onBack && (
+            <button
+              onClick={onBack}
+              className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition"
+              title="목록으로 이동"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+          )}
+          <div>
+            <h2 className="text-lg font-black text-slate-900 tracking-tight">
+              인쇄 견적서 작성
+            </h2>
+            <div className="flex items-center space-x-2 mt-1">
+              <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${
+                costingMode === 'GOVERNMENT'
+                  ? 'bg-teal-100 text-teal-800 border border-teal-200'
+                  : 'bg-blue-100 text-blue-800 border border-blue-200'
+              }`}>
+                {costingMode === 'GOVERNMENT' ? '국가계약법 14단계 표준원가' : '사기업 6대 실무 공정'}
+              </span>
+              <span className="text-xs text-slate-400 font-mono">
+                {estimateNo || '신규 견적'}
+              </span>
+            </div>
           </div>
-          <p className="text-xs text-slate-600 mt-1">
-            {costingMode === 'GOVERNMENT'
-              ? '국가계약법 시행규칙 제6조 및 조달청 공인 기준 14단계 표준 원가계산 (일반관리비 5%, 법정이윤 10%, 낙찰하한율 88%, 원가계산서/규격서 공문서 출력)'
-              : '비피앤피 / 갑우문화사 6대 실무 공정(CTP 6,500원, 실무 4종 무선산식, 댐지대, 용지대 사급/포함 토글, 후가공 세부 단가) 기반 견적서 산출'}
-          </p>
         </div>
 
-        {/* 모드 전환 토글 탭 */}
-        <div className="flex items-center bg-slate-100 p-1.5 rounded-2xl self-start md:self-auto border border-slate-200">
+        {/* ── 견적 모드 전환 토글 (조달·공공 표준 기본) ── */}
+        <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 self-start md:self-auto">
           <button
             type="button"
-            onClick={() => setCostingMode('COMMERCIAL')}
-            className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl text-xs font-black transition-all ${
-              costingMode === 'COMMERCIAL'
-                ? 'bg-white text-blue-700 shadow-md ring-1 ring-blue-200'
-                : 'text-slate-600 hover:text-slate-900'
+            onClick={() => setCostingMode('GOVERNMENT')}
+            className={`flex items-center space-x-1.5 px-3.5 py-2 rounded-lg text-xs transition ${
+              costingMode === 'GOVERNMENT'
+                ? 'bg-teal-700 text-white shadow-sm font-black'
+                : 'text-slate-600 hover:text-slate-900 font-bold'
             }`}
           >
-            <Building2 className="w-4 h-4 text-blue-600" />
-            <span>🏢 사기업 실무견적 (PrintEstimate)</span>
+            <ShieldCheck className="w-4 h-4" />
+            <span>조달·공공기관 표준인쇄원가 (기본)</span>
           </button>
 
           <button
             type="button"
-            onClick={() => setCostingMode('GOVERNMENT')}
-            className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl text-xs font-black transition-all ${
-              costingMode === 'GOVERNMENT'
-                ? 'bg-teal-600 text-white shadow-md ring-1 ring-teal-700'
-                : 'text-slate-600 hover:text-slate-900'
+            onClick={() => setCostingMode('COMMERCIAL')}
+            className={`flex items-center space-x-1.5 px-3.5 py-2 rounded-lg text-xs transition ${
+              costingMode === 'COMMERCIAL'
+                ? 'bg-blue-600 text-white shadow-sm font-black'
+                : 'text-slate-600 hover:text-slate-900 font-bold'
             }`}
           >
-            <ShieldCheck className="w-4 h-4 text-teal-200" />
-            <span>🏛️ 조달청 공공 표준원가 (공공기관)</span>
+            <Building2 className="w-4 h-4" />
+            <span>사기업 실무견적</span>
+          </button>
+        </div>
+
+        {/* 액션 버튼 */}
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => exportEstimateDetailToExcel({
+              estimateNo, clientName, contactName, productName, quantity, unit: '부',
+              sizeWidth: 0, sizeHeight: 0, paperCut, pages: totalPages,
+              colors: `표지 ${coverColor} / 본문 ${bodyColor}`, bindingType: bindingDetailType,
+              paperType: includePaper ? `표지: ${coverPaperName} / 본문: ${bodyPaperName}` : `거래처 사급/입고 (0원)`,
+              subtotal: activeSubtotal, vat: activeVat, totalAmount: activeTotalAmount, unitPrice: activeUnitPrice,
+              items: costReport.allItems, notes
+            })}
+            className="flex items-center space-x-1.5 px-3 py-2 text-xs font-bold rounded-xl border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition shadow-sm"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>엑셀</span>
+          </button>
+
+          {costingMode === 'GOVERNMENT' ? (
+            <button
+              type="button"
+              onClick={() => setShowGovPrintModal(true)}
+              className="flex items-center space-x-1.5 px-3 py-2 text-xs font-black rounded-xl bg-teal-700 hover:bg-teal-800 text-white transition shadow-sm"
+            >
+              <FileText className="w-3.5 h-3.5" />
+              <span>공공 원가계산서/규격서 인쇄</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowPrintModal(true)}
+              className="flex items-center space-x-1.5 px-3 py-2 text-xs font-black rounded-xl bg-slate-800 hover:bg-slate-900 text-white transition shadow-sm"
+            >
+              <Printer className="w-3.5 h-3.5" />
+              <span>실무 견적서 인쇄</span>
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={handleConvertToJobOrder}
+            className="flex items-center space-x-1 px-3 py-2 text-xs font-bold rounded-xl border border-indigo-300 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition shadow-sm"
+          >
+            <FileCheck2 className="w-3.5 h-3.5" />
+            <span>작업전표 등록</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleConvertToSale}
+            className="flex items-center space-x-1 px-3 py-2 text-xs font-bold rounded-xl border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition shadow-sm"
+          >
+            <ShoppingCart className="w-3.5 h-3.5" />
+            <span>매출 등록</span>
+          </button>
+
+          {initialEstimate?.id && (
+            <button
+              type="button"
+              onClick={() => {
+                setSaveAsNewVersion(true);
+                setTimeout(() => handleSave(), 50);
+              }}
+              className="flex items-center space-x-1.5 px-3 py-2 text-xs font-black rounded-xl border border-sky-300 bg-sky-50 text-sky-800 hover:bg-sky-100 transition shadow-sm"
+              title="새로운 버전(차수)으로 분기 저장"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>차수 분기 저장</span>
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={handleSave}
+            className="flex items-center space-x-1.5 px-4 py-2 text-xs font-black rounded-xl bg-sky-600 hover:bg-sky-700 text-white transition shadow-sm"
+          >
+            <Save className="w-3.5 h-3.5" />
+            <span>견적서 저장</span>
           </button>
         </div>
       </div>
 
-      {/* ── 🏛️ 조달·공공 표준 원가 법정 가산율 패널 (공공기관 모드 활성화 시 표시) ── */}
+      {/* ── 🏛️ 조달·공공기관 표준 원가 법정 가산율 패널 (공공기관 모드 활성화 시 표시) ── */}
       {costingMode === 'GOVERNMENT' && (
         <div className="bg-gradient-to-r from-teal-50 via-teal-50/70 to-emerald-50 rounded-2xl border-2 border-teal-300 p-5 space-y-4 shadow-sm animate-in fade-in">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-3 border-b border-teal-200 gap-2">
@@ -995,97 +1090,6 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
           </div>
         </div>
       )}
-
-      {/* 헤더 바 */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-        <div className="flex items-center space-x-3">
-          {onBack && (
-            <button
-              onClick={onBack}
-              className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition"
-              title="목록으로 이동"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </button>
-          )}
-          <div>
-            <div className="flex items-center space-x-2">
-              <h2 className="text-lg font-black text-slate-900 tracking-tight">
-                인쇄 견적서 작성 ({costingMode === 'GOVERNMENT' ? '🏛️ 조달청 공공 표준원가' : '🏢 사기업 실무견적'})
-              </h2>
-              <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
-                costingMode === 'GOVERNMENT'
-                  ? 'bg-teal-100 text-teal-800'
-                  : 'bg-sky-100 text-sky-800'
-              }`}>
-                {costingMode === 'GOVERNMENT' ? '조달청 공인 14단계 원가' : '비피앤피/갑우문화사 6대 실무공정'}
-              </span>
-            </div>
-            <p className="text-xs text-slate-500 mt-0.5">
-              {costingMode === 'GOVERNMENT'
-                ? '국가계약법 시행규칙 제6조 및 조달청 인쇄요금 공인 표준원가에 의한 공식 산출'
-                : 'CTP 판당 6,500원 고정, 무선 실무 4종 산식, 댐지대, 용지대 사급/포함 토글, 후가공 세부 단가 적용'}
-            </p>
-          </div>
-        </div>
-
-        {/* 액션 버튼 */}
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => exportEstimateDetailToExcel({
-              estimateNo, clientName, contactName, productName, quantity, unit: '부',
-              sizeWidth: 0, sizeHeight: 0, paperCut, pages: totalPages,
-              colors: `표지 ${coverColor} / 본문 ${bodyColor}`, bindingType: bindingDetailType,
-              paperType: includePaper ? `표지: ${coverPaperName} / 본문: ${bodyPaperName}` : `거래처 사급/입고 (0원)`,
-              subtotal: activeSubtotal, vat: activeVat, totalAmount: activeTotalAmount, unitPrice: activeUnitPrice,
-              items: costReport.allItems, notes
-            })}
-            className="flex items-center space-x-1 px-3 py-2 text-xs font-bold rounded-xl border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition shadow-sm"
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span>엑셀</span>
-          </button>
-
-          {costingMode === 'GOVERNMENT' ? (
-            <button
-              type="button"
-              onClick={() => setShowGovPrintModal(true)}
-              className="flex items-center space-x-1.5 px-3 py-2 text-xs font-bold rounded-xl border border-teal-300 bg-teal-50 text-teal-800 hover:bg-teal-100 transition shadow-sm"
-            >
-              <FileText className="w-3.5 h-3.5 text-teal-700" />
-              <span>공공 원가계산서/규격서</span>
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setShowPrintModal(true)}
-              className="flex items-center space-x-1 px-3 py-2 text-xs font-bold rounded-xl border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 transition shadow-sm"
-            >
-              <Printer className="w-3.5 h-3.5" />
-              <span>A4 견적서 인쇄</span>
-            </button>
-          )}
-
-          <button
-            type="button"
-            onClick={handleConvertToJobOrder}
-            className="flex items-center space-x-1 px-3 py-2 text-xs font-bold rounded-xl border border-indigo-300 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition shadow-sm"
-          >
-            <FileCheck2 className="w-3.5 h-3.5" />
-            <span>작업전표 등록</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={handleConvertToSale}
-            className="flex items-center space-x-1 px-3 py-2 text-xs font-bold rounded-xl border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition shadow-sm"
-          >
-            <ShoppingCart className="w-3.5 h-3.5" />
-            <span>매출 등록</span>
-          </button>
-        </div>
-      </div>
 
       {/* ── 1. 기본 선택 정보 ── */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
@@ -1313,14 +1317,18 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
         </div>
       </div>
 
-      {/* ── 2. 규격 및 실무 공정 핵심 옵션 (PrintEstimate 정밀 반영) ── */}
+      {/* ── 2. 규격 및 실무 공정 핵심 옵션 ── */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
         <div className="text-xs font-black text-slate-800 uppercase tracking-wider pb-2 border-b border-slate-100 flex items-center justify-between">
           <span className="flex items-center space-x-2">
             <span className="w-2.5 h-2.5 rounded-full bg-indigo-600"></span>
-            <span>규격 및 실무 공정 선택 (PrintEstimate 기준)</span>
+            <span>
+              {costingMode === 'GOVERNMENT'
+                ? '규격 및 공공 표준 공정 선택 (조달청 기준)'
+                : '규격 및 실무 공정 선택'}
+            </span>
           </span>
-          {/* 용지대 포함/사급 토글 스위치 (PrintEstimate includePaper 플래그) */}
+          {/* 용지대 포함/사급 토글 스위치 */}
           <label className="flex items-center space-x-2 cursor-pointer bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-300 hover:bg-sky-50 transition">
             <input
               type="checkbox"
@@ -1599,7 +1607,7 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
           )}
         </div>
 
-        {/* ── 후가공 세부 옵션 체크리스트 (PrintEstimate 단가표 반영) ── */}
+        {/* ── 후가공 세부 옵션 체크리스트 ── */}
         <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2.5 text-xs">
           <div className="font-bold text-slate-700 flex items-center justify-between pb-1 border-b border-slate-200">
             <span className="flex items-center space-x-1">
@@ -2276,13 +2284,13 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
             <span>
               {costingMode === 'GOVERNMENT'
                 ? '■ 🏛️ 조달청 공공 표준 인쇄원가 14단계 법정 산출 상세표'
-                : '■ 🏢 사기업 6대 실무 공정별 원가 명세 (PrintEstimate)'}
+                : '■ 🏢 사기업 6대 실무 공정별 원가 명세'}
             </span>
           </span>
           <span className="text-[11px] font-normal text-slate-500">
             {costingMode === 'GOVERNMENT'
               ? '국가를 당사자로 하는 계약에 관한 법률 시행규칙 제6조 적용'
-              : '비피앤피 / 갑우문화사 실무 견적 공식 & 편차율 분석'}
+              : '사기업 실무 견적 공식 및 세부 내역'}
           </span>
         </div>
 
@@ -2454,7 +2462,7 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
             </table>
           </div>
         ) : (
-          /* 🏢 사기업 실무 견적: 6대 공정별 아코디언 / 테이블 카드 (PrintEstimate 구조) */
+          /* 🏢 사기업 실무 견적: 6대 공정별 아코디언 / 테이블 카드 */
           <div className="space-y-4">
             {Object.entries(costReport.sections).map(([secKey, section]) => {
               if (secKey === 'paper' && !includePaper) {

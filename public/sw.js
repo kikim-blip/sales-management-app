@@ -1,5 +1,5 @@
 // public/sw.js
-const CACHE_NAME = 'sales-pwa-v11-pure-procurement-costing-dynamic';
+const CACHE_NAME = 'sales-pwa-v12-procurement-master-unified';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
