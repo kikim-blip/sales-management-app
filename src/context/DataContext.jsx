@@ -156,7 +156,59 @@ export function DataProvider({ children }) {
         saveCache('payments', cleanPay);
       }
       if (Array.isArray(data.jobOrders)) {
-        const cleanJobs = deduplicateById(data.jobOrders);
+        const rawJobs = deduplicateById(data.jobOrders);
+        const cleanJobs = rawJobs.map(job => {
+          const codeNo = job.code_number || job.id;
+          
+          // 로컬 드래프트 확인
+          let localDraft = null;
+          try {
+            const savedDraft = localStorage.getItem(`estimate_draft_${codeNo}`);
+            if (savedDraft) localDraft = JSON.parse(savedDraft);
+          } catch (_) {}
+
+          // 💡 44-261022-3390 (자원순환기본계획) 건 특별 무결성 보정
+          if (codeNo === '44-261022-3390' || (job.title && job.title.includes('자원순환기본계획'))) {
+            const restoredContact = (job.client_contact_person === '정소영 주무관' || !job.client_contact_person)
+              ? '박윤균 주무관'
+              : job.client_contact_person;
+            const restoredPhone = (job.client_contact_person === '정소영 주무관' || !job.client_phone)
+              ? '010-5622-3779'
+              : job.client_phone;
+
+            const targetItems = (job.estimate_items && job.estimate_items !== '[]')
+              ? job.estimate_items
+              : (localDraft?.items || [
+                  { id: 'item-1', name: '내지(출력/칼라)', spec: 'A4', pages: 128, quantity: 10, unit: '부', unit_price: 300, amount: 384000, note: '' },
+                  { id: 'item-2', name: '제본(무선제본)', spec: 'A4', pages: 1, quantity: 10, unit: '부', unit_price: 4000, amount: 40000, note: '' }
+                ]);
+
+            return {
+              ...job,
+              client_contact_person: restoredContact,
+              client_phone: restoredPhone,
+              estimate_items: typeof targetItems === 'string' ? targetItems : JSON.stringify(targetItems),
+              discount_unit: job.discount_unit !== undefined ? job.discount_unit : (localDraft?.discountUnit || 10000),
+              supply_price: job.supply_price || 420000,
+              tax: job.tax || 42000,
+              total_price: job.total_price || 462000,
+            };
+          }
+
+          // 일반 작업전표: 로컬 캐시/드래프트의 견적 품목 보존
+          if (!job.estimate_items && localDraft?.items) {
+            return {
+              ...job,
+              estimate_items: JSON.stringify(localDraft.items),
+              estimate_type: localDraft.estimateType || job.estimate_type || 'print',
+              supplier_id: localDraft.supplierId || job.supplier_id || 1,
+              discount_unit: localDraft.discountUnit !== undefined ? localDraft.discountUnit : job.discount_unit,
+            };
+          }
+
+          return job;
+        });
+
         if (cleanJobs.length > 0) {
           localStorage.removeItem('d1_cache_jobOrders');
         }
@@ -311,6 +363,30 @@ export function DataProvider({ children }) {
 
   const updateJobOrder = async (codeNo, updatedOrder) => {
     let fullMergedOrder = { code_number: codeNo, ...updatedOrder, _localUpdated: Date.now() };
+
+    // 견적서 품목이 포함되어 있다면 영구 로컬 드래프트에도 즉시 동기화
+    if (updatedOrder.estimate_items) {
+      try {
+        let parsed = updatedOrder.estimate_items;
+        if (typeof parsed === 'string') parsed = JSON.parse(parsed);
+        const draftObj = {
+          items: parsed,
+          estimateType: updatedOrder.estimate_type || 'print',
+          supplierId: updatedOrder.supplier_id || 1,
+          discountUnit: updatedOrder.discount_unit,
+          customSupplyPrice: updatedOrder.custom_supply_price,
+          estimateDate: updatedOrder.estimate_date,
+          validDays: updatedOrder.valid_days,
+          paymentTerms: updatedOrder.payment_terms,
+          estimateNote: updatedOrder.estimate_note,
+          contactPerson: updatedOrder.client_contact_person || updatedOrder.contact_person,
+          contactPhone: updatedOrder.client_phone || updatedOrder.phone,
+          showContactPerson: updatedOrder.show_contact_person !== undefined ? updatedOrder.show_contact_person : !updatedOrder.hide_contact_person,
+          updatedAt: Date.now(),
+        };
+        localStorage.setItem(`estimate_draft_${codeNo}`, JSON.stringify(draftObj));
+      } catch (_) {}
+    }
 
     // 1. 로컬 즉시 반영 (optimistic update)
     setJobOrders(prev => {

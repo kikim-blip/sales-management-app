@@ -24,7 +24,46 @@ function error(message, status = 400) {
   });
 }
 
+async function ensureSchemaUpgrades(db) {
+  const jobOrderCols = [
+    ["estimate_items", "TEXT DEFAULT '[]'"],
+    ["estimate_date", "TEXT DEFAULT ''"],
+    ["estimate_type", "TEXT DEFAULT 'print'"],
+    ["valid_days", "TEXT DEFAULT ''"],
+    ["payment_terms", "TEXT DEFAULT ''"],
+    ["estimate_note", "TEXT DEFAULT ''"],
+    ["supplier_id", "INTEGER DEFAULT 1"],
+    ["discount_unit", "TEXT DEFAULT '0'"],
+    ["discount_amount", "REAL DEFAULT 0"],
+    ["custom_supply_price", "REAL DEFAULT NULL"],
+    ["supply_price", "REAL DEFAULT 0"],
+    ["tax", "REAL DEFAULT 0"],
+    ["total_price", "REAL DEFAULT 0"],
+    ["hide_contact_person", "INTEGER DEFAULT 0"],
+  ];
+  for (const [col, type] of jobOrderCols) {
+    try {
+      await db.prepare(`ALTER TABLE job_orders ADD COLUMN ${col} ${type}`).run();
+    } catch (_) {}
+  }
+
+  const salesCols = [
+    ["supplier_id", "INTEGER DEFAULT 1"],
+    ["discount_unit", "TEXT DEFAULT '0'"],
+    ["discount_amount", "REAL DEFAULT 0"],
+    ["custom_supply_price", "REAL DEFAULT NULL"],
+    ["hide_contact_person", "INTEGER DEFAULT 0"],
+  ];
+  for (const [col, type] of salesCols) {
+    try {
+      await db.prepare(`ALTER TABLE sales ADD COLUMN ${col} ${type}`).run();
+    } catch (_) {}
+  }
+}
+
 async function ensureInitialData(db) {
+  await ensureSchemaUpgrades(db);
+
   // 부서/팀 기본 데이터만 확인 (사용자 데이터는 앱에서 직접 입력)
   const counts = await db.prepare(`
     SELECT
@@ -443,6 +482,38 @@ async function updateJobOrder(db, id, request) {
          merged.cover_related||'', merged.inner_related||'', merged.request_note||'',
          merged.editor_name||'', merged.designer_name||'',
          merged.status||'의뢰접수', id, id).run();
+
+  // 견적서 관련 컬럼 안전 업데이트
+  if (merged.estimate_items !== undefined || merged.supply_price !== undefined || merged.total_price !== undefined || merged.hide_contact_person !== undefined) {
+    try {
+      await db.prepare(
+        `UPDATE job_orders SET
+         estimate_items=?, estimate_date=?, estimate_type=?, valid_days=?, payment_terms=?,
+         estimate_note=?, supplier_id=?, discount_unit=?, discount_amount=?, custom_supply_price=?,
+         supply_price=?, tax=?, total_price=?, hide_contact_person=?
+         WHERE id=? OR code_number=?`
+      ).bind(
+        typeof merged.estimate_items === 'string' ? merged.estimate_items : JSON.stringify(merged.estimate_items || []),
+        merged.estimate_date || '',
+        merged.estimate_type || 'print',
+        merged.valid_days || '',
+        merged.payment_terms || '',
+        merged.estimate_note || '',
+        merged.supplier_id || 1,
+        merged.discount_unit !== undefined ? String(merged.discount_unit) : '0',
+        merged.discount_amount || 0,
+        merged.custom_supply_price || null,
+        merged.supply_price || 0,
+        merged.tax || 0,
+        merged.total_price || 0,
+        merged.hide_contact_person ? 1 : 0,
+        id, id
+      ).run();
+    } catch (_) {
+      // 컬럼 미존재 시 무시
+    }
+  }
+
   const row = await db.prepare('SELECT * FROM job_orders WHERE id = ? OR code_number = ?').bind(id, id).first();
   return json(row);
 }

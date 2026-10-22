@@ -190,11 +190,15 @@ export default function QuotePrintModal({ quote, customer, onClose }) {
       XLSX.writeFile(workbook, fileName);
     } else {
       const fileName = `견적서_${currentSupplier.shortName}_${custName}_${quote.title}_${today}.xlsx`;
+      const shouldShowContact = quote.hide_contact_person ? false : (quote.show_contact_person !== undefined ? quote.show_contact_person : true);
+      const explicitContact = quote.client_contact_person !== undefined ? quote.client_contact_person : quote.contact_person;
+      const finalContactForPrint = shouldShowContact ? (explicitContact !== undefined ? (explicitContact || '-') : (customer?.contact_person || '-')) : '-';
+
       const rows = [
         ['견  적  서', '', '', '', '', '', ''],
         [],
         [`${custName} ${custDept}`.trim(), '貴中', '', currentSupplier.name, '', `사업자번호: ${currentSupplier.bizNum} / 대표: ${currentSupplier.ceo}`],
-        ['담당자', quote.client_contact_person || quote.contact_person || customer?.contact_person || '-', '', '주소', '', currentSupplier.address],
+        ['담당자', finalContactForPrint, '', '주소', '', currentSupplier.address],
         ['작성자', currentSupplier.contactPerson || managerName, '', '전화/팩스', '', `전화: ${currentSupplier.phone} / 팩스: ${currentSupplier.fax}`],
         ['작성일', todayKorean, '', 'e-mail', '', currentSupplier.email],
         ['품  명', quote.title || '-', '', '', '', ''],

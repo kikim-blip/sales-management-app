@@ -14,7 +14,9 @@ export default function TemplateTheSeoul({
   logoImage,
 }) {
   const custName = customer?.name || quote.customer_name || '거래처';
-  const custContact = quote.client_contact_person || quote.contact_person || customer?.contact_person || '사업총괄팀 귀중';
+  const shouldShowContact = quote.hide_contact_person ? false : (quote.show_contact_person !== undefined ? quote.show_contact_person : true);
+  const explicitContact = quote.client_contact_person !== undefined ? quote.client_contact_person : quote.contact_person;
+  const custContact = shouldShowContact ? (explicitContact !== undefined ? explicitContact : (customer?.contact_person || '')) : '';
   const { items, supplyPrice, taxPrice, totalPrice, koreanTotalPrice } = calcData;
 
   return (
@@ -46,10 +48,12 @@ export default function TemplateTheSeoul({
             <span className="w-24 text-slate-500 font-semibold">Client/거래처 :</span>
             <span className="font-bold text-slate-900 text-sm">{custName}</span>
           </div>
-          <div className="flex">
-            <span className="w-24 text-slate-500 font-semibold">담당자 &nbsp; &nbsp; :</span>
-            <span className="font-semibold text-slate-800">{custContact}</span>
-          </div>
+          {shouldShowContact && custContact ? (
+            <div className="flex">
+              <span className="w-24 text-slate-500 font-semibold">담당자 &nbsp; &nbsp; :</span>
+              <span className="font-semibold text-slate-800">{custContact}</span>
+            </div>
+          ) : null}
           <div className="flex">
             <span className="w-24 text-slate-500 font-semibold">Date/날짜 &nbsp; &nbsp; :</span>
             <span className="font-semibold text-slate-700">{todayKorean}</span>

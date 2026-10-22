@@ -14,7 +14,9 @@ export default function TemplateHappyTree({
   logoImage,
 }) {
   const custName = customer?.name || quote.customer_name || '거래처';
-  const custContact = quote.client_contact_person || quote.contact_person || customer?.contact_person || '사업총괄팀 귀중';
+  const shouldShowContact = quote.hide_contact_person ? false : (quote.show_contact_person !== undefined ? quote.show_contact_person : true);
+  const explicitContact = quote.client_contact_person !== undefined ? quote.client_contact_person : quote.contact_person;
+  const custContact = shouldShowContact ? (explicitContact !== undefined ? explicitContact : (customer?.contact_person || '')) : '';
   const { items, supplyPrice, taxPrice, totalPrice, koreanTotalPrice } = calcData;
 
   return (
@@ -53,7 +55,9 @@ export default function TemplateHappyTree({
             <span className="text-sm font-bold text-slate-700">貴中</span>
           </div>
           <div className="text-[11px] text-slate-600 space-y-0.5 pt-1">
-            <p><span className="w-16 inline-block font-semibold text-slate-500">담당자 :</span> {custContact}</p>
+            {shouldShowContact && custContact ? (
+              <p><span className="w-16 inline-block font-semibold text-slate-500">담당자 :</span> {custContact}</p>
+            ) : null}
             <p><span className="w-16 inline-block font-semibold text-slate-500">작성일 :</span> {todayKorean}</p>
             <p><span className="w-16 inline-block font-semibold text-slate-500">품 &nbsp; 명 :</span> <strong className="text-slate-900">{quote.title}</strong></p>
           </div>

@@ -15,8 +15,11 @@ export default function TemplateKyungsung({
 }) {
   const custName = customer?.name || quote.customer_name || '거래처';
   const custDept = quote.dept || customer?.dept || '';
-  const custContact = quote.client_contact_person || quote.contact_person || customer?.contact_person || '';
-  const custPhone = quote.client_phone || quote.phone || customer?.phone || customer?.mobile || '';
+
+  const shouldShowContact = quote.hide_contact_person ? false : (quote.show_contact_person !== undefined ? quote.show_contact_person : true);
+  const explicitContact = quote.client_contact_person !== undefined ? quote.client_contact_person : quote.contact_person;
+  const custContact = shouldShowContact ? (explicitContact !== undefined ? explicitContact : (customer?.contact_person || '')) : '';
+  const custPhone = shouldShowContact ? (quote.client_phone || quote.phone || (explicitContact !== undefined ? '' : (customer?.phone || customer?.mobile || ''))) : '';
 
   const { items, supplyPrice, taxPrice, totalPrice, koreanTotalPrice } = calcData;
   const isPrintTemplate = items.some(it => it.pages && Number(it.pages) > 0);
@@ -70,7 +73,9 @@ export default function TemplateKyungsung({
           </div>
 
           <div className="border-t border-slate-300 pt-2 space-y-1 text-[11px] text-slate-700">
-            <div className="flex"><span className="w-14 text-slate-500 font-semibold">담당자:</span> <span className="font-bold">{custContact || '-'} {custPhone ? `(${custPhone})` : ''}</span></div>
+            {shouldShowContact && custContact ? (
+              <div className="flex"><span className="w-14 text-slate-500 font-semibold">담당자:</span> <span className="font-bold">{custContact} {custPhone ? `(${custPhone})` : ''}</span></div>
+            ) : null}
             <div className="flex"><span className="w-14 text-slate-500 font-semibold">작성자:</span> <span className="font-bold text-sky-900">{managerName}</span></div>
             <div className="flex"><span className="w-14 text-slate-500 font-semibold">작성일:</span> <span className="font-semibold">{todayKorean}</span></div>
           </div>

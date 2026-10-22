@@ -12,13 +12,26 @@ export default function EstimateModal({ sale, customer, onClose, onSave, onPrint
 
   const todayStr = getLocalDateStr();
 
+  const draftKey = `estimate_draft_${sale.code_number || sale.id}`;
+  const isTargetSpecialOrder = sale.code_number === '44-261022-3390' || (sale.title && sale.title.includes('자원순환기본계획'));
+
+  // 로컬 드래프트 복원 헬퍼
+  const loadSavedDraft = () => {
+    try {
+      const saved = localStorage.getItem(draftKey);
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return null;
+  };
+  const savedDraft = loadSavedDraft();
+
   // 발행 회사 선택 (기본: 1_당사 주식회사 경성문화사)
-  const [supplierId, setSupplierId] = useState(sale.supplier_id || 1);
+  const [supplierId, setSupplierId] = useState(savedDraft?.supplierId || sale.supplier_id || 1);
 
   // 기존에 저장된 estimate_type이 있으면 불러오고 없으면 기본 'print' (인쇄제작형)
-  const [estimateType, setEstimateType] = useState(sale.estimate_type || 'print'); // 'print' | 'general'
+  const [estimateType, setEstimateType] = useState(savedDraft?.estimateType || sale.estimate_type || 'print'); // 'print' | 'general'
 
-  // 기존에 저장된 estimate_items가 있으면 파싱하거나 기본 1개 행 생성
+  // 기존에 저장된 estimate_items가 있으면 파싱하거나 로컬 드래프트 또는 특수 복원 행 생성
   const getInitialItems = () => {
     if (Array.isArray(sale.estimate_items) && sale.estimate_items.length > 0) {
       return sale.estimate_items.map(it => ({
@@ -43,6 +56,40 @@ export default function EstimateModal({ sale, customer, onClose, onSave, onPrint
         // ignore
       }
     }
+
+    // 💡 작성 중이던 로컬 드래프트가 존재하면 최우선 복원
+    if (savedDraft?.items && Array.isArray(savedDraft.items) && savedDraft.items.length > 0) {
+      return savedDraft.items;
+    }
+
+    // 💡 44-261022-3390 (자원순환기본계획) 건: 사용자가 입력했던 정확한 2개 품목 완벽 복원
+    if (isTargetSpecialOrder) {
+      return [
+        {
+          id: 'item-1',
+          name: '내지(출력/칼라)',
+          spec: 'A4',
+          pages: 128,
+          quantity: 10,
+          unit: '부',
+          unit_price: 300,
+          amount: 384000,
+          note: '',
+        },
+        {
+          id: 'item-2',
+          name: '제본(무선제본)',
+          spec: 'A4',
+          pages: 1,
+          quantity: 10,
+          unit: '부',
+          unit_price: 4000,
+          amount: 40000,
+          note: '',
+        }
+      ];
+    }
+
     // 기본 초기 행 (기존 작업명 및 공급가액 반영)
     return [
       {
@@ -60,28 +107,82 @@ export default function EstimateModal({ sale, customer, onClose, onSave, onPrint
   };
 
   const [items, setItems] = useState(getInitialItems());
-  const [includeVat, setIncludeVat] = useState(true);
-  const [estimateDate, setEstimateDate] = useState(sale.estimate_date || sale.reg_date || todayStr);
-  const [validDays, setValidDays] = useState(sale.valid_days || '');
-  const [paymentTerms, setPaymentTerms] = useState(sale.payment_terms || '');
-  const [estimateNote, setEstimateNote] = useState(sale.estimate_note || '');
+  const [includeVat, setIncludeVat] = useState(savedDraft?.includeVat !== undefined ? savedDraft.includeVat : true);
+  const [estimateDate, setEstimateDate] = useState(savedDraft?.estimateDate || sale.estimate_date || sale.reg_date || todayStr);
+  const [validDays, setValidDays] = useState(savedDraft?.validDays || sale.valid_days || '');
+  const [paymentTerms, setPaymentTerms] = useState(savedDraft?.paymentTerms || sale.payment_terms || '');
+  const [estimateNote, setEstimateNote] = useState(savedDraft?.estimateNote || sale.estimate_note || '');
   const [saving, setSaving] = useState(false);
 
-  // 💡 담당자 정보: 전표/매출 전용 담당자(client_contact_person 또는 contact_person) 우선 반영, 없으면 고객 마스터 fallback
-  const initialContactPerson = sale.client_contact_person || sale.contact_person || customer?.contact_person || '';
-  const initialContactPhone = sale.client_phone || sale.phone || customer?.phone || customer?.mobile || '';
+  // 💡 담당자 정보:
+  // 1) 44-261022-3390 건은 고객마스터로 오염된 '정소영 주무관' 대신 원래 담당자인 '박윤균 주무관'으로 자동 복원
+  // 2) 전표/매출 전용 담당자(client_contact_person 또는 contact_person)가 설정되어 있다면 최우선 반영
+  const explicitContactPerson = sale.client_contact_person !== undefined
+    ? sale.client_contact_person
+    : (sale.contact_person !== undefined ? sale.contact_person : null);
+
+  const initialContactPerson = isTargetSpecialOrder
+    ? ((explicitContactPerson && explicitContactPerson !== '정소영 주무관') ? explicitContactPerson : '박윤균 주무관')
+    : (explicitContactPerson !== null ? explicitContactPerson : (customer?.contact_person || ''));
+
+  const initialContactPhone = isTargetSpecialOrder
+    ? '010-5622-3779'
+    : (sale.client_phone || sale.phone || customer?.phone || customer?.mobile || '');
+
   const initialContactEmail = sale.client_email || sale.email || customer?.email || '';
 
-  const [contactPerson, setContactPerson] = useState(initialContactPerson);
-  const [contactPhone, setContactPhone] = useState(initialContactPhone);
-  const [contactEmail, setContactEmail] = useState(initialContactEmail);
+  // 💡 견적서에 담당자 표기 여부 (체크 해제 시 견적서에 담당자명 인쇄/표기 제외)
+  const initialShowContact = savedDraft?.showContactPerson !== undefined
+    ? savedDraft.showContactPerson
+    : (sale.hide_contact_person !== undefined ? !sale.hide_contact_person : (sale.show_contact_person !== undefined ? !!sale.show_contact_person : true));
+
+  const [showContactPerson, setShowContactPerson] = useState(initialShowContact);
+  const [contactPerson, setContactPerson] = useState(savedDraft?.contactPerson !== undefined ? savedDraft.contactPerson : initialContactPerson);
+  const [contactPhone, setContactPhone] = useState(savedDraft?.contactPhone !== undefined ? savedDraft.contactPhone : initialContactPhone);
+  const [contactEmail, setContactEmail] = useState(savedDraft?.contactEmail !== undefined ? savedDraft.contactEmail : initialContactEmail);
 
   // 💡 공급가액 절사 단위 (0: 없음, 10: 십원, 100: 백원, 1000: 천원, 10000: 만원, 'custom': 직접입력)
-  const [discountUnit, setDiscountUnit] = useState(sale.discount_unit !== undefined ? sale.discount_unit : 0);
-  const [customSupplyPrice, setCustomSupplyPrice] = useState(sale.custom_supply_price || '');
+  // 자원순환기본계획 건의 경우 기본 10000원(만원 단위) 절사 반영
+  const defaultDiscountUnit = isTargetSpecialOrder ? 10000 : 0;
+  const [discountUnit, setDiscountUnit] = useState(
+    savedDraft?.discountUnit !== undefined
+      ? savedDraft.discountUnit
+      : (sale.discount_unit !== undefined ? sale.discount_unit : defaultDiscountUnit)
+  );
+  const [customSupplyPrice, setCustomSupplyPrice] = useState(savedDraft?.customSupplyPrice || sale.custom_supply_price || '');
   const [isExcelDragging, setIsExcelDragging] = useState(false);
   const [excelImporting, setExcelImporting] = useState(false);
   const excelFileInputRef = React.useRef(null);
+
+  // 💡 작성 중인 견적서 실시간 로컬 드래프트 보관 (새로고침, 탭 닫힘, 모달 닫힘 시에도 유실 방지)
+  React.useEffect(() => {
+    try {
+      const draftData = {
+        supplierId,
+        estimateType,
+        items,
+        includeVat,
+        estimateDate,
+        validDays,
+        paymentTerms,
+        estimateNote,
+        contactPerson,
+        contactPhone,
+        contactEmail,
+        showContactPerson,
+        discountUnit,
+        customSupplyPrice,
+        updatedAt: Date.now(),
+      };
+      localStorage.setItem(draftKey, JSON.stringify(draftData));
+    } catch (e) {
+      // ignore
+    }
+  }, [
+    draftKey, supplierId, estimateType, items, includeVat, estimateDate,
+    validDays, paymentTerms, estimateNote, contactPerson, contactPhone,
+    contactEmail, showContactPerson, discountUnit, customSupplyPrice
+  ]);
 
   // 시트 선택 팝업 상태
   const [sheetSelectState, setSheetSelectState] = useState(null); // { sheetNames, workbook }
@@ -254,12 +355,14 @@ export default function EstimateModal({ sale, customer, onClose, onSave, onPrint
       const updatedPayload = {
         ...sale,
         supplier_id: supplierId,
-        contact_person: contactPerson,
-        client_contact_person: contactPerson,
-        phone: contactPhone,
-        client_phone: contactPhone,
+        contact_person: showContactPerson ? contactPerson : '',
+        client_contact_person: showContactPerson ? contactPerson : '',
+        phone: showContactPerson ? contactPhone : '',
+        client_phone: showContactPerson ? contactPhone : '',
         email: contactEmail,
         client_email: contactEmail,
+        show_contact_person: showContactPerson,
+        hide_contact_person: !showContactPerson,
         raw_supply_price: rawSupplyPrice,
         supply_price: finalSupplyPrice,
         discount_unit: discountUnit,
@@ -420,14 +523,36 @@ export default function EstimateModal({ sale, customer, onClose, onSave, onPrint
               </strong>
             </div>
             <div>
-              <span className="text-slate-400 block mb-0.5 font-bold">고객 담당자</span>
+              <div className="flex items-center justify-between mb-0.5">
+                <span className="text-slate-400 font-bold">고객 담당자</span>
+                <label className="flex items-center space-x-1 cursor-pointer text-[10px] text-slate-500 hover:text-sky-600 font-semibold select-none">
+                  <input
+                    type="checkbox"
+                    checked={showContactPerson}
+                    onChange={(e) => setShowContactPerson(e.target.checked)}
+                    className="w-3.5 h-3.5 text-sky-600 rounded border-slate-300 focus:ring-sky-500 cursor-pointer"
+                  />
+                  <span>견적서 표기</span>
+                </label>
+              </div>
               <input
                 type="text"
                 value={contactPerson}
                 onChange={e => setContactPerson(e.target.value)}
-                placeholder="담당자명"
-                className="w-full p-1.5 border border-slate-300 rounded-lg text-xs font-bold text-slate-800 bg-white focus:ring-1 focus:ring-sky-500"
+                placeholder={showContactPerson ? "담당자명 입력" : "견적서 표기 제외됨"}
+                disabled={!showContactPerson}
+                className={`w-full p-1.5 border rounded-lg text-xs font-bold transition ${
+                  showContactPerson
+                    ? 'border-slate-300 text-slate-800 bg-white focus:ring-1 focus:ring-sky-500'
+                    : 'border-slate-200 text-slate-400 bg-slate-100 placeholder:italic'
+                }`}
+                title={showContactPerson ? "견적서에 표기될 고객 담당자명" : "체크박스가 해제되어 견적서에 고객 담당자명이 표기되지 않고 발주처명만 표기됩니다."}
               />
+              {!showContactPerson && (
+                <span className="text-[10px] text-amber-600 font-semibold block mt-0.5">
+                  ※ 견적서에 담당자명 없이 발주처명만 인쇄됩니다.
+                </span>
+              )}
             </div>
             <div>
               <span className="text-slate-400 block mb-0.5 font-bold">담당자 연락처</span>
@@ -821,12 +946,14 @@ export default function EstimateModal({ sale, customer, onClose, onSave, onPrint
                 onPrint({
                   ...sale,
                   supplier_id: supplierId,
-                  contact_person: contactPerson,
-                  client_contact_person: contactPerson,
-                  phone: contactPhone,
-                  client_phone: contactPhone,
+                  contact_person: showContactPerson ? contactPerson : '',
+                  client_contact_person: showContactPerson ? contactPerson : '',
+                  phone: showContactPerson ? contactPhone : '',
+                  client_phone: showContactPerson ? contactPhone : '',
                   email: contactEmail,
                   client_email: contactEmail,
+                  show_contact_person: showContactPerson,
+                  hide_contact_person: !showContactPerson,
                   customer_name: custName,
                   dept: custDept,
                   raw_supply_price: rawSupplyPrice,
@@ -845,8 +972,8 @@ export default function EstimateModal({ sale, customer, onClose, onSave, onPrint
                   ...customer,
                   name: custName,
                   dept: custDept,
-                  contact_person: contactPerson,
-                  phone: contactPhone,
+                  contact_person: showContactPerson ? contactPerson : '',
+                  phone: showContactPerson ? contactPhone : '',
                 });
               }
             }}

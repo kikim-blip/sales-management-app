@@ -14,7 +14,9 @@ export default function TemplateSpacePlan({
   logoImage,
 }) {
   const custName = customer?.name || quote.customer_name || '거래처';
-  const custContact = quote.client_contact_person || quote.contact_person || customer?.contact_person || '사업총괄팀 귀중';
+  const shouldShowContact = quote.hide_contact_person ? false : (quote.show_contact_person !== undefined ? quote.show_contact_person : true);
+  const explicitContact = quote.client_contact_person !== undefined ? quote.client_contact_person : quote.contact_person;
+  const custContact = shouldShowContact ? (explicitContact !== undefined ? explicitContact : (customer?.contact_person || '')) : '';
   const { items, supplyPrice, taxPrice, totalPrice, koreanTotalPrice } = calcData;
 
   return (
@@ -51,7 +53,9 @@ export default function TemplateSpacePlan({
             <span className="text-sm font-bold text-slate-700">貴中</span>
           </div>
           <div className="text-[11px] text-slate-700 space-y-1">
-            <p><span className="w-14 inline-block text-slate-500 font-semibold">담당자:</span> {custContact}</p>
+            {shouldShowContact && custContact ? (
+              <p><span className="w-14 inline-block text-slate-500 font-semibold">담당자:</span> {custContact}</p>
+            ) : null}
             <p><span className="w-14 inline-block text-slate-500 font-semibold">작성자:</span> {supplier.contactPerson || managerName}</p>
             <p><span className="w-14 inline-block text-slate-500 font-semibold">작성일:</span> {todayKorean}</p>
           </div>
