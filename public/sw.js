@@ -1,5 +1,5 @@
 // public/sw.js
-const CACHE_NAME = 'sales-pwa-v13-light-print-formula-perfect';
+const CACHE_NAME = 'sales-pwa-v14-correct-company-suppliers';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();

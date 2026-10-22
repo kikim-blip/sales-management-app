@@ -3,12 +3,17 @@ import React, { useState, useRef } from 'react';
 import { X, Printer, Download, FileText, CheckCircle2, Building, ShieldCheck } from 'lucide-react';
 import { exportEstimateDetailToExcel } from '../../services/printEstimateStorage';
 import { calculateGovernmentLightPrint } from '../../utils/printCalculators/governmentCostCalculator';
+import { COMPANY_SUPPLIERS, getCompanySupplierById } from '../../data/companySuppliers';
 
 export default function GovernmentCostModal({ estimate, onClose }) {
   const [activeDocTab, setActiveDocTab] = useState('costSheet'); // 'costSheet' | 'specDoc' | 'commercial'
+  const [supplierId, setSupplierId] = useState(estimate?.supplierId || 1);
   const printRef = useRef(null);
 
   if (!estimate) return null;
+
+  const currentSupplier = getCompanySupplierById(supplierId);
+  const stampImage = localStorage.getItem(`quote_stamp_${supplierId}`) || null;
 
   const gov = estimate.governmentReport || {};
   const isLightPrint = (estimate.printType || '').includes('경인쇄') || (estimate.printType || '').includes('마스터');
@@ -38,7 +43,7 @@ export default function GovernmentCostModal({ estimate, onClose }) {
   const deliveryDateStr = estimate.deliveryDate || '-';
   const proofDateStr = estimate.proofDate || '-';
   const writerTitle = estimate.writerTitle || '담당자';
-  const writerName = estimate.writerName || estimate.authorName || '김광일';
+  const writerName = estimate.writerName || estimate.authorName || '';
 
   const handlePrint = () => {
     window.print();
@@ -738,6 +743,27 @@ export default function GovernmentCostModal({ estimate, onClose }) {
                ════════════════════════════════════════════════════════════ */}
             {activeDocTab === 'commercial' && (
               <div>
+                {/* 상단 발행 공급사 선택 바 (화면 전용, 인쇄 시 숨김) */}
+                <div className="flex flex-wrap items-center justify-between pb-3 mb-4 border-b border-slate-200 print:hidden text-xs gap-2">
+                  <div className="flex items-center space-x-2">
+                    <span className="font-bold text-slate-700">공급자(발행회사) 선택:</span>
+                    <select
+                      value={supplierId}
+                      onChange={e => setSupplierId(Number(e.target.value))}
+                      className="p-1.5 border border-slate-300 rounded-lg text-xs font-bold text-slate-800 bg-white shadow-sm"
+                    >
+                      {COMPANY_SUPPLIERS.map(s => (
+                        <option key={s.id} value={s.id}>
+                          {s.tag} - {s.name} ({s.ceo})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <span className="text-[11px] text-slate-500 font-medium">
+                    ※ 등록된 공식 사업자 정보가 공급자 란 및 하단 서명부에 자동 반영됩니다.
+                  </span>
+                </div>
+
                 <div className="text-center pb-6 border-b-2 border-slate-900">
                   <h1 className="text-2xl sm:text-3xl font-black tracking-widest text-slate-900">
                     인 쇄 견 적 서
@@ -765,18 +791,32 @@ export default function GovernmentCostModal({ estimate, onClose }) {
                     </div>
                   </div>
 
-                  <div className="border border-slate-300 rounded-lg p-4 bg-slate-50/50">
-                    <div className="text-xs text-slate-500 mb-1">공급자</div>
+                  <div className="border border-slate-300 rounded-lg p-4 bg-slate-50/50 relative">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs text-slate-500">공급자</span>
+                      <span className="text-[10px] font-bold text-sky-800 bg-sky-100 px-2 py-0.5 rounded">
+                        {currentSupplier.certTag || 'ISO 9001/14001 인증기업'}
+                      </span>
+                    </div>
                     <div className="text-base font-black text-slate-900 mb-2">
-                      (주)경성문화사
+                      {currentSupplier.name}
                     </div>
-                    <div className="space-y-1 text-xs text-slate-600">
-                      <p>등록번호: <span className="font-medium">314-81-22904</span></p>
-                      <p>대표자: <span className="font-medium">김광일</span></p>
-                      <p>사업장: <span className="font-medium">대전광역시 중구 대흥로 115번길 5</span></p>
-                      <p>업태/종목: <span className="font-medium">제조, 서비스 / 인쇄, 출판, 전산</span></p>
-                      <p>담당자: <span className="font-bold text-sky-700">{writerName}</span></p>
+                    <div className="space-y-1 text-xs text-slate-700">
+                      <p>등록번호: <span className="font-bold text-slate-900 font-mono">{currentSupplier.bizNum}</span></p>
+                      <p>대표자: <span className="font-bold text-slate-900">{currentSupplier.ceo}</span></p>
+                      <p>사업장: <span className="font-medium text-slate-800">{currentSupplier.address}</span></p>
+                      <p>업태/종목: <span className="font-medium text-slate-800">{currentSupplier.bizType} / {currentSupplier.bizItem}</span></p>
+                      <p>전화/팩스: <span className="font-medium text-slate-800">{currentSupplier.phone} / {currentSupplier.fax}</span></p>
+                      <p>담당자: <span className="font-bold text-sky-700">{writerName || '영업담당'}</span></p>
                     </div>
+
+                    {stampImage && (
+                      <img
+                        src={stampImage}
+                        alt="직인"
+                        className="absolute right-4 bottom-4 w-16 h-16 object-contain mix-blend-multiply pointer-events-none"
+                      />
+                    )}
                   </div>
                 </div>
 
@@ -825,6 +865,17 @@ export default function GovernmentCostModal({ estimate, onClose }) {
                     </tr>
                   </tbody>
                 </table>
+
+                {/* 하단 공급자 서명란 */}
+                <div className="text-right pt-6 text-sm border-t border-slate-200 mt-6">
+                  <div className="font-bold text-slate-900 text-base mb-1">
+                    {currentSupplier.name} 대표이사 {currentSupplier.ceo} (인)
+                  </div>
+                  <div className="text-xs text-slate-500">
+                    전화: {currentSupplier.phone} &nbsp;|&nbsp; 팩스: {currentSupplier.fax} &nbsp;|&nbsp; 이메일: {currentSupplier.email}
+                    {currentSupplier.bank && ` | 입금계좌: ${currentSupplier.bank}`}
+                  </div>
+                </div>
               </div>
             )}
 

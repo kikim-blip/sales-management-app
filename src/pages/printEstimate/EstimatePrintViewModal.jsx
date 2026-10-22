@@ -1,11 +1,13 @@
 // src/pages/printEstimate/EstimatePrintViewModal.jsx
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { X, Printer, Download } from 'lucide-react';
 import { exportEstimateDetailToExcel } from '../../services/printEstimateStorage';
 import GovernmentCostModal from './GovernmentCostModal';
+import { COMPANY_SUPPLIERS, getCompanySupplierById } from '../../data/companySuppliers';
 
 export default function EstimatePrintViewModal({ estimate, onClose }) {
   const printRef = useRef(null);
+  const [supplierId, setSupplierId] = useState(estimate?.supplierId || 1);
 
   if (!estimate) return null;
 
@@ -14,6 +16,8 @@ export default function EstimatePrintViewModal({ estimate, onClose }) {
     return <GovernmentCostModal estimate={estimate} onClose={onClose} />;
   }
 
+  const currentSupplier = getCompanySupplierById(supplierId);
+  const stampImage = localStorage.getItem(`quote_stamp_${supplierId}`) || null;
 
   const handlePrint = () => {
     window.print();
@@ -39,6 +43,20 @@ export default function EstimatePrintViewModal({ estimate, onClose }) {
             <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-sky-100 text-sky-700">
               {estimate.version || 1}차 견적 {estimate.isFinal ? '(최종확정)' : ''}
             </span>
+            <div className="hidden sm:flex items-center space-x-1 pl-2">
+              <span className="text-xs text-slate-500 font-bold">발행회사:</span>
+              <select
+                value={supplierId}
+                onChange={e => setSupplierId(Number(e.target.value))}
+                className="p-1 border border-slate-300 rounded text-xs font-bold text-slate-800 bg-white"
+              >
+                {COMPANY_SUPPLIERS.map(s => (
+                  <option key={s.id} value={s.id}>
+                    {s.tag} - {s.name} ({s.ceo})
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
           <div className="flex items-center space-x-2">
@@ -101,19 +119,33 @@ export default function EstimatePrintViewModal({ estimate, onClose }) {
                 </div>
               </div>
 
-              {/* 공급자 (경성문화사) */}
-              <div className="border border-slate-300 rounded-lg p-4 bg-slate-50/50">
-                <div className="text-xs text-slate-500 mb-1">공급자</div>
-                <div className="text-base font-black text-slate-900 mb-2">
-                  (주)경성문화사
+              {/* 공급자 정보 */}
+              <div className="border border-slate-300 rounded-lg p-4 bg-slate-50/50 relative">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs text-slate-500">공급자</span>
+                  <span className="text-[10px] font-bold text-sky-800 bg-sky-100 px-2 py-0.5 rounded">
+                    {currentSupplier.certTag || 'ISO 9001/14001 인증기업'}
+                  </span>
                 </div>
-                <div className="space-y-1 text-xs text-slate-600">
-                  <p>등록번호: <span className="font-medium">314-81-22904</span></p>
-                  <p>대표자: <span className="font-medium">김광일</span></p>
-                  <p>사업장: <span className="font-medium">대전광역시 중구 대흥로 115번길 5</span></p>
-                  <p>업태/종목: <span className="font-medium">제조, 서비스 / 인쇄, 출판, 전산</span></p>
+                <div className="text-base font-black text-slate-900 mb-2">
+                  {currentSupplier.name}
+                </div>
+                <div className="space-y-1 text-xs text-slate-700">
+                  <p>등록번호: <span className="font-bold text-slate-900 font-mono">{currentSupplier.bizNum}</span></p>
+                  <p>대표자: <span className="font-bold text-slate-900">{currentSupplier.ceo}</span></p>
+                  <p>사업장: <span className="font-medium text-slate-800">{currentSupplier.address}</span></p>
+                  <p>업태/종목: <span className="font-medium text-slate-800">{currentSupplier.bizType} / {currentSupplier.bizItem}</span></p>
+                  <p>전화/팩스: <span className="font-medium text-slate-800">{currentSupplier.phone} / {currentSupplier.fax}</span></p>
                   <p>담당자: <span className="font-bold text-sky-700">{estimate.authorName || '영업담당'}</span></p>
                 </div>
+
+                {stampImage && (
+                  <img
+                    src={stampImage}
+                    alt="직인"
+                    className="absolute right-4 bottom-4 w-16 h-16 object-contain mix-blend-multiply pointer-events-none"
+                  />
+                )}
               </div>
             </div>
 
@@ -242,9 +274,14 @@ export default function EstimatePrintViewModal({ estimate, onClose }) {
             </div>
 
             {/* 서명부 */}
-            <div className="text-right pt-6 text-sm">
-              <div className="font-bold text-slate-900 text-base mb-1">(주)경성문화사 대표이사 김광일 (인)</div>
-              <div className="text-xs text-slate-500">문의: 042-226-4444 / sales@kyungsung.co.kr</div>
+            <div className="text-right pt-6 text-sm border-t border-slate-200 mt-6">
+              <div className="font-bold text-slate-900 text-base mb-1">
+                {currentSupplier.name} 대표이사 {currentSupplier.ceo} (인)
+              </div>
+              <div className="text-xs text-slate-500">
+                전화: {currentSupplier.phone} &nbsp;|&nbsp; 팩스: {currentSupplier.fax} &nbsp;|&nbsp; 이메일: {currentSupplier.email}
+                {currentSupplier.bank && ` | 입금계좌: ${currentSupplier.bank}`}
+              </div>
             </div>
           </div>
         </div>
