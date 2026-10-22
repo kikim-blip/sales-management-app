@@ -1,5 +1,5 @@
 // public/sw.js
-const CACHE_NAME = 'sales-pwa-v14-correct-company-suppliers';
+const CACHE_NAME = 'sales-pwa-v15-contact-person-sync';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();

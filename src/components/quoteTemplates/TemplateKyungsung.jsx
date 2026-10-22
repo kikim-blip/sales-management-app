@@ -15,8 +15,8 @@ export default function TemplateKyungsung({
 }) {
   const custName = customer?.name || quote.customer_name || '거래처';
   const custDept = quote.dept || customer?.dept || '';
-  const custContact = quote.contact_person || customer?.contact_person || '';
-  const custPhone = quote.phone || customer?.phone || '';
+  const custContact = quote.client_contact_person || quote.contact_person || customer?.contact_person || '';
+  const custPhone = quote.client_phone || quote.phone || customer?.phone || customer?.mobile || '';
 
   const { items, supplyPrice, taxPrice, totalPrice, koreanTotalPrice } = calcData;
   const isPrintTemplate = items.some(it => it.pages && Number(it.pages) > 0);

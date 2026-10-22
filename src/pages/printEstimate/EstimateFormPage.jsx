@@ -55,8 +55,8 @@ export default function EstimateFormPage({ initialEstimate = null, onBack, onSav
   const [clientId, setClientId] = useState(initialEstimate?.clientId || '');
   const [clientName, setClientName] = useState(initialEstimate?.clientName || '');
   const [clientDept, setClientDept] = useState(initialEstimate?.clientDept || '');
-  const [contactName, setContactName] = useState(initialEstimate?.contactName || '');
-  const [phone, setPhone] = useState(initialEstimate?.phone || '');
+  const [contactName, setContactName] = useState(initialEstimate?.contactName || initialEstimate?.client_contact_person || initialEstimate?.contact_person || '');
+  const [phone, setPhone] = useState(initialEstimate?.phone || initialEstimate?.client_phone || '');
 
   // 거래처 실시간 검색창 상태
   const [customerSearchInput, setCustomerSearchInput] = useState('');

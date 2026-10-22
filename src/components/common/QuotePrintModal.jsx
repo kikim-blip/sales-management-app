@@ -194,7 +194,7 @@ export default function QuotePrintModal({ quote, customer, onClose }) {
         ['견  적  서', '', '', '', '', '', ''],
         [],
         [`${custName} ${custDept}`.trim(), '貴中', '', currentSupplier.name, '', `사업자번호: ${currentSupplier.bizNum} / 대표: ${currentSupplier.ceo}`],
-        ['담당자', quote.contact_person || customer?.contact_person || '-', '', '주소', '', currentSupplier.address],
+        ['담당자', quote.client_contact_person || quote.contact_person || customer?.contact_person || '-', '', '주소', '', currentSupplier.address],
         ['작성자', currentSupplier.contactPerson || managerName, '', '전화/팩스', '', `전화: ${currentSupplier.phone} / 팩스: ${currentSupplier.fax}`],
         ['작성일', todayKorean, '', 'e-mail', '', currentSupplier.email],
         ['품  명', quote.title || '-', '', '', '', ''],

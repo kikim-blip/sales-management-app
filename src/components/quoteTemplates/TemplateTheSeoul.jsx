@@ -14,7 +14,7 @@ export default function TemplateTheSeoul({
   logoImage,
 }) {
   const custName = customer?.name || quote.customer_name || '거래처';
-  const custContact = quote.contact_person || customer?.contact_person || '사업총괄팀 귀중';
+  const custContact = quote.client_contact_person || quote.contact_person || customer?.contact_person || '사업총괄팀 귀중';
   const { items, supplyPrice, taxPrice, totalPrice, koreanTotalPrice } = calcData;
 
   return (

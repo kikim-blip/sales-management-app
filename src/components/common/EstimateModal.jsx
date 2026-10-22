@@ -1,4 +1,4 @@
-﻿// src/components/common/EstimateModal.jsx
+// src/components/common/EstimateModal.jsx
 import React, { useState } from 'react';
 import { X, Plus, Trash2, Calculator, Printer, Save, FileText, CheckCircle2, Layers, BookOpen, Package, Building2, Scissors, Upload, FileSpreadsheet, Sparkles, ChevronDown } from 'lucide-react';
 import { getLocalDateStr } from '../../utils/dateUtils';
@@ -66,6 +66,15 @@ export default function EstimateModal({ sale, customer, onClose, onSave, onPrint
   const [paymentTerms, setPaymentTerms] = useState(sale.payment_terms || '');
   const [estimateNote, setEstimateNote] = useState(sale.estimate_note || '');
   const [saving, setSaving] = useState(false);
+
+  // 💡 담당자 정보: 전표/매출 전용 담당자(client_contact_person 또는 contact_person) 우선 반영, 없으면 고객 마스터 fallback
+  const initialContactPerson = sale.client_contact_person || sale.contact_person || customer?.contact_person || '';
+  const initialContactPhone = sale.client_phone || sale.phone || customer?.phone || customer?.mobile || '';
+  const initialContactEmail = sale.client_email || sale.email || customer?.email || '';
+
+  const [contactPerson, setContactPerson] = useState(initialContactPerson);
+  const [contactPhone, setContactPhone] = useState(initialContactPhone);
+  const [contactEmail, setContactEmail] = useState(initialContactEmail);
 
   // 💡 공급가액 절사 단위 (0: 없음, 10: 십원, 100: 백원, 1000: 천원, 10000: 만원, 'custom': 직접입력)
   const [discountUnit, setDiscountUnit] = useState(sale.discount_unit !== undefined ? sale.discount_unit : 0);
@@ -245,6 +254,12 @@ export default function EstimateModal({ sale, customer, onClose, onSave, onPrint
       const updatedPayload = {
         ...sale,
         supplier_id: supplierId,
+        contact_person: contactPerson,
+        client_contact_person: contactPerson,
+        phone: contactPhone,
+        client_phone: contactPhone,
+        email: contactEmail,
+        client_email: contactEmail,
         raw_supply_price: rawSupplyPrice,
         supply_price: finalSupplyPrice,
         discount_unit: discountUnit,
@@ -271,10 +286,8 @@ export default function EstimateModal({ sale, customer, onClose, onSave, onPrint
     }
   };
 
-  const custName = customer?.name || sale.customer_name || sale.customer_id || '고객사 미지정';
-  const custDept = sale.dept || customer?.dept || '';
-  const contactPerson = sale.contact_person || customer?.contact_person || '';
-  const contactPhone = sale.phone || customer?.phone || '';
+  const custName = customer?.name || sale.customer_name || sale.client_name || sale.customer_id || '고객사 미지정';
+  const custDept = sale.dept || sale.client_dept || customer?.dept || '';
 
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
@@ -401,20 +414,39 @@ export default function EstimateModal({ sale, customer, onClose, onSave, onPrint
           {/* 1. 견적 기본 정보 요약 박스 */}
           <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
             <div>
-              <span className="text-slate-400 block mb-0.5">수신 거래처</span>
-              <strong className="text-slate-800 text-sm">{custName} {custDept ? `(${custDept})` : ''}</strong>
+              <span className="text-slate-400 block mb-0.5 font-bold">수신 거래처</span>
+              <strong className="text-slate-800 text-sm block truncate" title={`${custName} ${custDept ? `(${custDept})` : ''}`}>
+                {custName} {custDept ? `(${custDept})` : ''}
+              </strong>
             </div>
             <div>
-              <span className="text-slate-400 block mb-0.5">고객 담당자</span>
-              <strong className="text-slate-800">{contactPerson || '미지정'} {contactPhone ? `(${contactPhone})` : ''}</strong>
+              <span className="text-slate-400 block mb-0.5 font-bold">고객 담당자</span>
+              <input
+                type="text"
+                value={contactPerson}
+                onChange={e => setContactPerson(e.target.value)}
+                placeholder="담당자명"
+                className="w-full p-1.5 border border-slate-300 rounded-lg text-xs font-bold text-slate-800 bg-white focus:ring-1 focus:ring-sky-500"
+              />
             </div>
             <div>
-              <span className="text-slate-400 block mb-0.5">작업명 (견적명)</span>
-              <strong className="text-slate-800">{sale.title || '작업명 미지정'}</strong>
+              <span className="text-slate-400 block mb-0.5 font-bold">담당자 연락처</span>
+              <input
+                type="text"
+                value={contactPhone}
+                onChange={e => setContactPhone(e.target.value)}
+                placeholder="연락처"
+                className="w-full p-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 bg-white focus:ring-1 focus:ring-sky-500"
+              />
             </div>
             <div>
-              <span className="text-slate-400 block mb-0.5">영업담당자</span>
-              <strong className="text-rose-600 font-bold">{sale.sales_manager || sale.manager_name || '담당자'}</strong>
+              <span className="text-slate-400 block mb-0.5 font-bold">작업명 / 영업담당자</span>
+              <div className="truncate font-bold text-slate-800" title={sale.title}>
+                {sale.title || '작업명 미지정'}
+              </div>
+              <span className="text-[11px] text-rose-600 font-bold block">
+                영업: {sale.sales_manager || sale.manager_name || '담당자'}
+              </span>
             </div>
           </div>
 
@@ -789,6 +821,14 @@ export default function EstimateModal({ sale, customer, onClose, onSave, onPrint
                 onPrint({
                   ...sale,
                   supplier_id: supplierId,
+                  contact_person: contactPerson,
+                  client_contact_person: contactPerson,
+                  phone: contactPhone,
+                  client_phone: contactPhone,
+                  email: contactEmail,
+                  client_email: contactEmail,
+                  customer_name: custName,
+                  dept: custDept,
                   raw_supply_price: rawSupplyPrice,
                   discount_unit: discountUnit,
                   discount_amount: discountAmount,
@@ -801,7 +841,13 @@ export default function EstimateModal({ sale, customer, onClose, onSave, onPrint
                   supply_price: totalSupplyPrice,
                   tax: totalTax,
                   total_price: totalPrice,
-                }, customer);
+                }, {
+                  ...customer,
+                  name: custName,
+                  dept: custDept,
+                  contact_person: contactPerson,
+                  phone: contactPhone,
+                });
               }
             }}
             className="flex items-center space-x-1.5 px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-xs font-bold transition"
