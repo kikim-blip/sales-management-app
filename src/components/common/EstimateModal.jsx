@@ -571,7 +571,7 @@ export default function EstimateModal({ sale, customer, onClose, onSave, onPrint
                 >
                   {COMPANY_SUPPLIERS.map((s) => (
                     <option key={`sup-opt-${s.id}`} value={s.id}>
-                      {s.name} {s.id === 1 ? '(당사)' : `(${s.tag})`}
+                      {s.name} {s.id === supplierId ? '(선택된 발행사)' : ''}
                     </option>
                   ))}
                 </select>
@@ -585,10 +585,8 @@ export default function EstimateModal({ sale, customer, onClose, onSave, onPrint
               <span className="bg-white border border-slate-200 px-2.5 py-1 rounded-lg text-slate-600 font-medium">
                 대표: <strong className="text-slate-800">{COMPANY_SUPPLIERS.find(s => s.id === supplierId)?.ceo}</strong>
               </span>
-              <span className={`px-2 py-1 rounded-lg font-bold text-[11px] ${
-                supplierId === 1 ? 'bg-sky-100 text-sky-800' : 'bg-purple-100 text-purple-800'
-              }`}>
-                {supplierId === 1 ? '기준 단가 (100%)' : `비교견적 단가 (+${Math.round((COMPANY_SUPPLIERS.find(s => s.id === supplierId)?.rate - 1) * 100)}%)`}
+              <span className="px-2.5 py-1 rounded-lg font-bold text-[11px] bg-sky-100 text-sky-800 border border-sky-300">
+                ⭐ 기준 발행사 (100% 당사 기준 금액)
               </span>
             </div>
           </div>

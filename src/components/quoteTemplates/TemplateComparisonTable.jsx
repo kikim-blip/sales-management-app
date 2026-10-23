@@ -8,11 +8,12 @@ export default function TemplateComparisonTable({
   suppliers,
   summaryData,
   todayKorean,
+  mainSupplierId,
 }) {
   const custName = customer?.name || quote.customer_name || '거래처';
 
-  // 기본 당사 품목 리스트
-  const baseItems = summaryData[0]?.items || [];
+  // 기본 메인 발행사 품목 리스트
+  const baseItems = summaryData.find((s) => s.isBase)?.items || summaryData[0]?.items || [];
 
   return (
     <div className="font-sans text-slate-900 text-xs space-y-4 print:text-black">
@@ -39,21 +40,21 @@ export default function TemplateComparisonTable({
             <thead>
               <tr className="bg-slate-800 text-white text-[10.5px] font-bold text-center">
                 <th className="p-2 border-r border-slate-700 w-10">No</th>
-                <th className="p-2 border-r border-slate-700 w-16">구분</th>
+                <th className="p-2 border-r border-slate-700 w-24">구분</th>
                 <th className="p-2 border-r border-slate-700 min-w-[120px]">공급사명 (상호)</th>
                 <th className="p-2 border-r border-slate-700 w-14">대표자</th>
                 <th className="p-2 border-r border-slate-700 w-24">사업자번호</th>
                 <th className="p-2 border-r border-slate-700 w-24 text-right pr-2">공급가액</th>
                 <th className="p-2 border-r border-slate-700 w-20 text-right pr-2">부가세</th>
                 <th className="p-2 border-r border-slate-700 w-28 text-right pr-2">총 견적금액</th>
-                <th className="p-2 border-r border-slate-700 w-20 text-right pr-2">당사대비</th>
+                <th className="p-2 border-r border-slate-700 w-20 text-right pr-2">기준대비</th>
                 <th className="p-2 border-r border-slate-700 w-16 text-center">비율</th>
                 <th className="p-2 min-w-[130px]">기업 특성 및 비고</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-300 text-[11px]">
               {summaryData.map((row, idx) => {
-                const isBase = idx === 0;
+                const isBase = row.isBase;
                 return (
                   <tr
                     key={`sup-${row.supplier.id}`}
@@ -61,7 +62,7 @@ export default function TemplateComparisonTable({
                   >
                     <td className="p-2 border-r border-slate-300 text-center font-mono">{idx + 1}</td>
                     <td className="p-2 border-r border-slate-300 text-center font-semibold">
-                      {isBase ? '1_당사' : row.supplier.code}
+                      {isBase ? '1_발행사(당사)' : row.supplier.code}
                     </td>
                     <td className="p-2 border-r border-slate-300 font-bold">
                       {row.supplier.name}
@@ -84,7 +85,7 @@ export default function TemplateComparisonTable({
                       {isBase ? '100%' : `${Math.round(row.ratio * 100)}%`}
                     </td>
                     <td className="p-2 text-[10.5px] text-slate-600">
-                      {row.supplier.tag} {row.supplier.certTag ? `(${row.supplier.certTag})` : ''}
+                      {isBase ? '주관사 (메인 발행사)' : `${row.supplier.tag} ${row.supplier.certTag ? `(${row.supplier.certTag})` : ''}`}
                     </td>
                   </tr>
                 );
@@ -110,6 +111,7 @@ export default function TemplateComparisonTable({
                 {summaryData.map((s) => (
                   <th key={`head-${s.supplier.id}`} className="p-1.5 border-r border-slate-300 text-right pr-2 min-w-[70px]">
                     {s.supplier.shortName}
+                    {s.isBase && <span className="block text-[9px] text-sky-700 font-bold">(발행사)</span>}
                   </th>
                 ))}
               </tr>
@@ -124,7 +126,7 @@ export default function TemplateComparisonTable({
                   {summaryData.map((s) => {
                     const sItem = s.items[itemIdx];
                     const unitPrice = sItem ? sItem.unit_price : 0;
-                    const isBase = s.supplier.id === 1;
+                    const isBase = s.isBase;
                     return (
                       <td
                         key={`cell-${s.supplier.id}-${itemIdx}`}

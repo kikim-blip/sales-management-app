@@ -5,7 +5,7 @@ import * as XLSX from 'xlsx';
 import { useGoogleAuth } from '../../context/GoogleAuthContext';
 import { getLocalDateStr } from '../../utils/dateUtils';
 import { COMPANY_SUPPLIERS, getCompanySupplierById } from '../../data/companySuppliers';
-import { calculateSupplierQuote, calculateComparativeSummary } from '../../utils/quoteCalculations';
+import { calculateSupplierQuote, calculateComparativeSummary, getRelativeSupplierRate } from '../../utils/quoteCalculations';
 
 // 7개 회사별 템플릿 및 종합비교대조표 컴포넌트 임포트
 import TemplateKyungsung from '../quoteTemplates/TemplateKyungsung';
@@ -41,8 +41,18 @@ export default function QuotePrintModal({ quote, customer, onClose }) {
   const { user } = useGoogleAuth();
   const printRef = useRef();
 
+  const initialMainId = Number(quote?.supplier_id || 1);
+  const [mainSupplierId, setMainSupplierId] = useState(initialMainId);
   // 1: 경성문화사, 2: 케이에스센세이션, ..., 7: 행복드림, 'comparison': 종합비교대조표
-  const [selectedTab, setSelectedTab] = useState(() => quote?.supplier_id || 1);
+  const [selectedTab, setSelectedTab] = useState(initialMainId);
+
+  useEffect(() => {
+    if (quote?.supplier_id) {
+      const qId = Number(quote.supplier_id);
+      setMainSupplierId(qId);
+      setSelectedTab(qId);
+    }
+  }, [quote?.supplier_id]);
 
   // 회사별 도장 맵 { 1: base64|null, 2: ... }
   const [stampMap, setStampMap] = useState(loadAllStamps);
@@ -138,16 +148,16 @@ export default function QuotePrintModal({ quote, customer, onClose }) {
     return getCompanySupplierById(selectedTab);
   }, [selectedTab]);
 
-  // 현재 선택된 공급사의 계산 데이터
+  // 현재 선택된 공급사의 계산 데이터 (메인 발행사 기준 상대 계산)
   const calcData = useMemo(() => {
     if (!currentSupplier) return null;
-    return calculateSupplierQuote(parsedItems, currentSupplier, estimateType, quote);
-  }, [parsedItems, currentSupplier, estimateType, quote]);
+    return calculateSupplierQuote(parsedItems, currentSupplier, estimateType, quote, mainSupplierId);
+  }, [parsedItems, currentSupplier, estimateType, quote, mainSupplierId]);
 
-  // 7개사 전체 비교대조 데이터
+  // 7개사 전체 비교대조 데이터 (메인 발행사 1번 배치 및 상대 비교)
   const summaryData = useMemo(() => {
-    return calculateComparativeSummary(parsedItems, COMPANY_SUPPLIERS, estimateType, quote);
-  }, [parsedItems, estimateType, quote]);
+    return calculateComparativeSummary(parsedItems, COMPANY_SUPPLIERS, estimateType, quote, mainSupplierId);
+  }, [parsedItems, estimateType, quote, mainSupplierId]);
 
   // 엑셀 다운로드
   const handleExportExcel = () => {
@@ -160,23 +170,23 @@ export default function QuotePrintModal({ quote, customer, onClose }) {
         [`수요기관: ${custName}`, '', `견적일자: ${todayKorean}`, '', `결제조건: ${quote.payment_terms || '검수 후 익월말 현금'}`],
         [],
         ['[ 1. 공급사별 총 견적금액 집계 및 비교 (VAT 포함) ]'],
-        ['순번', '구분', '공급사명 (상호)', '대표자', '사업자등록번호', '공급가액 (소계)', '부가가치세 (10%)', '총 견적금액 (합계)', '당사 대비 차액', '당사 대비 비율', '기업 특성 및 비고'],
+        ['순번', '구분', '공급사명 (상호)', '대표자', '사업자등록번호', '공급가액 (소계)', '부가가치세 (10%)', '총 견적금액 (합계)', '기준 대비 차액', '기준 대비 비율', '기업 특성 및 비고'],
         ...summaryData.map((row, idx) => [
           idx + 1,
-          idx === 0 ? '1_당사' : row.supplier.code,
+          row.isBase ? '1_발행사(당사)' : row.supplier.code,
           row.supplier.name,
           row.supplier.ceo,
           row.supplier.bizNum,
           row.supplyPrice,
           row.taxPrice,
           row.totalPrice,
-          idx === 0 ? 0 : row.diff,
-          idx === 0 ? '100%' : `${Math.round(row.ratio * 100)}%`,
-          `${row.supplier.tag} ${row.supplier.certTag ? `(${row.supplier.certTag})` : ''}`,
+          row.isBase ? 0 : row.diff,
+          row.isBase ? '100%' : `${Math.round(row.ratio * 100)}%`,
+          row.isBase ? '주관사 (메인 발행사)' : `${row.supplier.tag} ${row.supplier.certTag ? `(${row.supplier.certTag})` : ''}`,
         ]),
         [],
         ['[ 2. 품목별 세부 견적 단가 비교 (VAT 별도) ]'],
-        ['순번', '품명', '규격', '수량', ...COMPANY_SUPPLIERS.map(s => s.shortName)],
+        ['순번', '품명', '규격', '수량', ...summaryData.map(s => s.supplier.shortName)],
         ...parsedItems.map((it, itemIdx) => [
           itemIdx + 1,
           it.name || quote.title,
@@ -421,52 +431,80 @@ export default function QuotePrintModal({ quote, customer, onClose }) {
           )}
 
           {/* ── 7개 회사 선택 탭 및 종합비교대조표 토글 바 ── */}
-          <div className="flex items-center space-x-1.5 overflow-x-auto pb-1 scrollbar-thin">
-            <span className="text-[11px] font-bold text-slate-500 flex-shrink-0 mr-1 flex items-center">
-              <Layers className="w-3.5 h-3.5 mr-1" />
-              발행 양식 선택:
-            </span>
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-2">
+            <div className="flex items-center space-x-1.5 overflow-x-auto pb-1 scrollbar-thin">
+              <span className="text-[11px] font-bold text-slate-500 flex-shrink-0 mr-1 flex items-center">
+                <Layers className="w-3.5 h-3.5 mr-1" />
+                발행 양식 선택:
+              </span>
 
-            {COMPANY_SUPPLIERS.map((s) => {
-              const isActive = selectedTab === s.id;
-              const hasStamp = !!stampMap[s.id];
-              return (
-                <button
-                  key={`tab-${s.id}`}
-                  onClick={() => setSelectedTab(s.id)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition flex items-center space-x-1 ${
-                    isActive
-                      ? 'bg-slate-900 text-white shadow-md'
-                      : 'bg-white text-slate-700 hover:bg-slate-200 border border-slate-200'
-                  }`}
-                >
-                  <span>{s.shortName}</span>
-                  {s.id === 1 ? (
-                    <span className="text-[10px] bg-sky-500 text-white px-1 rounded ml-1">당사</span>
-                  ) : (
-                    <span className="text-[10px] text-slate-400 font-mono">+{Math.round((s.rate - 1) * 100)}%</span>
-                  )}
-                  {hasStamp && (
-                    <span className="w-1.5 h-1.5 rounded-full bg-rose-400 inline-block" title="직인 등록됨" />
-                  )}
-                </button>
-              );
-            })}
+              {COMPANY_SUPPLIERS.map((s) => {
+                const isActive = selectedTab === s.id;
+                const isMain = s.id === mainSupplierId;
+                const hasStamp = !!stampMap[s.id];
+                const markupRate = getRelativeSupplierRate(s.id, mainSupplierId);
+                return (
+                  <button
+                    key={`tab-${s.id}`}
+                    onClick={() => setSelectedTab(s.id)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition flex items-center space-x-1 ${
+                      isActive
+                        ? 'bg-slate-900 text-white shadow-md'
+                        : 'bg-white text-slate-700 hover:bg-slate-200 border border-slate-200'
+                    }`}
+                  >
+                    <span>{s.shortName}</span>
+                    {isMain ? (
+                      <span className="text-[10px] bg-sky-500 text-white px-1.5 py-0.5 rounded ml-1 font-black">
+                        발행사(당사)
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-slate-400 font-mono">
+                        +{Math.round((markupRate - 1) * 100)}%
+                      </span>
+                    )}
+                    {hasStamp && (
+                      <span className="w-1.5 h-1.5 rounded-full bg-rose-400 inline-block" title="직인 등록됨" />
+                    )}
+                  </button>
+                );
+              })}
 
-            <div className="h-5 w-[1px] bg-slate-300 mx-1 flex-shrink-0" />
+              <div className="h-5 w-[1px] bg-slate-300 mx-1 flex-shrink-0" />
 
-            {/* 종합 비교대조표 탭 */}
-            <button
-              onClick={() => setSelectedTab('comparison')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-extrabold whitespace-nowrap transition flex items-center space-x-1 ${
-                selectedTab === 'comparison'
-                  ? 'bg-purple-700 text-white shadow-md'
-                  : 'bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200'
-              }`}
-            >
-              <TableProperties className="w-3.5 h-3.5 mr-1" />
-              <span>종합 비교대조표 (관공서용)</span>
-            </button>
+              {/* 종합 비교대조표 탭 */}
+              <button
+                onClick={() => setSelectedTab('comparison')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-extrabold whitespace-nowrap transition flex items-center space-x-1 ${
+                  selectedTab === 'comparison'
+                    ? 'bg-purple-700 text-white shadow-md'
+                    : 'bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200'
+                }`}
+              >
+                <TableProperties className="w-3.5 h-3.5 mr-1" />
+                <span>종합 비교대조표 (관공서용)</span>
+              </button>
+            </div>
+
+            {/* 메인 발행사(당사) 전환 드롭다운 */}
+            <div className="flex items-center space-x-2 bg-white px-2.5 py-1 rounded-xl border border-slate-300 text-xs shadow-sm">
+              <span className="text-[11px] font-bold text-slate-500 flex-shrink-0">기준 발행사(당사):</span>
+              <select
+                value={mainSupplierId}
+                onChange={(e) => {
+                  const newId = Number(e.target.value);
+                  setMainSupplierId(newId);
+                  setSelectedTab(newId);
+                }}
+                className="font-black text-slate-900 bg-transparent border-none p-0 focus:ring-0 cursor-pointer text-xs"
+              >
+                {COMPANY_SUPPLIERS.map((s) => (
+                  <option key={`main-select-${s.id}`} value={s.id}>
+                    {s.name} ({s.shortName})
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
 
@@ -483,6 +521,7 @@ export default function QuotePrintModal({ quote, customer, onClose }) {
               suppliers={COMPANY_SUPPLIERS}
               summaryData={summaryData}
               todayKorean={todayKorean}
+              mainSupplierId={mainSupplierId}
             />
           ) : selectedTab === 1 ? (
             <TemplateKyungsung

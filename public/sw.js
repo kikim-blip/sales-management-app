@@ -1,5 +1,5 @@
 // public/sw.js
-const CACHE_NAME = 'sales-pwa-v18-storage-gc-dead-letter-normalization';
+const CACHE_NAME = 'sales-pwa-v19-dynamic-main-supplier-relative-quote';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
